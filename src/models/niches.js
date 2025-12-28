@@ -1,0 +1,168 @@
+// Nichos disponíveis com suas configurações
+export const NICHES = {
+  podcast: {
+    id: 'podcast',
+    name: 'Podcast',
+    description: 'Conversas, entrevistas e debates',
+    retentionVideos: [
+      'hydraulic-press',
+      'satisfying-loops',
+      'timelapse-abstract',
+      'mechanical-loop'
+    ],
+    headlineStyles: ['bold', 'impact', 'modern'],
+    fonts: ['Inter', 'Roboto', 'Montserrat']
+  },
+  educacao: {
+    id: 'educacao',
+    name: 'Educação',
+    description: 'Aulas, tutoriais e conteúdo educacional',
+    retentionVideos: [
+      'sand-kinetic',
+      'slime',
+      'satisfying-loops',
+      'timelapse-nature'
+    ],
+    headlineStyles: ['clean', 'academic', 'modern'],
+    fonts: ['Roboto', 'Open Sans', 'Lato']
+  },
+  motivacional: {
+    id: 'motivacional',
+    name: 'Motivacional',
+    description: 'Conteúdo inspirador e de desenvolvimento pessoal',
+    retentionVideos: [
+      'sunset-timelapse',
+      'ocean-waves',
+      'satisfying-loops',
+      'abstract-flow'
+    ],
+    headlineStyles: ['bold', 'elegant', 'impact'],
+    fonts: ['Montserrat', 'Playfair Display', 'Poppins']
+  },
+  tech: {
+    id: 'tech',
+    name: 'Tech',
+    description: 'Tecnologia, programação e inovação',
+    retentionVideos: [
+      'circuit-animation',
+      'code-rain',
+      'mechanical-loop',
+      'abstract-tech'
+    ],
+    headlineStyles: ['futuristic', 'modern', 'minimal'],
+    fonts: ['Roboto Mono', 'Fira Code', 'Inter']
+  },
+  financeiro: {
+    id: 'financeiro',
+    name: 'Financeiro',
+    description: 'Investimentos, economia e finanças',
+    retentionVideos: [
+      'gold-particles',
+      'satisfying-loops',
+      'timelapse-city',
+      'abstract-numbers'
+    ],
+    headlineStyles: ['professional', 'bold', 'clean'],
+    fonts: ['Inter', 'Roboto', 'Lato']
+  }
+};
+
+export const RETENTION_VIDEOS = {
+  'hydraulic-press': {
+    id: 'hydraulic-press',
+    name: 'Prensa Hidráulica',
+    tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
+    description: 'Loop de prensa hidráulica comprimindo objetos'
+  },
+  'satisfying-loops': {
+    id: 'satisfying-loops',
+    name: 'Loops Satisfatórios',
+    tags: ['Alta retenção', 'Viral', 'Seguro para TikTok'],
+    description: 'Vídeos de satisfação visual em loop'
+  },
+  'sand-kinetic': {
+    id: 'sand-kinetic',
+    name: 'Areia Cinética',
+    tags: ['Hipnótico', 'Alta retenção', 'Seguro para TikTok'],
+    description: 'Areia cinética sendo manipulada'
+  },
+  'slime': {
+    id: 'slime',
+    name: 'Slime',
+    tags: ['Viral', 'Alta retenção', 'Seguro para TikTok'],
+    description: 'Slime sendo cortado e esticado'
+  },
+  'timelapse-abstract': {
+    id: 'timelapse-abstract',
+    name: 'Timelapse Abstrato',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Timelapse de padrões abstratos'
+  },
+  'mechanical-loop': {
+    id: 'mechanical-loop',
+    name: 'Loop Mecânico',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Máquinas e mecanismos em loop'
+  },
+  'timelapse-nature': {
+    id: 'timelapse-nature',
+    name: 'Timelapse Natureza',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Timelapse de paisagens naturais'
+  },
+  'sunset-timelapse': {
+    id: 'sunset-timelapse',
+    name: 'Pôr do Sol',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Timelapse de pôr do sol'
+  },
+  'ocean-waves': {
+    id: 'ocean-waves',
+    name: 'Ondas do Mar',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Ondas do oceano em loop'
+  },
+  'abstract-flow': {
+    id: 'abstract-flow',
+    name: 'Fluxo Abstrato',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Padrões de fluxo abstratos'
+  },
+  'circuit-animation': {
+    id: 'circuit-animation',
+    name: 'Animação de Circuitos',
+    tags: ['Hipnótico', 'Tech', 'Alta retenção'],
+    description: 'Animação de circuitos elétricos'
+  },
+  'code-rain': {
+    id: 'code-rain',
+    name: 'Chuva de Código',
+    tags: ['Hipnótico', 'Tech', 'Alta retenção'],
+    description: 'Efeito matrix de código'
+  },
+  'abstract-tech': {
+    id: 'abstract-tech',
+    name: 'Abstrato Tech',
+    tags: ['Hipnótico', 'Tech', 'Alta retenção'],
+    description: 'Padrões tecnológicos abstratos'
+  },
+  'gold-particles': {
+    id: 'gold-particles',
+    name: 'Partículas Douradas',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Partículas douradas em movimento'
+  },
+  'timelapse-city': {
+    id: 'timelapse-city',
+    name: 'Timelapse Urbano',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Timelapse de cidade'
+  },
+  'abstract-numbers': {
+    id: 'abstract-numbers',
+    name: 'Números Abstratos',
+    tags: ['Hipnótico', 'Alta retenção'],
+    description: 'Animação de números e gráficos'
+  }
+};
+

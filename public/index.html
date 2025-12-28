@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EZ Clips AI V2 - Retention Engine</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="logo">EZ Clips AI <span class="version">V2</span></h1>
+            <p class="tagline">Retention Engine - Séries Cronológicas Virais</p>
+        </header>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator">
+            <div class="step active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Vídeo</div>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Trim</div>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Nicho</div>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">Retenção</div>
+            </div>
+            <div class="step" data-step="5">
+                <div class="step-number">5</div>
+                <div class="step-label">Preview</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Video Selection -->
+        <div class="step-content active" id="step-1">
+            <h2>Selecione seu vídeo</h2>
+            <div class="video-options">
+                <div class="option-card" id="youtube-option">
+                    <div class="option-icon">📺</div>
+                    <h3>YouTube</h3>
+                    <p>Cole a URL do vídeo</p>
+                    <input type="text" id="youtube-url" placeholder="https://youtube.com/watch?v=..." class="input">
+                    <button class="btn-primary" onclick="processYouTube()">Processar</button>
+                </div>
+                <div class="option-card" id="upload-option">
+                    <div class="option-icon">📤</div>
+                    <h3>Upload</h3>
+                    <p>Envie seu arquivo</p>
+                    <input type="file" id="video-file" accept="video/*" class="file-input">
+                    <label for="video-file" class="btn-primary">Escolher arquivo</label>
+                    <div id="file-name" class="file-name"></div>
+                </div>
+            </div>
+            <div id="video-preview" class="video-preview hidden"></div>
+        </div>
+
+        <!-- Step 2: Trim -->
+        <div class="step-content" id="step-2">
+            <h2>Defina o trim do vídeo</h2>
+            <div class="trim-container">
+                <div class="trim-preview">
+                    <video id="trim-video" controls></video>
+                </div>
+                <div class="trim-controls">
+                    <div class="trim-input-group">
+                        <label>Início (segundos)</label>
+                        <input type="number" id="trim-start" value="0" min="0" class="input">
+                    </div>
+                    <div class="trim-input-group">
+                        <label>Fim (segundos)</label>
+                        <input type="number" id="trim-end" class="input">
+                    </div>
+                    <div class="trim-info">
+                        <p id="trim-estimate" class="estimate-text"></p>
+                    </div>
+                    <button class="btn-primary" onclick="calculateCuts()">Calcular cortes</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Niche Selection -->
+        <div class="step-content" id="step-3">
+            <h2>Escolha o nicho do conteúdo</h2>
+            <p class="step-description">Cada nicho possui vídeos de retenção testados para maximizar watch time</p>
+            <div id="niches-grid" class="niches-grid"></div>
+        </div>
+
+        <!-- Step 4: Retention Video Library -->
+        <div class="step-content" id="step-4">
+            <h2>Biblioteca de Vídeos de Retenção</h2>
+            <p class="step-description">Escolha o vídeo que manterá a atenção enquanto seu conteúdo principal acontece</p>
+            <div class="retention-options">
+                <label class="radio-option">
+                    <input type="radio" name="retention" value="none" id="retention-none">
+                    <span>Nenhum (não recomendado)</span>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="retention" value="random" id="retention-random" checked>
+                    <span>Randomizar por corte</span>
+                </label>
+            </div>
+            <div id="retention-grid" class="retention-grid"></div>
+        </div>
+
+        <!-- Step 5: Preview & Style -->
+        <div class="step-content" id="step-5">
+            <h2>Preview e Estilo Visual</h2>
+            <div class="preview-container">
+                <div class="preview-wrapper">
+                    <div class="preview-vertical" id="preview-canvas">
+                        <div class="preview-top">
+                            <div class="preview-main-video">
+                                <div class="preview-placeholder">Vídeo Principal</div>
+                            </div>
+                        </div>
+                        <div class="preview-middle">
+                            <div class="preview-headline" id="preview-headline">Headline Impactante</div>
+                        </div>
+                        <div class="preview-bottom">
+                            <div class="preview-retention-video">
+                                <div class="preview-placeholder">Vídeo de Retenção</div>
+                            </div>
+                        </div>
+                        <div class="preview-overlay">
+                            <div class="preview-captions" id="preview-captions">Legendas animadas</div>
+                            <div class="preview-part-number" id="preview-part">PARTE 1/42</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="style-controls">
+                    <div class="style-group">
+                        <label>Fonte da Headline</label>
+                        <select id="headline-font" class="select" onchange="updatePreview()">
+                            <option value="Inter">Inter</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Montserrat">Montserrat</option>
+                        </select>
+                    </div>
+                    <div class="style-group">
+                        <label>Estilo da Headline</label>
+                        <select id="headline-style" class="select" onchange="updatePreview()">
+                            <option value="bold">Bold</option>
+                            <option value="impact">Impact</option>
+                            <option value="modern">Modern</option>
+                        </select>
+                    </div>
+                    <div class="style-group">
+                        <label>Estilo de Legenda</label>
+                        <select id="caption-style" class="select" onchange="updatePreview()">
+                            <option value="tiktok">TikTok</option>
+                            <option value="minimal">Minimal</option>
+                            <option value="bold">Bold</option>
+                        </select>
+                    </div>
+                    <div class="preview-note">
+                        <p>📌 Este layout será aplicado a toda a série</p>
+                    </div>
+                    <button class="btn-primary btn-large" onclick="generateSeries()">Gerar Série Completa</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h3>Gerando série...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <p id="progress-text">0%</p>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="success-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-icon">✅</div>
+                <h2>Série gerada com sucesso!</h2>
+                <p id="series-info"></p>
+                <div class="modal-actions">
+                    <button class="btn-primary" onclick="downloadSeries()">Download ZIP</button>
+                    <button class="btn-secondary" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
