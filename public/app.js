@@ -101,7 +101,13 @@ async function processYouTube() {
             goToStep(2);
             setupTrimVideo(data.video);
         } else {
-            alert('Erro ao processar YouTube: ' + (data.error || data.details || 'Erro desconhecido'));
+            // Mostrar erro mais detalhado
+            const errorMsg = data.error || data.details || 'Erro desconhecido';
+            const suggestion = data.suggestion || '';
+            const fullMessage = suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg;
+            
+            alert(fullMessage);
+            console.error('Erro detalhado:', data);
         }
     } catch (error) {
         console.error('Erro:', error);

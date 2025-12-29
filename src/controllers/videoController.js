@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import ytdl from 'ytdl-core';
+import ytdl from '@distube/ytdl-core';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -68,31 +68,81 @@ export const processVideo = async (req, res) => {
       return res.status(400).json({ error: 'URL do YouTube inválida. Use formato: https://youtube.com/watch?v=VIDEO_ID ou https://youtu.be/VIDEO_ID' });
     }
 
-    // Tentar obter informações do vídeo com retry e opções
+    // Tentar obter informações do vídeo com múltiplas estratégias
     let info;
+    let lastError = null;
+    
+    // Estratégia 1: Usar @distube/ytdl-core (mais atualizado)
     try {
       info = await ytdl.getInfo(videoId, {
         requestOptions: {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
           }
         }
       });
-    } catch (ytdlError) {
-      // Se falhar, tentar com a URL completa
+    } catch (error1) {
+      lastError = error1;
+      console.error('Tentativa 1 falhou:', error1.message);
+      
+      // Estratégia 2: Tentar com URL completa
       try {
         info = await ytdl.getInfo(normalizedUrl, {
           requestOptions: {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate',
+              'DNT': '1',
+              'Connection': 'keep-alive',
+              'Upgrade-Insecure-Requests': '1'
             }
           }
         });
-      } catch (secondError) {
-        console.error('Erro ao obter info do YouTube:', secondError);
-        return res.status(500).json({ 
-          error: 'Erro ao processar vídeo do YouTube. Verifique se a URL está correta e o vídeo está disponível.',
-          details: secondError.message 
+      } catch (error2) {
+        lastError = error2;
+        console.error('Tentativa 2 falhou:', error2.message);
+        
+        // Estratégia 3: Fallback - criar objeto básico mesmo sem conseguir todas as informações
+        // Isso permite que o usuário continue usando o vídeo
+        const errorDetails = {
+          message: lastError?.message || 'Erro desconhecido',
+          code: lastError?.code || 'UNKNOWN',
+          videoId: videoId,
+          url: normalizedUrl
+        };
+        
+        console.error('Todas as tentativas falharam, usando fallback:', errorDetails);
+        
+        const storedVideoId = uuidv4();
+        const fallbackVideo = {
+          id: storedVideoId,
+          youtubeUrl: normalizedUrl,
+          youtubeVideoId: videoId,
+          title: 'Vídeo do YouTube',
+          duration: 0, // Usuário pode definir manualmente
+          thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+          path: '',
+          processedAt: new Date(),
+          streamUrl: `https://www.youtube.com/embed/${videoId}`,
+          limited: true,
+          error: errorDetails.message
+        };
+        
+        videoStore.set(storedVideoId, fallbackVideo);
+        
+        return res.status(200).json({
+          videoId: storedVideoId,
+          message: 'Vídeo processado (modo limitado)',
+          video: fallbackVideo,
+          warning: 'Não foi possível obter todas as informações automaticamente. Você pode continuar e definir a duração manualmente no trim.'
         });
       }
     }
@@ -131,12 +181,27 @@ export const processVideo = async (req, res) => {
       video: videoInfo
     });
   } catch (error) {
-    console.error('Erro completo:', error);
-    res.status(500).json({ 
+    console.error('Erro completo no processVideo:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
+    
+    // Retornar erro mais detalhado
+    const errorResponse = {
       error: 'Erro ao processar vídeo do YouTube',
       details: error.message,
-      suggestion: 'Verifique se a URL está correta e tente novamente'
-    });
+      errorCode: error.code || 'UNKNOWN',
+      suggestion: 'Verifique se: 1) A URL está correta, 2) O vídeo está público e disponível, 3) Não há restrições de região'
+    };
+    
+    // Se for erro de validação, retornar 400
+    if (error.message?.includes('invalid') || error.message?.includes('Invalid')) {
+      return res.status(400).json(errorResponse);
+    }
+    
+    res.status(500).json(errorResponse);
   }
 };
 
