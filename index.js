@@ -54,12 +54,14 @@ import videoRoutes from "./src/routes/video.js";
 import nicheRoutes from "./src/routes/niches.js";
 import retentionRoutes from "./src/routes/retention.js";
 import generateRoutes from "./src/routes/generate.js";
+import authRoutes from "./src/routes/auth.js";
 
 // Rotas da API
 app.use("/api/video", videoRoutes);
 app.use("/api/niches", nicheRoutes);
 app.use("/api/retention", retentionRoutes);
 app.use("/api/generate", generateRoutes);
+app.use("/api/auth", authRoutes);
 
 // Rota principal - Health check básico
 app.get("/", (req, res) => {

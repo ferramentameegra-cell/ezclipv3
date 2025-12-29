@@ -11,7 +11,9 @@ const appState = {
     headlineStyle: 'bold',
     font: 'Inter',
     jobId: null,
-    seriesId: null
+    seriesId: null,
+    currentUser: null,
+    currentTab: 'home'
 };
 
 const API_BASE = window.location.origin;
@@ -25,12 +27,298 @@ function initializeApp() {
     setupYouTubeInput();
     setupTrimControls();
     loadNiches();
+    loadCursos();
+    checkAuth();
 }
 
-// Setup YouTube input com Enter key e validação em tempo real
+// ========== TAB NAVIGATION ==========
+function switchTab(tabName) {
+    // Atualizar estado
+    appState.currentTab = tabName;
+    
+    // Atualizar tabs visuais
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Mostrar conteúdo da tab
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    
+    // Scroll para o topo
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ========== AUTHENTICATION ==========
+function checkAuth() {
+    const user = localStorage.getItem('ezv2_user');
+    if (user) {
+        appState.currentUser = JSON.parse(user);
+        updateUserUI();
+    }
+}
+
+function updateUserUI() {
+    const userInfo = document.getElementById('user-info');
+    const userName = document.getElementById('user-name');
+    
+    if (appState.currentUser) {
+        userInfo.classList.remove('hidden');
+        userName.textContent = appState.currentUser.name || appState.currentUser.email;
+    } else {
+        userInfo.classList.add('hidden');
+    }
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const btnText = document.getElementById('login-btn-text');
+    const btnSpinner = document.getElementById('login-btn-spinner');
+    const statusMsg = document.getElementById('login-status');
+    
+    btnText.classList.add('hidden');
+    btnSpinner.classList.remove('hidden');
+    statusMsg.classList.add('hidden');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            appState.currentUser = data.user;
+            localStorage.setItem('ezv2_user', JSON.stringify(data.user));
+            localStorage.setItem('ezv2_token', data.token);
+            
+            statusMsg.textContent = 'Login realizado com sucesso!';
+            statusMsg.className = 'login-status success';
+            statusMsg.classList.remove('hidden');
+            
+            updateUserUI();
+            
+            setTimeout(() => {
+                switchTab('home');
+            }, 1500);
+        } else {
+            statusMsg.textContent = data.error || 'Erro ao fazer login';
+            statusMsg.className = 'login-status error';
+            statusMsg.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        statusMsg.textContent = 'Erro ao conectar com o servidor';
+        statusMsg.className = 'login-status error';
+        statusMsg.classList.remove('hidden');
+    } finally {
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+    }
+}
+
+async function handleRegister(event) {
+    event.preventDefault();
+    
+    const name = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
+    const password = document.getElementById('register-password').value;
+    const btnText = document.getElementById('register-btn-text');
+    const btnSpinner = document.getElementById('register-btn-spinner');
+    const statusMsg = document.getElementById('register-status');
+    
+    btnText.classList.add('hidden');
+    btnSpinner.classList.remove('hidden');
+    statusMsg.classList.add('hidden');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            statusMsg.textContent = 'Conta criada com sucesso! Faça login para continuar.';
+            statusMsg.className = 'login-status success';
+            statusMsg.classList.remove('hidden');
+            
+            setTimeout(() => {
+                showLogin();
+            }, 2000);
+        } else {
+            statusMsg.textContent = data.error || 'Erro ao criar conta';
+            statusMsg.className = 'login-status error';
+            statusMsg.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        statusMsg.textContent = 'Erro ao conectar com o servidor';
+        statusMsg.className = 'login-status error';
+        statusMsg.classList.remove('hidden');
+    } finally {
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+    }
+}
+
+function showRegister() {
+    document.getElementById('login-form').closest('.login-box').classList.add('hidden');
+    document.getElementById('register-box').classList.remove('hidden');
+}
+
+function showLogin() {
+    document.getElementById('register-box').classList.add('hidden');
+    document.getElementById('login-form').closest('.login-box').classList.remove('hidden');
+}
+
+function logout() {
+    appState.currentUser = null;
+    localStorage.removeItem('ezv2_user');
+    localStorage.removeItem('ezv2_token');
+    updateUserUI();
+    switchTab('home');
+}
+
+// ========== CURSOS ==========
+const cursosData = [
+    {
+        id: 1,
+        title: 'Criação de Vídeos Virais para TikTok',
+        description: 'Aprenda a criar conteúdo que viraliza no TikTok usando técnicas de retenção e storytelling.',
+        category: 'video',
+        price: 297,
+        oldPrice: 497,
+        image: '🎬'
+    },
+    {
+        id: 2,
+        title: 'Marketing Digital Completo',
+        description: 'Domine todas as estratégias de marketing digital: SEO, ads, redes sociais e muito mais.',
+        category: 'marketing',
+        price: 497,
+        oldPrice: 797,
+        image: '📈'
+    },
+    {
+        id: 3,
+        title: 'Como Criar um Negócio Online',
+        description: 'Do zero ao primeiro cliente: aprenda a criar e escalar seu negócio digital.',
+        category: 'business',
+        price: 397,
+        oldPrice: 597,
+        image: '💼'
+    },
+    {
+        id: 4,
+        title: 'Programação para Iniciantes',
+        description: 'Aprenda programação do zero e crie seus primeiros projetos web e mobile.',
+        category: 'tech',
+        price: 347,
+        oldPrice: 547,
+        image: '💻'
+    },
+    {
+        id: 5,
+        title: 'Edição de Vídeo Profissional',
+        description: 'Domine Premiere, After Effects e crie vídeos de nível profissional.',
+        category: 'video',
+        price: 447,
+        oldPrice: 697,
+        image: '🎞️'
+    },
+    {
+        id: 6,
+        title: 'Estratégias de Growth Hacking',
+        description: 'Técnicas avançadas para fazer sua empresa crescer rapidamente.',
+        category: 'marketing',
+        price: 547,
+        oldPrice: 847,
+        image: '🚀'
+    }
+];
+
+let currentFilter = 'all';
+
+function loadCursos() {
+    renderCursos(cursosData);
+}
+
+function filterCursos(category) {
+    currentFilter = category;
+    
+    // Atualizar botões de filtro
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Filtrar cursos
+    const filtered = category === 'all' 
+        ? cursosData 
+        : cursosData.filter(curso => curso.category === category);
+    
+    renderCursos(filtered);
+}
+
+function renderCursos(cursos) {
+    const grid = document.getElementById('cursos-grid');
+    grid.innerHTML = '';
+    
+    cursos.forEach(curso => {
+        const card = document.createElement('div');
+        card.className = 'curso-card';
+        card.innerHTML = `
+            <div class="curso-image">${curso.image}</div>
+            <div class="curso-content">
+                <span class="curso-category">${curso.category.toUpperCase()}</span>
+                <h3 class="curso-title">${curso.title}</h3>
+                <p class="curso-description">${curso.description}</p>
+                <div class="curso-footer">
+                    <div>
+                        <span class="curso-price-old">R$ ${curso.oldPrice}</span>
+                        <span class="curso-price">R$ ${curso.price}</span>
+                    </div>
+                    <button class="btn-comprar" onclick="comprarCurso(${curso.id})">
+                        Comprar
+                    </button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function comprarCurso(cursoId) {
+    if (!appState.currentUser) {
+        alert('Por favor, faça login para comprar cursos.');
+        switchTab('login');
+        return;
+    }
+    
+    const curso = cursosData.find(c => c.id === cursoId);
+    if (curso) {
+        alert(`Redirecionando para compra do curso: ${curso.title}\n\nValor: R$ ${curso.price}`);
+        // Aqui você pode integrar com gateway de pagamento
+    }
+}
+
+// ========== YOUTUBE & VIDEO PROCESSING ==========
 function setupYouTubeInput() {
     const input = document.getElementById('youtube-url');
     const btn = document.getElementById('btn-process');
+    
+    if (!input || !btn) return;
     
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -48,7 +336,6 @@ function setupYouTubeInput() {
     });
 }
 
-// Validar URL do YouTube
 function isValidYouTubeUrl(url) {
     const patterns = [
         /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)/,
@@ -57,7 +344,6 @@ function isValidYouTubeUrl(url) {
     return patterns.some(pattern => pattern.test(url));
 }
 
-// Processar YouTube - função principal
 async function handleYouTubeSubmit() {
     const input = document.getElementById('youtube-url');
     const url = input.value.trim();
@@ -76,7 +362,6 @@ async function handleYouTubeSubmit() {
         return;
     }
     
-    // UI feedback
     btn.disabled = true;
     btnText.classList.add('hidden');
     btnSpinner.classList.remove('hidden');
@@ -97,7 +382,6 @@ async function handleYouTubeSubmit() {
             
             showStatus('Vídeo processado com sucesso!', 'success');
             
-            // Mostrar trim tool imediatamente
             showTrimSection();
             setupVideoPlayer(data.video);
             setupTrimControlsForVideo(data.video);
@@ -115,28 +399,28 @@ async function handleYouTubeSubmit() {
     }
 }
 
-// Mostrar status
 function showStatus(message, type) {
     const statusMsg = document.getElementById('youtube-status');
+    if (!statusMsg) return;
     statusMsg.textContent = message;
     statusMsg.className = `status-message ${type}`;
     statusMsg.classList.remove('hidden');
 }
 
-// Mostrar seção de trim
 function showTrimSection() {
     const trimSection = document.getElementById('step-trim');
-    trimSection.classList.remove('hidden');
-    
-    // Scroll suave para a seção
-    setTimeout(() => {
-        trimSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
+    if (trimSection) {
+        trimSection.classList.remove('hidden');
+        setTimeout(() => {
+            trimSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 300);
+    }
 }
 
-// Configurar player de vídeo
 function setupVideoPlayer(video) {
     const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     if (video.youtubeVideoId || video.youtubeUrl) {
@@ -155,7 +439,6 @@ function setupVideoPlayer(video) {
     }
 }
 
-// Extrair ID do YouTube
 function extractYouTubeId(url) {
     const patterns = [
         /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
@@ -169,7 +452,6 @@ function extractYouTubeId(url) {
     return null;
 }
 
-// Setup controles de trim
 function setupTrimControls() {
     const startSlider = document.getElementById('trim-start-slider');
     const startInput = document.getElementById('trim-start-input');
@@ -177,7 +459,6 @@ function setupTrimControls() {
     const endInput = document.getElementById('trim-end-input');
     
     if (!startSlider || !startInput || !endSlider || !endInput) {
-        console.warn('Trim controls not found, will be set up when video is loaded');
         return;
     }
     
@@ -202,7 +483,6 @@ function setupTrimControls() {
     });
 }
 
-// Configurar controles para vídeo específico
 function setupTrimControlsForVideo(video) {
     const duration = video.duration || 0;
     const startSlider = document.getElementById('trim-start-slider');
@@ -211,17 +491,14 @@ function setupTrimControlsForVideo(video) {
     const endInput = document.getElementById('trim-end-input');
     
     if (!startSlider || !startInput || !endSlider || !endInput) {
-        console.error('Trim controls not found');
         return;
     }
     
-    // Configurar máximos
-    startSlider.max = duration || 3600; // Default to 1 hour if unknown
+    startSlider.max = duration || 3600;
     startInput.max = duration || 3600;
     endSlider.max = duration || 3600;
     endInput.max = duration || 3600;
     
-    // Valores iniciais
     const initialEnd = duration > 0 ? duration : 0;
     startSlider.value = 0;
     startInput.value = 0;
@@ -231,26 +508,24 @@ function setupTrimControlsForVideo(video) {
     appState.trimStart = 0;
     appState.trimEnd = initialEnd;
     
-    // Atualizar displays
     updateTimeDisplay('start', 0);
     updateTimeDisplay('end', initialEnd);
     
-    // Calcular clips inicial
     calculateClips();
 }
 
-// Atualizar tempo inicial
 function updateStartTime(seconds) {
-    const max = parseInt(document.getElementById('trim-start-slider').max);
+    const max = parseInt(document.getElementById('trim-start-slider')?.max || 3600);
     const value = Math.max(0, Math.min(seconds, max));
     
     appState.trimStart = value;
     
-    document.getElementById('trim-start-slider').value = value;
-    document.getElementById('trim-start-input').value = value;
+    const startSlider = document.getElementById('trim-start-slider');
+    const startInput = document.getElementById('trim-start-input');
+    if (startSlider) startSlider.value = value;
+    if (startInput) startInput.value = value;
     updateTimeDisplay('start', value);
     
-    // Garantir que fim > início
     const endValue = appState.trimEnd;
     if (endValue <= value) {
         const newEnd = Math.min(value + 1, max);
@@ -260,39 +535,38 @@ function updateStartTime(seconds) {
     calculateClips();
 }
 
-// Atualizar tempo final
 function updateEndTime(seconds) {
-    const max = parseInt(document.getElementById('trim-end-slider').max);
+    const max = parseInt(document.getElementById('trim-end-slider')?.max || 3600);
     const min = appState.trimStart;
     const value = Math.max(min + 1, Math.min(seconds, max));
     
     appState.trimEnd = value;
     
-    document.getElementById('trim-end-slider').value = value;
-    document.getElementById('trim-end-input').value = value;
+    const endSlider = document.getElementById('trim-end-slider');
+    const endInput = document.getElementById('trim-end-input');
+    if (endSlider) endSlider.value = value;
+    if (endInput) endInput.value = value;
     updateTimeDisplay('end', value);
     
     calculateClips();
 }
 
-// Atualizar display de tempo
 function updateTimeDisplay(type, seconds) {
     const display = document.getElementById(`${type}-time-display`);
-    display.textContent = formatTime(seconds);
+    if (display) {
+        display.textContent = formatTime(seconds);
+    }
 }
 
-// Formatar tempo MM:SS
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Selecionar duração
 function selectDuration(seconds) {
     appState.cutDuration = seconds;
     
-    // Atualizar UI
     document.querySelectorAll('.duration-btn').forEach(btn => {
         btn.classList.remove('active');
         if (parseInt(btn.dataset.duration) === seconds) {
@@ -303,7 +577,6 @@ function selectDuration(seconds) {
     calculateClips();
 }
 
-// Calcular número de clips (TEMPO REAL)
 function calculateClips() {
     const start = appState.trimStart;
     const end = appState.trimEnd;
@@ -314,14 +587,11 @@ function calculateClips() {
     
     appState.numberOfCuts = clips;
     
-    // Atualizar UI imediatamente
     const clipsCount = document.getElementById('clips-count');
     const clipsCard = document.getElementById('clips-calculation');
     const previewTotal = document.getElementById('preview-total');
     
-    if (clipsCount) {
-        clipsCount.textContent = clips;
-    }
+    if (clipsCount) clipsCount.textContent = clips;
     
     if (clipsCard) {
         if (clips > 0) {
@@ -331,38 +601,32 @@ function calculateClips() {
         }
     }
     
-    // Atualizar preview
-    if (previewTotal) {
-        previewTotal.textContent = clips;
-    }
+    if (previewTotal) previewTotal.textContent = clips;
     
-    // Mostrar próximas etapas se tiver clips válidos
     if (clips > 0) {
         showNextSteps();
     }
 }
 
-// Mostrar próximas etapas progressivamente
 function showNextSteps() {
     const nicheStep = document.getElementById('step-niche');
     if (nicheStep && !nicheStep.classList.contains('visible')) {
         nicheStep.classList.remove('hidden');
         nicheStep.classList.add('visible');
-        
-        // Scroll suave para a próxima etapa
         setTimeout(() => {
             nicheStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
     }
 }
 
-// Carregar nichos
 async function loadNiches() {
     try {
         const response = await fetch(`${API_BASE}/api/niches`);
         const data = await response.json();
         
         const container = document.getElementById('niches-container');
+        if (!container) return;
+        
         container.innerHTML = '';
         
         data.niches.forEach(niche => {
@@ -380,7 +644,6 @@ async function loadNiches() {
     }
 }
 
-// Selecionar nicho
 async function selectNiche(nicheId, cardElement) {
     document.querySelectorAll('.niche-card-item').forEach(card => {
         card.classList.remove('selected');
@@ -389,25 +652,26 @@ async function selectNiche(nicheId, cardElement) {
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    // Mostrar retenção
     const retentionStep = document.getElementById('step-retention');
-    retentionStep.classList.remove('hidden');
-    retentionStep.classList.add('visible');
-    
-    setTimeout(() => {
-        retentionStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    if (retentionStep) {
+        retentionStep.classList.remove('hidden');
+        retentionStep.classList.add('visible');
+        setTimeout(() => {
+            retentionStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
     
     await loadRetentionVideos(nicheId);
 }
 
-// Carregar vídeos de retenção
 async function loadRetentionVideos(nicheId) {
     try {
         const response = await fetch(`${API_BASE}/api/retention/niche/${nicheId}`);
         const data = await response.json();
         
         const container = document.getElementById('retention-container');
+        if (!container) return;
+        
         container.innerHTML = '';
         
         data.videos.forEach(video => {
@@ -417,23 +681,23 @@ async function loadRetentionVideos(nicheId) {
                 <div class="retention-preview-icon">🎬</div>
                 <h4>${video.name}</h4>
                 <div class="retention-tags-row">
-                    ${video.tags.map(tag => `<span class="tag-item">${tag}</span>`).join('')}
+                    ${video.tags?.map(tag => `<span class="tag-item">${tag}</span>`).join('') || ''}
                 </div>
             `;
             card.addEventListener('click', () => selectRetentionVideo(video.id, card));
             container.appendChild(card);
         });
         
-        // Mostrar preview
         const previewStep = document.getElementById('step-preview');
-        previewStep.classList.remove('hidden');
-        previewStep.classList.add('visible');
+        if (previewStep) {
+            previewStep.classList.remove('hidden');
+            previewStep.classList.add('visible');
+        }
     } catch (error) {
         console.error('Erro ao carregar vídeos de retenção:', error);
     }
 }
 
-// Selecionar vídeo de retenção
 function selectRetentionVideo(videoId, cardElement) {
     document.querySelectorAll('.retention-card-item').forEach(card => {
         card.classList.remove('selected');
@@ -444,16 +708,19 @@ function selectRetentionVideo(videoId, cardElement) {
     updatePreviewStyle();
 }
 
-// Atualizar modo de retenção
 function updateRetentionMode(mode) {
     appState.retentionVideoId = mode;
 }
 
-// Atualizar estilo do preview
 function updatePreviewStyle() {
     const headline = document.getElementById('preview-headline');
-    const font = document.getElementById('headline-font-select').value;
-    const style = document.getElementById('headline-style-select').value;
+    const fontSelect = document.getElementById('headline-font-select');
+    const styleSelect = document.getElementById('headline-style-select');
+    
+    if (!headline || !fontSelect || !styleSelect) return;
+    
+    const font = fontSelect.value;
+    const style = styleSelect.value;
     
     appState.font = font;
     appState.headlineStyle = style;
@@ -472,7 +739,6 @@ function updatePreviewStyle() {
     }
 }
 
-// Gerar série
 async function generateSeries() {
     if (!appState.videoId || !appState.nicheId || !appState.numberOfCuts) {
         alert('Por favor, complete todas as etapas');
@@ -480,7 +746,7 @@ async function generateSeries() {
     }
     
     const loadingOverlay = document.getElementById('loading-overlay');
-    loadingOverlay.classList.remove('hidden');
+    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
     
     try {
         const response = await fetch(`${API_BASE}/api/generate/series`, {
@@ -507,16 +773,15 @@ async function generateSeries() {
             monitorProgress(data.jobId);
         } else {
             alert('Erro ao gerar série: ' + data.error);
-            loadingOverlay.classList.add('hidden');
+            if (loadingOverlay) loadingOverlay.classList.add('hidden');
         }
     } catch (error) {
         console.error('Erro:', error);
         alert('Erro ao gerar série');
-        loadingOverlay.classList.add('hidden');
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
     }
 }
 
-// Monitorar progresso
 async function monitorProgress(jobId) {
     const progressFill = document.getElementById('loading-progress');
     const progressText = document.getElementById('loading-percent');
@@ -528,8 +793,8 @@ async function monitorProgress(jobId) {
             
             if (data.job) {
                 const progress = data.job.progress || 0;
-                progressFill.style.width = `${progress}%`;
-                progressText.textContent = `${progress}%`;
+                if (progressFill) progressFill.style.width = `${progress}%`;
+                if (progressText) progressText.textContent = `${progress}%`;
                 
                 if (data.job.status === 'completed') {
                     clearInterval(interval);
@@ -537,7 +802,8 @@ async function monitorProgress(jobId) {
                 } else if (data.job.status === 'error') {
                     clearInterval(interval);
                     alert('Erro ao gerar série: ' + data.job.error);
-                    document.getElementById('loading-overlay').classList.add('hidden');
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
                 }
             }
         } catch (error) {
@@ -546,19 +812,19 @@ async function monitorProgress(jobId) {
     }, 1000);
 }
 
-// Mostrar modal de sucesso
 function showSuccessModal(job) {
     const loadingOverlay = document.getElementById('loading-overlay');
-    loadingOverlay.classList.add('hidden');
+    if (loadingOverlay) loadingOverlay.classList.add('hidden');
     
     const modal = document.getElementById('success-modal');
     const message = document.getElementById('success-message');
-    message.textContent = `Série com ${appState.numberOfCuts} partes gerada com sucesso!`;
     
-    modal.classList.remove('hidden');
+    if (modal && message) {
+        message.textContent = `Série com ${appState.numberOfCuts} partes gerada com sucesso!`;
+        modal.classList.remove('hidden');
+    }
 }
 
-// Download série
 async function downloadSeries() {
     if (!appState.seriesId) {
         alert('Série não encontrada');
@@ -568,7 +834,6 @@ async function downloadSeries() {
     window.location.href = `${API_BASE}/api/generate/download/${appState.seriesId}`;
 }
 
-// Abrir TikTok Studio
 function openTikTokStudio() {
     window.open('https://www.tiktok.com/studio', '_blank');
 }
