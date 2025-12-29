@@ -9,3 +9,6 @@ cmds = ["npm run build"]
 
 [start]
 cmd = "node index.js"
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
