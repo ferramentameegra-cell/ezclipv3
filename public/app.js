@@ -96,10 +96,21 @@ async function processYouTube() {
         if (response.ok) {
             appState.videoId = data.videoId;
             appState.videoInfo = data.video;
-            showVideoPreview(data.video);
-            // Ir para step 2 (trim) automaticamente
-            goToStep(2);
-            setupTrimVideo(data.video);
+            
+            // Mostrar aviso se estiver em modo limitado
+            if (data.warning || data.video.limited) {
+                const warningMsg = data.warning || 'Algumas informações do vídeo não puderam ser obtidas automaticamente. Você pode continuar normalmente.';
+                if (confirm(warningMsg + '\n\nDeseja continuar?')) {
+                    showVideoPreview(data.video);
+                    goToStep(2);
+                    setupTrimVideo(data.video);
+                }
+            } else {
+                showVideoPreview(data.video);
+                // Ir para step 2 (trim) automaticamente
+                goToStep(2);
+                setupTrimVideo(data.video);
+            }
         } else {
             // Mostrar erro mais detalhado
             const errorMsg = data.error || data.details || 'Erro desconhecido';
