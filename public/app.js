@@ -1,6 +1,5 @@
 // Estado da aplicação
 const appState = {
-    currentStep: 1,
     videoId: null,
     videoInfo: null,
     nicheId: null,
@@ -8,6 +7,7 @@ const appState = {
     numberOfCuts: 0,
     trimStart: 0,
     trimEnd: null,
+    cutDuration: 60, // Duração padrão por corte em segundos
     headlineStyle: 'bold',
     font: 'Inter',
     captionStyle: 'tiktok',
@@ -21,7 +21,7 @@ const API_BASE = window.location.origin;
 document.addEventListener('DOMContentLoaded', () => {
     loadNiches();
     setupFileUpload();
-    setupStepNavigation();
+    setupRetentionRadio();
 });
 
 // Setup file upload
@@ -35,6 +35,19 @@ function setupFileUpload() {
             fileName.textContent = file.name;
             await uploadVideo(file);
         }
+    });
+}
+
+// Setup retention radio buttons
+function setupRetentionRadio() {
+    document.querySelectorAll('input[name="retention"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'none') {
+                appState.retentionVideoId = null;
+            } else if (e.target.value === 'random') {
+                appState.retentionVideoId = 'random';
+            }
+        });
     });
 }
 
@@ -55,8 +68,7 @@ async function uploadVideo(file) {
             appState.videoId = data.videoId;
             appState.videoInfo = data.video;
             showVideoPreview(data.video);
-            // Ir para step 2 (trim) automaticamente
-            goToStep(2);
+            showTrimSection();
             setupTrimVideo(data.video);
         } else {
             alert('Erro ao fazer upload: ' + data.error);
@@ -102,21 +114,18 @@ async function processYouTube() {
                 const warningMsg = data.warning || 'Algumas informações do vídeo não puderam ser obtidas automaticamente. Você pode continuar normalmente.';
                 if (confirm(warningMsg + '\n\nDeseja continuar?')) {
                     showVideoPreview(data.video);
-                    goToStep(2);
+                    showTrimSection();
                     setupTrimVideo(data.video);
                 }
             } else {
                 showVideoPreview(data.video);
-                // Ir para step 2 (trim) automaticamente
-                goToStep(2);
+                showTrimSection();
                 setupTrimVideo(data.video);
             }
         } else {
-            // Mostrar erro mais detalhado
             const errorMsg = data.error || data.details || 'Erro desconhecido';
             const suggestion = data.suggestion || '';
             const fullMessage = suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg;
-            
             alert(fullMessage);
             console.error('Erro detalhado:', data);
         }
@@ -141,59 +150,65 @@ function showVideoPreview(video) {
     `;
 }
 
+// Mostrar seção de trim
+function showTrimSection() {
+    const trimSection = document.getElementById('section-trim');
+    trimSection.classList.remove('hidden');
+    // Scroll suave para a seção
+    setTimeout(() => {
+        trimSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+}
+
 // Configurar vídeo no trim
 function setupTrimVideo(video) {
-    const trimVideo = document.getElementById('trim-video');
-    const trimStartInput = document.getElementById('trim-start');
-    const trimEndInput = document.getElementById('trim-end');
+    const trimContainer = document.getElementById('trim-video-container');
+    trimContainer.innerHTML = ''; // Limpar container
     
     // Se for vídeo do YouTube, usar iframe
     if (video.youtubeVideoId || video.youtubeUrl) {
         const videoId = video.youtubeVideoId || extractYouTubeId(video.youtubeUrl);
         if (videoId) {
-            // Criar iframe do YouTube
-            trimVideo.style.display = 'none';
             const iframe = document.createElement('iframe');
             iframe.id = 'youtube-player';
             iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
             iframe.width = '100%';
             iframe.height = '400';
             iframe.style.border = 'none';
+            iframe.style.borderRadius = '8px';
             iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
             iframe.allowFullscreen = true;
-            
-            // Remover iframe anterior se existir
-            const existingIframe = document.getElementById('youtube-player');
-            if (existingIframe) {
-                existingIframe.remove();
-            }
-            
-            trimVideo.parentElement.appendChild(iframe);
+            trimContainer.appendChild(iframe);
         }
     } else if (video.path) {
         // Vídeo local
-        trimVideo.src = `${API_BASE}/api/video/stream/${video.id}`;
-        trimVideo.style.display = 'block';
+        const videoEl = document.createElement('video');
+        videoEl.id = 'trim-video';
+        videoEl.src = `${API_BASE}/api/video/stream/${video.id}`;
+        videoEl.controls = true;
+        videoEl.style.width = '100%';
+        videoEl.style.borderRadius = '8px';
+        trimContainer.appendChild(videoEl);
     }
     
-    // Configurar valores padrão
+    // Configurar inputs
+    const trimStartInput = document.getElementById('trim-start');
+    const trimEndInput = document.getElementById('trim-end');
+    
     trimStartInput.value = 0;
     
-    // Se não tiver duração (modo limitado), permitir input livre
     if (video.duration && video.duration > 0) {
         trimStartInput.max = video.duration;
         trimEndInput.value = video.duration;
         trimEndInput.max = video.duration;
         trimEndInput.placeholder = `Máximo: ${formatDuration(video.duration)}`;
     } else {
-        // Modo limitado - permitir que usuário defina manualmente
         trimStartInput.max = '';
         trimEndInput.placeholder = 'Digite a duração em segundos (ex: 3600 para 1 hora)';
-        trimEndInput.title = 'Como o vídeo está em modo limitado, defina a duração manualmente em segundos';
     }
     
-    // Atualizar estimativa inicial
-    updateTrimEstimate();
+    // Calcular estimativa inicial
+    calculateCutsEstimate();
 }
 
 // Extrair ID do YouTube
@@ -210,50 +225,44 @@ function extractYouTubeId(url) {
     return null;
 }
 
-// Atualizar estimativa de cortes
-function updateTrimEstimate() {
+// Calcular estimativa de cortes (nova função melhorada)
+function calculateCutsEstimate() {
     const trimStart = parseInt(document.getElementById('trim-start').value) || 0;
     const trimEnd = parseInt(document.getElementById('trim-end').value);
     const duration = appState.videoInfo?.duration || 0;
     
-    const effectiveDuration = trimEnd ? (trimEnd - trimStart) : (duration - trimStart);
+    // Obter duração do corte selecionada
+    const cutDurationRadio = document.querySelector('input[name="cut-duration"]:checked');
+    const cutDuration = parseInt(cutDurationRadio?.value || 60);
+    appState.cutDuration = cutDuration;
     
-    // Assumindo cortes de 60 segundos
-    const estimatedCuts = Math.max(1, Math.floor(effectiveDuration / 60));
-    
-    const estimateText = document.getElementById('trim-estimate');
-    if (effectiveDuration > 0) {
-        estimateText.textContent = `Este vídeo gerará aproximadamente ${estimatedCuts} partes`;
-    } else {
-        estimateText.textContent = 'Defina o trim para calcular o número de partes';
+    // Calcular duração efetiva
+    let effectiveDuration = 0;
+    if (trimEnd && trimEnd > trimStart) {
+        effectiveDuration = trimEnd - trimStart;
+    } else if (duration > trimStart) {
+        effectiveDuration = duration - trimStart;
     }
-}
-
-// Calcular cortes
-function calculateCuts() {
-    const trimStart = parseInt(document.getElementById('trim-start').value) || 0;
-    const trimEnd = parseInt(document.getElementById('trim-end').value);
     
+    // Calcular número de cortes
+    const cutsCount = effectiveDuration > 0 ? Math.max(1, Math.floor(effectiveDuration / cutDuration)) : 0;
+    appState.numberOfCuts = cutsCount;
+    
+    // Atualizar UI
+    const cutsCountEl = document.getElementById('cuts-count');
+    if (cutsCountEl) {
+        if (cutsCount > 0) {
+            cutsCountEl.textContent = `${cutsCount} partes`;
+            cutsCountEl.style.color = 'var(--primary)';
+        } else {
+            cutsCountEl.textContent = 'Defina o trim';
+            cutsCountEl.style.color = 'var(--text-muted)';
+        }
+    }
+    
+    // Salvar valores no estado
     appState.trimStart = trimStart;
-    appState.trimEnd = trimEnd;
-    
-    const duration = appState.videoInfo?.duration || 0;
-    const effectiveDuration = trimEnd ? (trimEnd - trimStart) : (duration - trimStart);
-    
-    if (effectiveDuration <= 0) {
-        alert('Por favor, defina um trim válido (fim maior que início)');
-        return;
-    }
-    
-    // Assumindo cortes de 60 segundos
-    const estimatedCuts = Math.max(1, Math.floor(effectiveDuration / 60));
-    
-    appState.numberOfCuts = estimatedCuts;
-    
-    const estimateText = document.getElementById('trim-estimate');
-    estimateText.textContent = `Este vídeo gerará aproximadamente ${estimatedCuts} partes`;
-    
-    nextStep();
+    appState.trimEnd = trimEnd || duration;
 }
 
 // Carregar nichos
@@ -282,19 +291,21 @@ async function loadNiches() {
 
 // Selecionar nicho
 async function selectNiche(nicheId, cardElement) {
-    // Remover seleção anterior
     document.querySelectorAll('.niche-card').forEach(card => {
         card.classList.remove('selected');
     });
     
-    // Adicionar seleção atual
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    // Carregar vídeos de retenção do nicho
-    await loadRetentionVideos(nicheId);
+    // Mostrar seção de retenção
+    const retentionSection = document.getElementById('section-retention');
+    retentionSection.classList.remove('hidden');
+    setTimeout(() => {
+        retentionSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
     
-    nextStep();
+    await loadRetentionVideos(nicheId);
 }
 
 // Carregar vídeos de retenção
@@ -319,6 +330,10 @@ async function loadRetentionVideos(nicheId) {
             card.addEventListener('click', () => selectRetentionVideo(video.id, card));
             grid.appendChild(card);
         });
+        
+        // Mostrar seção de preview após selecionar retenção
+        const previewSection = document.getElementById('section-preview');
+        previewSection.classList.remove('hidden');
     } catch (error) {
         console.error('Erro ao carregar vídeos de retenção:', error);
     }
@@ -326,31 +341,22 @@ async function loadRetentionVideos(nicheId) {
 
 // Selecionar vídeo de retenção
 function selectRetentionVideo(videoId, cardElement) {
-    // Remover seleção anterior
     document.querySelectorAll('.retention-card').forEach(card => {
         card.classList.remove('selected');
     });
     
-    // Adicionar seleção atual
     cardElement.classList.add('selected');
     appState.retentionVideoId = videoId;
     
+    // Mostrar seção de preview
+    const previewSection = document.getElementById('section-preview');
+    previewSection.classList.remove('hidden');
+    setTimeout(() => {
+        previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    
     updatePreview();
 }
-
-// Setup radio buttons para retenção
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('input[name="retention"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            if (e.target.value === 'none') {
-                appState.retentionVideoId = null;
-            } else if (e.target.value === 'random') {
-                appState.retentionVideoId = 'random';
-            }
-            updatePreview();
-        });
-    });
-});
 
 // Atualizar preview
 function updatePreview() {
@@ -401,7 +407,8 @@ async function generateSeries() {
                 headlineStyle: appState.headlineStyle,
                 font: appState.font,
                 trimStart: appState.trimStart,
-                trimEnd: appState.trimEnd
+                trimEnd: appState.trimEnd,
+                cutDuration: appState.cutDuration
             })
         });
         
@@ -410,8 +417,6 @@ async function generateSeries() {
         if (response.ok) {
             appState.jobId = data.jobId;
             appState.seriesId = data.seriesId;
-            
-            // Monitorar progresso
             monitorProgress(data.jobId);
         } else {
             alert('Erro ao gerar série: ' + data.error);
@@ -481,47 +486,9 @@ function openTikTokStudio() {
     window.open('https://www.tiktok.com/studio', '_blank');
 }
 
-// Navegação entre steps
-function setupStepNavigation() {
-    // Implementar navegação se necessário
-}
-
-function nextStep() {
-    if (appState.currentStep < 5) {
-        appState.currentStep++;
-        updateStepDisplay();
-    }
-}
-
-function goToStep(step) {
-    appState.currentStep = step;
-    updateStepDisplay();
-}
-
-function updateStepDisplay() {
-    // Atualizar indicador de steps
-    document.querySelectorAll('.step').forEach((step, index) => {
-        if (index + 1 <= appState.currentStep) {
-            step.classList.add('active');
-        } else {
-            step.classList.remove('active');
-        }
-    });
-    
-    // Atualizar conteúdo dos steps
-    document.querySelectorAll('.step-content').forEach((content, index) => {
-        if (index + 1 === appState.currentStep) {
-            content.classList.add('active');
-        } else {
-            content.classList.remove('active');
-        }
-    });
-}
-
 // Formatar duração
 function formatDuration(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
-
