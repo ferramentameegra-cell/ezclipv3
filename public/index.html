@@ -3,409 +3,365 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EZ Clips AI V2 - Plataforma Completa</title>
+    <title>EZ Clips AI - Crie Vídeos Virais com IA</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Navigation Header with Tabs -->
-    <nav class="main-nav">
-        <div class="nav-container">
-            <div class="nav-brand">
-                <h1 class="brand-logo">EZ Clips AI <span class="brand-version">V2</span></h1>
+    <!-- Top Navigation Bar -->
+    <nav class="top-nav">
+        <div class="nav-wrapper">
+            <div class="nav-left">
+                <div class="logo-container">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="logo-text">EZ Clips AI</span>
+                </div>
             </div>
-            <div class="nav-tabs">
-                <button class="nav-tab active" data-tab="home" onclick="switchTab('home')">
-                    <span class="tab-icon">🏠</span>
-                    <span class="tab-text">Início</span>
+            <div class="nav-center">
+                <button class="nav-link active" data-tab="home" onclick="switchTab('home')">
+                    <span>Criar Clips</span>
                 </button>
-                <button class="nav-tab" data-tab="login" onclick="switchTab('login')">
-                    <span class="tab-icon">🔐</span>
-                    <span class="tab-text">Login</span>
-                </button>
-                <button class="nav-tab" data-tab="cursos" onclick="switchTab('cursos')">
-                    <span class="tab-icon">📚</span>
-                    <span class="tab-text">Cursos</span>
+                <button class="nav-link" data-tab="cursos" onclick="switchTab('cursos')">
+                    <span>Cursos</span>
                 </button>
             </div>
-            <div class="nav-user" id="nav-user">
-                <div class="user-info hidden" id="user-info">
-                    <span class="user-name" id="user-name"></span>
-                    <button class="btn-logout" onclick="logout()">Sair</button>
+            <div class="nav-right">
+                <div class="user-section" id="user-section">
+                    <button class="btn-login-nav" id="btn-login-nav" onclick="switchTab('login')">
+                        Entrar
+                    </button>
+                    <div class="user-menu hidden" id="user-menu">
+                        <div class="user-avatar" id="user-avatar">
+                            <span id="user-initial">U</span>
+                        </div>
+                        <div class="user-dropdown" id="user-dropdown">
+                            <div class="user-info-dropdown">
+                                <div class="user-name-dropdown" id="user-name-dropdown"></div>
+                                <div class="user-email-dropdown" id="user-email-dropdown"></div>
+                            </div>
+                            <button class="dropdown-item" onclick="logout()">Sair</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content Container -->
-    <div class="main-container">
-        <!-- TAB 1: HOME - EZ Clips AI Tool -->
-        <div class="tab-content active" id="tab-home">
-            <div class="page-header">
-                <h2 class="page-title">Retention Engine</h2>
-                <p class="page-subtitle">Transforme vídeos longos em séries cronológicas virais</p>
-            </div>
-
-            <!-- Step 1: YouTube Input -->
-            <section class="app-step" id="step-youtube" data-step="1">
-                <div class="step-header">
-                    <div class="step-number">1</div>
-                    <div class="step-content-header">
-                        <h2>Cole o link do YouTube</h2>
-                        <p class="step-subtitle">O vídeo será carregado automaticamente e o trim aparecerá abaixo</p>
-                    </div>
-                </div>
-                <div class="youtube-input-section">
-                    <div class="input-group">
-                        <input 
-                            type="text" 
-                            id="youtube-url" 
-                            class="youtube-input" 
-                            placeholder="https://youtube.com/watch?v=..."
-                            autocomplete="off"
-                            spellcheck="false"
-                        >
-                        <button class="btn-process" id="btn-process" onclick="handleYouTubeSubmit()">
-                            <span class="btn-text">Processar</span>
-                            <span class="btn-spinner hidden">⏳</span>
-                        </button>
-                    </div>
-                    <div id="youtube-status" class="status-message hidden"></div>
-                </div>
-            </section>
-
-            <!-- Step 2: Video Player & Trim -->
-            <section class="app-step hidden" id="step-trim" data-step="2">
-                <div class="step-header">
-                    <div class="step-number">2</div>
-                    <div class="step-content-header">
-                        <h2>Defina o trim do vídeo</h2>
-                        <p class="step-subtitle">Use os sliders ou digite os valores. O cálculo é instantâneo.</p>
-                    </div>
-                </div>
-                
-                <div class="trim-section">
-                    <div class="video-player-wrapper">
-                        <div id="video-player-container" class="video-player-container">
-                            <div class="video-placeholder">Carregando vídeo...</div>
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- TAB: HOME - Create Clips -->
+        <div class="tab-panel active" id="panel-home">
+            <!-- Hero Section -->
+            <section class="hero-section">
+                <div class="hero-content">
+                    <h1 class="hero-title">Transforme vídeos longos em <span class="gradient-text">clips virais</span></h1>
+                    <p class="hero-subtitle">IA avançada que cria séries cronológicas otimizadas para TikTok, Reels e Shorts</p>
+                    <div class="hero-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">10K+</div>
+                            <div class="stat-label">Clips criados</div>
                         </div>
-                    </div>
-
-                    <div class="trim-controls-wrapper">
-                        <div class="time-control">
-                            <div class="time-control-header">
-                                <label class="time-label">Tempo Inicial</label>
-                                <span class="time-display" id="start-time-display">00:00</span>
-                            </div>
-                            <div class="time-control-inputs">
-                                <input 
-                                    type="range" 
-                                    id="trim-start-slider" 
-                                    class="time-slider" 
-                                    min="0" 
-                                    max="0"
-                                    value="0"
-                                    step="1"
-                                >
-                                <input 
-                                    type="number" 
-                                    id="trim-start-input" 
-                                    class="time-input" 
-                                    min="0" 
-                                    value="0"
-                                    step="1"
-                                >
-                                <span class="time-unit">seg</span>
-                            </div>
+                        <div class="stat-item">
+                            <div class="stat-number">95%</div>
+                            <div class="stat-label">Taxa de retenção</div>
                         </div>
-
-                        <div class="time-control">
-                            <div class="time-control-header">
-                                <label class="time-label">Tempo Final</label>
-                                <span class="time-display" id="end-time-display">00:00</span>
-                            </div>
-                            <div class="time-control-inputs">
-                                <input 
-                                    type="range" 
-                                    id="trim-end-slider" 
-                                    class="time-slider" 
-                                    min="0" 
-                                    max="0"
-                                    value="0"
-                                    step="1"
-                                >
-                                <input 
-                                    type="number" 
-                                    id="trim-end-input" 
-                                    class="time-input" 
-                                    min="0" 
-                                    value="0"
-                                    step="1"
-                                >
-                                <span class="time-unit">seg</span>
-                            </div>
-                        </div>
-
-                        <div class="duration-selection-card">
-                            <label class="duration-label">Duração por corte:</label>
-                            <div class="duration-buttons">
-                                <button 
-                                    class="duration-btn active" 
-                                    data-duration="60"
-                                    onclick="selectDuration(60)"
-                                >
-                                    60 segundos
-                                </button>
-                                <button 
-                                    class="duration-btn" 
-                                    data-duration="120"
-                                    onclick="selectDuration(120)"
-                                >
-                                    120 segundos
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="clips-calculation-card" id="clips-calculation">
-                            <div class="clips-label">Este vídeo renderá:</div>
-                            <div class="clips-number" id="clips-count">0</div>
-                            <div class="clips-unit">partes</div>
+                        <div class="stat-item">
+                            <div class="stat-number">5min</div>
+                            <div class="stat-label">Tempo médio</div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Step 3: Niche Selection -->
-            <section class="app-step hidden" id="step-niche" data-step="3">
-                <div class="step-header">
-                    <div class="step-number">3</div>
-                    <div class="step-content-header">
-                        <h2>Escolha o nicho</h2>
-                        <p class="step-subtitle">Cada nicho possui vídeos de retenção otimizados</p>
+            <!-- YouTube Input Card -->
+            <section class="input-section">
+                <div class="card-modern">
+                    <div class="card-header">
+                        <h2 class="card-title">Cole o link do YouTube</h2>
+                        <p class="card-description">Nossa IA processará o vídeo e preparará os clips automaticamente</p>
                     </div>
-                </div>
-                <div id="niches-container" class="niches-container"></div>
-            </section>
-
-            <!-- Step 4: Retention Videos -->
-            <section class="app-step hidden" id="step-retention" data-step="4">
-                <div class="step-header">
-                    <div class="step-number">4</div>
-                    <div class="step-content-header">
-                        <h2>Vídeo de Retenção</h2>
-                        <p class="step-subtitle">Escolha o vídeo que manterá a atenção</p>
-                    </div>
-                </div>
-                <div class="retention-options-row">
-                    <label class="retention-radio">
-                        <input type="radio" name="retention-mode" value="random" checked onchange="updateRetentionMode('random')">
-                        <span>Randomizar por corte</span>
-                    </label>
-                    <label class="retention-radio">
-                        <input type="radio" name="retention-mode" value="none" onchange="updateRetentionMode('none')">
-                        <span>Nenhum (não recomendado)</span>
-                    </label>
-                </div>
-                <div id="retention-container" class="retention-container"></div>
-            </section>
-
-            <!-- Step 5: Preview & Generate -->
-            <section class="app-step hidden" id="step-preview" data-step="5">
-                <div class="step-header">
-                    <div class="step-number">5</div>
-                    <div class="step-content-header">
-                        <h2>Preview e Estilo</h2>
-                        <p class="step-subtitle">Visualize o layout final e ajuste o estilo</p>
-                    </div>
-                </div>
-                <div class="preview-layout">
-                    <div class="preview-display">
-                        <div class="preview-frame" id="preview-frame">
-                            <div class="preview-top-area">
-                                <div class="preview-video-main">Vídeo Principal</div>
-                            </div>
-                            <div class="preview-middle-area">
-                                <div class="preview-headline-text" id="preview-headline">Headline Impactante</div>
-                            </div>
-                            <div class="preview-bottom-area">
-                                <div class="preview-video-retention">Vídeo de Retenção</div>
-                            </div>
-                            <div class="preview-overlay-elements">
-                                <div class="preview-captions-text">Legendas animadas</div>
-                                <div class="preview-part-badge" id="preview-part">PARTE 1/<span id="preview-total">0</span></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="preview-controls">
-                        <div class="control-group">
-                            <label>Fonte da Headline</label>
-                            <select id="headline-font-select" class="control-select" onchange="updatePreviewStyle()">
-                                <option value="Inter">Inter</option>
-                                <option value="Roboto">Roboto</option>
-                                <option value="Montserrat">Montserrat</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>Estilo da Headline</label>
-                            <select id="headline-style-select" class="control-select" onchange="updatePreviewStyle()">
-                                <option value="bold">Bold</option>
-                                <option value="impact">Impact</option>
-                                <option value="modern">Modern</option>
-                            </select>
-                        </div>
-                        <button class="btn-generate-final" onclick="generateSeries()">
-                            <span>Gerar Série Completa</span>
-                        </button>
-                    </div>
-                </div>
-            </section>
-        </div>
-
-        <!-- TAB 2: LOGIN -->
-        <div class="tab-content" id="tab-login">
-            <div class="login-container">
-                <div class="login-box">
-                    <h2 class="login-title">Entrar na Plataforma</h2>
-                    <p class="login-subtitle">Acesse sua conta para recursos exclusivos</p>
-                    
-                    <form id="login-form" class="login-form" onsubmit="handleLogin(event)">
-                        <div class="form-group">
-                            <label for="login-email">Email</label>
-                            <input 
-                                type="email" 
-                                id="login-email" 
-                                class="form-input" 
-                                placeholder="seu@email.com"
-                                required
-                            >
-                        </div>
-                        <div class="form-group">
-                            <label for="login-password">Senha</label>
-                            <input 
-                                type="password" 
-                                id="login-password" 
-                                class="form-input" 
-                                placeholder="••••••••"
-                                required
-                            >
-                        </div>
-                        <button type="submit" class="btn-login-submit">
-                            <span id="login-btn-text">Entrar</span>
-                            <span id="login-btn-spinner" class="hidden">⏳</span>
-                        </button>
-                    </form>
-
-                    <div class="login-divider">
-                        <span>ou</span>
-                    </div>
-
-                    <button class="btn-register" onclick="showRegister()">
-                        Criar nova conta
-                    </button>
-
-                    <div id="login-status" class="login-status hidden"></div>
-                </div>
-
-                <!-- Register Box (hidden by default) -->
-                <div class="register-box hidden" id="register-box">
-                    <h2 class="login-title">Criar Conta</h2>
-                    <p class="login-subtitle">Cadastre-se para começar</p>
-                    
-                    <form id="register-form" class="login-form" onsubmit="handleRegister(event)">
-                        <div class="form-group">
-                            <label for="register-name">Nome Completo</label>
+                    <div class="input-container">
+                        <div class="input-wrapper-modern">
+                            <svg class="input-icon" viewBox="0 0 24 24" fill="none">
+                                <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2"/>
+                                <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                             <input 
                                 type="text" 
-                                id="register-name" 
-                                class="form-input" 
-                                placeholder="Seu nome"
-                                required
+                                id="youtube-url" 
+                                class="input-modern" 
+                                placeholder="https://youtube.com/watch?v=..."
+                                autocomplete="off"
                             >
                         </div>
-                        <div class="form-group">
-                            <label for="register-email">Email</label>
-                            <input 
-                                type="email" 
-                                id="register-email" 
-                                class="form-input" 
-                                placeholder="seu@email.com"
-                                required
-                            >
+                        <button class="btn-primary-modern" id="btn-process" onclick="handleYouTubeSubmit()">
+                            <span class="btn-text" id="btn-text">Processar Vídeo</span>
+                            <span class="btn-loader hidden" id="btn-loader">
+                                <svg class="spinner" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                        <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                    </circle>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                    <div id="youtube-status" class="status-modern hidden"></div>
+                </div>
+            </section>
+
+            <!-- Trim Tool Section -->
+            <section class="trim-section-modern hidden" id="section-trim">
+                <div class="card-modern">
+                    <div class="card-header">
+                        <h2 class="card-title">Defina o intervalo do vídeo</h2>
+                        <p class="card-description">Selecione o trecho que deseja transformar em clips</p>
+                    </div>
+                    <div class="trim-layout-modern">
+                        <div class="video-preview-modern">
+                            <div id="video-player-container" class="video-container-modern">
+                                <div class="video-placeholder-modern">
+                                    <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none">
+                                        <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+                                    </svg>
+                                    <p>Carregando vídeo...</p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="register-password">Senha</label>
-                            <input 
-                                type="password" 
-                                id="register-password" 
-                                class="form-input" 
-                                placeholder="Mínimo 6 caracteres"
-                                minlength="6"
-                                required
-                            >
+                        <div class="trim-controls-modern">
+                            <div class="time-range-group">
+                                <div class="time-label-group">
+                                    <label class="time-label-modern">Tempo Inicial</label>
+                                    <span class="time-value-modern" id="start-time-display">00:00</span>
+                                </div>
+                                <input type="range" id="trim-start-slider" class="range-modern" min="0" max="0" value="0" step="1">
+                                <input type="number" id="trim-start-input" class="time-input-modern" min="0" value="0" step="1">
+                            </div>
+                            <div class="time-range-group">
+                                <div class="time-label-group">
+                                    <label class="time-label-modern">Tempo Final</label>
+                                    <span class="time-value-modern" id="end-time-display">00:00</span>
+                                </div>
+                                <input type="range" id="trim-end-slider" class="range-modern" min="0" max="0" value="0" step="1">
+                                <input type="number" id="trim-end-input" class="time-input-modern" min="0" value="0" step="1">
+                            </div>
+                            <div class="duration-selector">
+                                <label class="selector-label">Duração por clip</label>
+                                <div class="duration-buttons-modern">
+                                    <button class="duration-btn-modern active" data-duration="60" onclick="selectDuration(60)">
+                                        60s
+                                    </button>
+                                    <button class="duration-btn-modern" data-duration="120" onclick="selectDuration(120)">
+                                        120s
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="clips-result-modern" id="clips-result">
+                                <div class="result-label">Total de clips</div>
+                                <div class="result-number" id="clips-count">0</div>
+                            </div>
                         </div>
-                        <button type="submit" class="btn-login-submit">
-                            <span id="register-btn-text">Criar Conta</span>
-                            <span id="register-btn-spinner" class="hidden">⏳</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Niche Selection -->
+            <section class="niche-section-modern hidden" id="section-niche">
+                <div class="card-modern">
+                    <div class="card-header">
+                        <h2 class="card-title">Escolha o nicho</h2>
+                        <p class="card-description">Cada nicho possui vídeos de retenção otimizados</p>
+                    </div>
+                    <div id="niches-grid-modern" class="niches-grid-modern"></div>
+                </div>
+            </section>
+
+            <!-- Retention Videos -->
+            <section class="retention-section-modern hidden" id="section-retention">
+                <div class="card-modern">
+                    <div class="card-header">
+                        <h2 class="card-title">Vídeo de Retenção</h2>
+                        <p class="card-description">Escolha o vídeo que manterá a atenção do público</p>
+                    </div>
+                    <div class="retention-options-modern">
+                        <label class="radio-modern">
+                            <input type="radio" name="retention-mode" value="random" checked onchange="updateRetentionMode('random')">
+                            <span>Randomizar por clip</span>
+                        </label>
+                        <label class="radio-modern">
+                            <input type="radio" name="retention-mode" value="none" onchange="updateRetentionMode('none')">
+                            <span>Sem vídeo de retenção</span>
+                        </label>
+                    </div>
+                    <div id="retention-grid-modern" class="retention-grid-modern"></div>
+                </div>
+            </section>
+
+            <!-- Preview & Generate -->
+            <section class="preview-section-modern hidden" id="section-preview">
+                <div class="card-modern">
+                    <div class="card-header">
+                        <h2 class="card-title">Preview e Estilo</h2>
+                        <p class="card-description">Visualize como seus clips ficarão</p>
+                    </div>
+                    <div class="preview-layout-modern">
+                        <div class="preview-display-modern">
+                            <div class="preview-frame-modern" id="preview-frame">
+                                <div class="preview-top-modern">Vídeo Principal</div>
+                                <div class="preview-middle-modern">
+                                    <div class="preview-headline-modern" id="preview-headline">Headline</div>
+                                </div>
+                                <div class="preview-bottom-modern">Retenção</div>
+                                <div class="preview-badge-modern">PARTE 1/<span id="preview-total">0</span></div>
+                            </div>
+                        </div>
+                        <div class="preview-controls-modern">
+                            <div class="control-group-modern">
+                                <label>Fonte</label>
+                                <select id="headline-font-select" class="select-modern" onchange="updatePreviewStyle()">
+                                    <option value="Inter">Inter</option>
+                                    <option value="Roboto">Roboto</option>
+                                    <option value="Montserrat">Montserrat</option>
+                                </select>
+                            </div>
+                            <div class="control-group-modern">
+                                <label>Estilo</label>
+                                <select id="headline-style-select" class="select-modern" onchange="updatePreviewStyle()">
+                                    <option value="bold">Bold</option>
+                                    <option value="impact">Impact</option>
+                                    <option value="modern">Modern</option>
+                                </select>
+                            </div>
+                            <button class="btn-generate-modern" onclick="generateSeries()">
+                                <span>Gerar Série Completa</span>
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB: CURSOS -->
+        <div class="tab-panel" id="panel-cursos">
+            <div class="cursos-header-modern">
+                <h1 class="cursos-title-modern">Cursos e Estudos</h1>
+                <p class="cursos-subtitle-modern">Aprenda com os melhores cursos e transforme seu conhecimento</p>
+            </div>
+            <div class="cursos-filters-modern">
+                <button class="filter-btn-modern active" onclick="filterCursos('all')">Todos</button>
+                <button class="filter-btn-modern" onclick="filterCursos('video')">Vídeo</button>
+                <button class="filter-btn-modern" onclick="filterCursos('marketing')">Marketing</button>
+                <button class="filter-btn-modern" onclick="filterCursos('business')">Negócios</button>
+                <button class="filter-btn-modern" onclick="filterCursos('tech')">Tecnologia</button>
+            </div>
+            <div class="cursos-grid-modern" id="cursos-grid-modern"></div>
+        </div>
+
+        <!-- TAB: LOGIN -->
+        <div class="tab-panel" id="panel-login">
+            <div class="login-container-modern">
+                <div class="login-card-modern">
+                    <div class="login-header-modern">
+                        <h2 class="login-title-modern">Entrar</h2>
+                        <p class="login-subtitle-modern">Acesse sua conta para continuar</p>
+                    </div>
+                    <form id="login-form" class="login-form-modern" onsubmit="handleLogin(event)">
+                        <div class="form-group-modern">
+                            <label>Email</label>
+                            <input type="email" id="login-email" class="input-form-modern" placeholder="seu@email.com" required>
+                        </div>
+                        <div class="form-group-modern">
+                            <label>Senha</label>
+                            <input type="password" id="login-password" class="input-form-modern" placeholder="••••••••" required>
+                        </div>
+                        <button type="submit" class="btn-login-modern">
+                            <span id="login-btn-text">Entrar</span>
+                            <span id="login-btn-spinner" class="hidden">
+                                <svg class="spinner-small" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                        <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                    </circle>
+                                </svg>
+                            </span>
                         </button>
                     </form>
-
-                    <div class="login-divider">
+                    <div class="login-divider-modern">
                         <span>ou</span>
                     </div>
-
-                    <button class="btn-register" onclick="showLogin()">
-                        Já tenho uma conta
-                    </button>
-
-                    <div id="register-status" class="login-status hidden"></div>
+                    <button class="btn-register-modern" onclick="showRegister()">Criar conta</button>
+                    <div id="login-status" class="status-modern hidden"></div>
+                </div>
+                <div class="register-card-modern hidden" id="register-card">
+                    <div class="login-header-modern">
+                        <h2 class="login-title-modern">Criar Conta</h2>
+                        <p class="login-subtitle-modern">Cadastre-se para começar</p>
+                    </div>
+                    <form id="register-form" class="login-form-modern" onsubmit="handleRegister(event)">
+                        <div class="form-group-modern">
+                            <label>Nome Completo</label>
+                            <input type="text" id="register-name" class="input-form-modern" placeholder="Seu nome" required>
+                        </div>
+                        <div class="form-group-modern">
+                            <label>Email</label>
+                            <input type="email" id="register-email" class="input-form-modern" placeholder="seu@email.com" required>
+                        </div>
+                        <div class="form-group-modern">
+                            <label>Senha</label>
+                            <input type="password" id="register-password" class="input-form-modern" placeholder="Mínimo 6 caracteres" minlength="6" required>
+                        </div>
+                        <button type="submit" class="btn-login-modern">
+                            <span id="register-btn-text">Criar Conta</span>
+                            <span id="register-btn-spinner" class="hidden">
+                                <svg class="spinner-small" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                        <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                    </circle>
+                                </svg>
+                            </span>
+                        </button>
+                    </form>
+                    <div class="login-divider-modern">
+                        <span>ou</span>
+                    </div>
+                    <button class="btn-register-modern" onclick="showLogin()">Já tenho conta</button>
+                    <div id="register-status" class="status-modern hidden"></div>
                 </div>
             </div>
         </div>
-
-        <!-- TAB 3: CURSOS / ESTUDO -->
-        <div class="tab-content" id="tab-cursos">
-            <div class="cursos-header">
-                <h2 class="cursos-title">Cursos e Estudos</h2>
-                <p class="cursos-subtitle">Aprenda com os melhores cursos e transforme seu conhecimento</p>
-            </div>
-
-            <div class="cursos-filters">
-                <button class="filter-btn active" onclick="filterCursos('all')">Todos</button>
-                <button class="filter-btn" onclick="filterCursos('video')">Vídeo</button>
-                <button class="filter-btn" onclick="filterCursos('marketing')">Marketing</button>
-                <button class="filter-btn" onclick="filterCursos('business')">Negócios</button>
-                <button class="filter-btn" onclick="filterCursos('tech')">Tecnologia</button>
-            </div>
-
-            <div class="cursos-grid" id="cursos-grid">
-                <!-- Cursos serão carregados dinamicamente -->
-            </div>
-        </div>
-    </div>
+    </main>
 
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="loading-overlay hidden">
-        <div class="loading-box">
-            <div class="loading-spinner"></div>
+    <div id="loading-overlay" class="loading-overlay-modern hidden">
+        <div class="loading-card-modern">
+            <div class="loading-spinner-modern"></div>
             <h3>Gerando série...</h3>
-            <div class="loading-progress-bar">
-                <div class="loading-progress-fill" id="loading-progress"></div>
+            <div class="progress-bar-modern">
+                <div class="progress-fill-modern" id="loading-progress"></div>
             </div>
-            <p class="loading-percent" id="loading-percent">0%</p>
+            <p class="progress-text-modern" id="loading-percent">0%</p>
         </div>
     </div>
 
     <!-- Success Modal -->
-    <div id="success-modal" class="success-modal hidden">
-        <div class="success-modal-content">
-            <div class="success-icon">✓</div>
+    <div id="success-modal" class="modal-modern hidden">
+        <div class="modal-content-modern">
+            <div class="modal-icon-modern">✓</div>
             <h2>Série gerada com sucesso!</h2>
             <p id="success-message"></p>
-            <div class="success-actions">
-                <button class="btn-download" onclick="downloadSeries()">Download ZIP</button>
-                <button class="btn-tiktok" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
+            <div class="modal-actions-modern">
+                <button class="btn-modal-modern primary" onclick="downloadSeries()">Download ZIP</button>
+                <button class="btn-modal-modern secondary" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
             </div>
         </div>
     </div>

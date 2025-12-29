@@ -37,16 +37,18 @@ function switchTab(tabName) {
     appState.currentTab = tabName;
     
     // Atualizar tabs visuais
-    document.querySelectorAll('.nav-tab').forEach(tab => {
+    document.querySelectorAll('.nav-link').forEach(tab => {
         tab.classList.remove('active');
     });
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    const navLink = document.querySelector(`[data-tab="${tabName}"]`);
+    if (navLink) navLink.classList.add('active');
     
     // Mostrar conteúdo da tab
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
     });
-    document.getElementById(`tab-${tabName}`).classList.add('active');
+    const panel = document.getElementById(`panel-${tabName}`);
+    if (panel) panel.classList.add('active');
     
     // Scroll para o topo
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -62,14 +64,25 @@ function checkAuth() {
 }
 
 function updateUserUI() {
-    const userInfo = document.getElementById('user-info');
-    const userName = document.getElementById('user-name');
+    const userSection = document.getElementById('user-section');
+    const btnLoginNav = document.getElementById('btn-login-nav');
+    const userMenu = document.getElementById('user-menu');
+    const userInitial = document.getElementById('user-initial');
+    const userNameDropdown = document.getElementById('user-name-dropdown');
+    const userEmailDropdown = document.getElementById('user-email-dropdown');
     
     if (appState.currentUser) {
-        userInfo.classList.remove('hidden');
-        userName.textContent = appState.currentUser.name || appState.currentUser.email;
+        if (btnLoginNav) btnLoginNav.classList.add('hidden');
+        if (userMenu) userMenu.classList.remove('hidden');
+        if (userInitial) {
+            const name = appState.currentUser.name || appState.currentUser.email;
+            userInitial.textContent = name.charAt(0).toUpperCase();
+        }
+        if (userNameDropdown) userNameDropdown.textContent = appState.currentUser.name || 'Usuário';
+        if (userEmailDropdown) userEmailDropdown.textContent = appState.currentUser.email;
     } else {
-        userInfo.classList.add('hidden');
+        if (btnLoginNav) btnLoginNav.classList.remove('hidden');
+        if (userMenu) userMenu.classList.add('hidden');
     }
 }
 
@@ -82,9 +95,9 @@ async function handleLogin(event) {
     const btnSpinner = document.getElementById('login-btn-spinner');
     const statusMsg = document.getElementById('login-status');
     
-    btnText.classList.add('hidden');
-    btnSpinner.classList.remove('hidden');
-    statusMsg.classList.add('hidden');
+    if (btnText) btnText.classList.add('hidden');
+    if (btnSpinner) btnSpinner.classList.remove('hidden');
+    if (statusMsg) statusMsg.classList.add('hidden');
     
     try {
         const response = await fetch(`${API_BASE}/api/auth/login`, {
@@ -100,9 +113,11 @@ async function handleLogin(event) {
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
             localStorage.setItem('ezv2_token', data.token);
             
-            statusMsg.textContent = 'Login realizado com sucesso!';
-            statusMsg.className = 'login-status success';
-            statusMsg.classList.remove('hidden');
+            if (statusMsg) {
+                statusMsg.textContent = 'Login realizado com sucesso!';
+                statusMsg.className = 'status-modern success';
+                statusMsg.classList.remove('hidden');
+            }
             
             updateUserUI();
             
@@ -110,18 +125,22 @@ async function handleLogin(event) {
                 switchTab('home');
             }, 1500);
         } else {
-            statusMsg.textContent = data.error || 'Erro ao fazer login';
-            statusMsg.className = 'login-status error';
-            statusMsg.classList.remove('hidden');
+            if (statusMsg) {
+                statusMsg.textContent = data.error || 'Erro ao fazer login';
+                statusMsg.className = 'status-modern error';
+                statusMsg.classList.remove('hidden');
+            }
         }
     } catch (error) {
         console.error('Erro:', error);
-        statusMsg.textContent = 'Erro ao conectar com o servidor';
-        statusMsg.className = 'login-status error';
-        statusMsg.classList.remove('hidden');
+        if (statusMsg) {
+            statusMsg.textContent = 'Erro ao conectar com o servidor';
+            statusMsg.className = 'status-modern error';
+            statusMsg.classList.remove('hidden');
+        }
     } finally {
-        btnText.classList.remove('hidden');
-        btnSpinner.classList.add('hidden');
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
     }
 }
 
@@ -173,13 +192,17 @@ async function handleRegister(event) {
 }
 
 function showRegister() {
-    document.getElementById('login-form').closest('.login-box').classList.add('hidden');
-    document.getElementById('register-box').classList.remove('hidden');
+    const loginCard = document.querySelector('.login-card-modern');
+    const registerCard = document.getElementById('register-card');
+    if (loginCard) loginCard.classList.add('hidden');
+    if (registerCard) registerCard.classList.remove('hidden');
 }
 
 function showLogin() {
-    document.getElementById('register-box').classList.add('hidden');
-    document.getElementById('login-form').closest('.login-box').classList.remove('hidden');
+    const loginCard = document.querySelector('.login-card-modern');
+    const registerCard = document.getElementById('register-card');
+    if (registerCard) registerCard.classList.add('hidden');
+    if (loginCard) loginCard.classList.remove('hidden');
 }
 
 function logout() {
@@ -272,24 +295,26 @@ function filterCursos(category) {
 }
 
 function renderCursos(cursos) {
-    const grid = document.getElementById('cursos-grid');
+    const grid = document.getElementById('cursos-grid-modern');
+    if (!grid) return;
+    
     grid.innerHTML = '';
     
     cursos.forEach(curso => {
         const card = document.createElement('div');
-        card.className = 'curso-card';
+        card.className = 'curso-card-modern';
         card.innerHTML = `
-            <div class="curso-image">${curso.image}</div>
-            <div class="curso-content">
-                <span class="curso-category">${curso.category.toUpperCase()}</span>
-                <h3 class="curso-title">${curso.title}</h3>
-                <p class="curso-description">${curso.description}</p>
-                <div class="curso-footer">
+            <div class="curso-image-modern">${curso.image}</div>
+            <div class="curso-content-modern">
+                <span class="curso-category-modern">${curso.category.toUpperCase()}</span>
+                <h3 class="curso-title-modern">${curso.title}</h3>
+                <p class="curso-description-modern">${curso.description}</p>
+                <div class="curso-footer-modern">
                     <div>
-                        <span class="curso-price-old">R$ ${curso.oldPrice}</span>
-                        <span class="curso-price">R$ ${curso.price}</span>
+                        <span class="curso-price-old-modern">R$ ${curso.oldPrice}</span>
+                        <span class="curso-price-modern">R$ ${curso.price}</span>
                     </div>
-                    <button class="btn-comprar" onclick="comprarCurso(${curso.id})">
+                    <button class="btn-comprar-modern" onclick="comprarCurso(${curso.id})">
                         Comprar
                     </button>
                 </div>
@@ -408,7 +433,7 @@ function showStatus(message, type) {
 }
 
 function showTrimSection() {
-    const trimSection = document.getElementById('step-trim');
+    const trimSection = document.getElementById('section-trim');
     if (trimSection) {
         trimSection.classList.remove('hidden');
         setTimeout(() => {
@@ -567,7 +592,7 @@ function formatTime(seconds) {
 function selectDuration(seconds) {
     appState.cutDuration = seconds;
     
-    document.querySelectorAll('.duration-btn').forEach(btn => {
+    document.querySelectorAll('.duration-btn-modern').forEach(btn => {
         btn.classList.remove('active');
         if (parseInt(btn.dataset.duration) === seconds) {
             btn.classList.add('active');
@@ -588,16 +613,16 @@ function calculateClips() {
     appState.numberOfCuts = clips;
     
     const clipsCount = document.getElementById('clips-count');
-    const clipsCard = document.getElementById('clips-calculation');
+    const clipsResult = document.getElementById('clips-result');
     const previewTotal = document.getElementById('preview-total');
     
     if (clipsCount) clipsCount.textContent = clips;
     
-    if (clipsCard) {
+    if (clipsResult) {
         if (clips > 0) {
-            clipsCard.classList.add('has-result');
+            clipsResult.style.opacity = '1';
         } else {
-            clipsCard.classList.remove('has-result');
+            clipsResult.style.opacity = '0.5';
         }
     }
     
@@ -609,10 +634,9 @@ function calculateClips() {
 }
 
 function showNextSteps() {
-    const nicheStep = document.getElementById('step-niche');
-    if (nicheStep && !nicheStep.classList.contains('visible')) {
+    const nicheStep = document.getElementById('section-niche');
+    if (nicheStep) {
         nicheStep.classList.remove('hidden');
-        nicheStep.classList.add('visible');
         setTimeout(() => {
             nicheStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
@@ -624,14 +648,14 @@ async function loadNiches() {
         const response = await fetch(`${API_BASE}/api/niches`);
         const data = await response.json();
         
-        const container = document.getElementById('niches-container');
+        const container = document.getElementById('niches-grid-modern');
         if (!container) return;
         
         container.innerHTML = '';
         
         data.niches.forEach(niche => {
             const card = document.createElement('div');
-            card.className = 'niche-card-item';
+            card.className = 'niche-card-modern';
             card.innerHTML = `
                 <h3>${niche.name}</h3>
                 <p>${niche.description}</p>
@@ -645,17 +669,16 @@ async function loadNiches() {
 }
 
 async function selectNiche(nicheId, cardElement) {
-    document.querySelectorAll('.niche-card-item').forEach(card => {
+    document.querySelectorAll('.niche-card-modern').forEach(card => {
         card.classList.remove('selected');
     });
     
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    const retentionStep = document.getElementById('step-retention');
+    const retentionStep = document.getElementById('section-retention');
     if (retentionStep) {
         retentionStep.classList.remove('hidden');
-        retentionStep.classList.add('visible');
         setTimeout(() => {
             retentionStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
@@ -669,29 +692,28 @@ async function loadRetentionVideos(nicheId) {
         const response = await fetch(`${API_BASE}/api/retention/niche/${nicheId}`);
         const data = await response.json();
         
-        const container = document.getElementById('retention-container');
+        const container = document.getElementById('retention-grid-modern');
         if (!container) return;
         
         container.innerHTML = '';
         
         data.videos.forEach(video => {
             const card = document.createElement('div');
-            card.className = 'retention-card-item';
+            card.className = 'retention-card-modern';
             card.innerHTML = `
-                <div class="retention-preview-icon">🎬</div>
-                <h4>${video.name}</h4>
-                <div class="retention-tags-row">
-                    ${video.tags?.map(tag => `<span class="tag-item">${tag}</span>`).join('') || ''}
+                <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🎬</div>
+                <h4 style="font-weight: 600; margin-bottom: 0.5rem;">${video.name}</h4>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+                    ${video.tags?.map(tag => `<span style="padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.375rem; font-size: 0.75rem; color: var(--text-secondary);">${tag}</span>`).join('') || ''}
                 </div>
             `;
             card.addEventListener('click', () => selectRetentionVideo(video.id, card));
             container.appendChild(card);
         });
         
-        const previewStep = document.getElementById('step-preview');
+        const previewStep = document.getElementById('section-preview');
         if (previewStep) {
             previewStep.classList.remove('hidden');
-            previewStep.classList.add('visible');
         }
     } catch (error) {
         console.error('Erro ao carregar vídeos de retenção:', error);
@@ -699,7 +721,7 @@ async function loadRetentionVideos(nicheId) {
 }
 
 function selectRetentionVideo(videoId, cardElement) {
-    document.querySelectorAll('.retention-card-item').forEach(card => {
+    document.querySelectorAll('.retention-card-modern').forEach(card => {
         card.classList.remove('selected');
     });
     
