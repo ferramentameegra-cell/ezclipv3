@@ -43,20 +43,11 @@ app.use(express.urlencoded({
   limit: process.env.MAX_URL_SIZE || '50mb' 
 }));
 
-// Servir arquivos estáticos com tratamento de erro
+// Servir arquivos estáticos
 app.use(express.static("public", {
   maxAge: process.env.STATIC_MAX_AGE || '1d',
   etag: true
 }));
-
-// Error handling middleware (deve vir antes das rotas)
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    status: 'error'
-  });
-});
 
 // Importar rotas (síncrono - não bloqueia startup)
 import videoRoutes from "./src/routes/video.js";
@@ -96,11 +87,20 @@ app.get("/ready", (req, res) => {
   });
 });
 
-// 404 handler
+// 404 handler (deve vir antes do error handler)
 app.use((req, res) => {
   res.status(404).json({
     error: "Route not found",
     path: req.path
+  });
+});
+
+// Error handling middleware (deve vir DEPOIS de todas as rotas)
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    status: 'error'
   });
 });
 
