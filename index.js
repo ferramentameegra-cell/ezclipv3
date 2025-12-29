@@ -3,18 +3,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-
-// Polyfill para File API no Node.js 18 (se necessário)
-// Node.js 20+ já tem suporte nativo
-if (typeof globalThis.File === 'undefined') {
-  try {
-    const { File } = await import('undici');
-    globalThis.File = File;
-  } catch (e) {
-    console.warn('File API não disponível. Certifique-se de usar Node.js 20+');
-  }
-}
-
 import videoRoutes from "./src/routes/video.js";
 import nicheRoutes from "./src/routes/niches.js";
 import retentionRoutes from "./src/routes/retention.js";
