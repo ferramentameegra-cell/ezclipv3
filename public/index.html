@@ -10,74 +10,78 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
+    <div class="app-container">
         <!-- Header -->
-        <header class="header">
-            <h1 class="logo">EZ Clips AI <span class="version">V2</span></h1>
-            <p class="tagline">Retention Engine - Séries Cronológicas Virais</p>
+        <header class="app-header">
+            <h1 class="app-logo">EZ Clips AI <span class="app-version">V2</span></h1>
+            <p class="app-tagline">Retention Engine - Séries Cronológicas Virais</p>
         </header>
 
-        <!-- Main Workflow - Single Page -->
-        <div class="workflow">
+        <!-- Main Content - Single Page Flow -->
+        <main class="app-main">
             <!-- Step 1: YouTube Input -->
-            <section class="workflow-step" id="step-youtube">
+            <section class="app-step" id="step-youtube" data-step="1">
                 <div class="step-header">
                     <div class="step-number">1</div>
-                    <div class="step-title">
+                    <div class="step-content-header">
                         <h2>Cole o link do YouTube</h2>
-                        <p>O trim tool aparecerá automaticamente após validação</p>
+                        <p class="step-subtitle">O vídeo será carregado automaticamente e o trim aparecerá abaixo</p>
                     </div>
                 </div>
-                <div class="youtube-input-container">
-                    <div class="input-wrapper">
+                <div class="youtube-input-section">
+                    <div class="input-group">
                         <input 
                             type="text" 
-                            id="youtube-url-input" 
+                            id="youtube-url" 
                             class="youtube-input" 
                             placeholder="https://youtube.com/watch?v=..."
                             autocomplete="off"
+                            spellcheck="false"
                         >
-                        <button class="btn-process" id="btn-process-youtube" onclick="processYouTube()">
+                        <button class="btn-process" id="btn-process" onclick="handleYouTubeSubmit()">
                             <span class="btn-text">Processar</span>
-                            <span class="btn-loader hidden">⏳</span>
+                            <span class="btn-spinner hidden">⏳</span>
                         </button>
                     </div>
                     <div id="youtube-status" class="status-message hidden"></div>
                 </div>
             </section>
 
-            <!-- Step 2: Trim Tool (aparece automaticamente) -->
-            <section class="workflow-step hidden" id="step-trim">
+            <!-- Step 2: Video Player & Trim (aparece automaticamente) -->
+            <section class="app-step hidden" id="step-trim" data-step="2">
                 <div class="step-header">
                     <div class="step-number">2</div>
-                    <div class="step-title">
+                    <div class="step-content-header">
                         <h2>Defina o trim do vídeo</h2>
-                        <p>Use os sliders ou digite os valores manualmente</p>
+                        <p class="step-subtitle">Use os sliders ou digite os valores. O cálculo é instantâneo.</p>
                     </div>
                 </div>
                 
-                <div class="trim-tool-container">
-                    <!-- Video Preview -->
-                    <div class="video-preview-container">
-                        <div id="video-player-container"></div>
+                <div class="trim-section">
+                    <!-- Video Player -->
+                    <div class="video-player-wrapper">
+                        <div id="video-player-container" class="video-player-container">
+                            <div class="video-placeholder">Carregando vídeo...</div>
+                        </div>
                     </div>
 
                     <!-- Trim Controls -->
-                    <div class="trim-controls-panel">
-                        <!-- Start Time -->
-                        <div class="time-control-group">
-                            <label class="time-label">
-                                <span>Início</span>
-                                <span class="time-value" id="start-time-display">00:00</span>
-                            </label>
-                            <div class="slider-input-group">
+                    <div class="trim-controls-wrapper">
+                        <!-- Start Time Control -->
+                        <div class="time-control">
+                            <div class="time-control-header">
+                                <label class="time-label">Tempo Inicial</label>
+                                <span class="time-display" id="start-time-display">00:00</span>
+                            </div>
+                            <div class="time-control-inputs">
                                 <input 
                                     type="range" 
                                     id="trim-start-slider" 
                                     class="time-slider" 
                                     min="0" 
+                                    max="0"
                                     value="0"
-                                    oninput="updateStartTime(this.value)"
+                                    step="1"
                                 >
                                 <input 
                                     type="number" 
@@ -85,25 +89,27 @@
                                     class="time-input" 
                                     min="0" 
                                     value="0"
-                                    oninput="updateStartTimeFromInput(this.value)"
+                                    step="1"
                                 >
+                                <span class="time-unit">seg</span>
                             </div>
                         </div>
 
-                        <!-- End Time -->
-                        <div class="time-control-group">
-                            <label class="time-label">
-                                <span>Fim</span>
-                                <span class="time-value" id="end-time-display">00:00</span>
-                            </label>
-                            <div class="slider-input-group">
+                        <!-- End Time Control -->
+                        <div class="time-control">
+                            <div class="time-control-header">
+                                <label class="time-label">Tempo Final</label>
+                                <span class="time-display" id="end-time-display">00:00</span>
+                            </div>
+                            <div class="time-control-inputs">
                                 <input 
                                     type="range" 
                                     id="trim-end-slider" 
                                     class="time-slider" 
                                     min="0" 
+                                    max="0"
                                     value="0"
-                                    oninput="updateEndTime(this.value)"
+                                    step="1"
                                 >
                                 <input 
                                     type="number" 
@@ -111,154 +117,150 @@
                                     class="time-input" 
                                     min="0" 
                                     value="0"
-                                    oninput="updateEndTimeFromInput(this.value)"
+                                    step="1"
                                 >
+                                <span class="time-unit">seg</span>
                             </div>
                         </div>
 
                         <!-- Duration Selection -->
-                        <div class="duration-selection">
+                        <div class="duration-selection-card">
                             <label class="duration-label">Duração por corte:</label>
-                            <div class="duration-options">
-                                <label class="duration-option">
-                                    <input 
-                                        type="radio" 
-                                        name="clip-duration" 
-                                        value="60" 
-                                        checked
-                                        onchange="calculateClips()"
-                                    >
-                                    <span>60 segundos</span>
-                                </label>
-                                <label class="duration-option">
-                                    <input 
-                                        type="radio" 
-                                        name="clip-duration" 
-                                        value="120"
-                                        onchange="calculateClips()"
-                                    >
-                                    <span>120 segundos</span>
-                                </label>
+                            <div class="duration-buttons">
+                                <button 
+                                    class="duration-btn active" 
+                                    data-duration="60"
+                                    onclick="selectDuration(60)"
+                                >
+                                    60 segundos
+                                </button>
+                                <button 
+                                    class="duration-btn" 
+                                    data-duration="120"
+                                    onclick="selectDuration(120)"
+                                >
+                                    120 segundos
+                                </button>
                             </div>
                         </div>
 
                         <!-- Clips Calculation Result -->
-                        <div class="clips-result" id="clips-result">
-                            <div class="clips-result-label">Este vídeo renderá:</div>
-                            <div class="clips-result-number" id="clips-count">0</div>
-                            <div class="clips-result-unit">partes</div>
+                        <div class="clips-calculation-card" id="clips-calculation">
+                            <div class="clips-label">Este vídeo renderá:</div>
+                            <div class="clips-number" id="clips-count">0</div>
+                            <div class="clips-unit">partes</div>
                         </div>
                     </div>
                 </div>
             </section>
 
             <!-- Step 3: Niche Selection -->
-            <section class="workflow-step hidden" id="step-niche">
+            <section class="app-step hidden" id="step-niche" data-step="3">
                 <div class="step-header">
                     <div class="step-number">3</div>
-                    <div class="step-title">
+                    <div class="step-content-header">
                         <h2>Escolha o nicho</h2>
-                        <p>Cada nicho possui vídeos de retenção otimizados</p>
+                        <p class="step-subtitle">Cada nicho possui vídeos de retenção otimizados</p>
                     </div>
                 </div>
-                <div id="niches-grid" class="niches-grid"></div>
+                <div id="niches-container" class="niches-container"></div>
             </section>
 
             <!-- Step 4: Retention Videos -->
-            <section class="workflow-step hidden" id="step-retention">
+            <section class="app-step hidden" id="step-retention" data-step="4">
                 <div class="step-header">
                     <div class="step-number">4</div>
-                    <div class="step-title">
+                    <div class="step-content-header">
                         <h2>Vídeo de Retenção</h2>
-                        <p>Escolha o vídeo que manterá a atenção</p>
+                        <p class="step-subtitle">Escolha o vídeo que manterá a atenção</p>
                     </div>
                 </div>
-                <div class="retention-options">
-                    <label class="radio-option">
-                        <input type="radio" name="retention" value="random" checked onchange="updateRetention('random')">
+                <div class="retention-options-row">
+                    <label class="retention-radio">
+                        <input type="radio" name="retention-mode" value="random" checked onchange="updateRetentionMode('random')">
                         <span>Randomizar por corte</span>
                     </label>
-                    <label class="radio-option">
-                        <input type="radio" name="retention" value="none" onchange="updateRetention('none')">
+                    <label class="retention-radio">
+                        <input type="radio" name="retention-mode" value="none" onchange="updateRetentionMode('none')">
                         <span>Nenhum (não recomendado)</span>
                     </label>
                 </div>
-                <div id="retention-grid" class="retention-grid"></div>
+                <div id="retention-container" class="retention-container"></div>
             </section>
 
             <!-- Step 5: Preview & Generate -->
-            <section class="workflow-step hidden" id="step-preview">
+            <section class="app-step hidden" id="step-preview" data-step="5">
                 <div class="step-header">
                     <div class="step-number">5</div>
-                    <div class="step-title">
+                    <div class="step-content-header">
                         <h2>Preview e Estilo</h2>
-                        <p>Visualize o layout final e ajuste o estilo</p>
+                        <p class="step-subtitle">Visualize o layout final e ajuste o estilo</p>
                     </div>
                 </div>
-                <div class="preview-section">
-                    <div class="preview-canvas-container">
-                        <div class="preview-vertical" id="preview-canvas">
-                            <div class="preview-top">
-                                <div class="preview-main-video">Vídeo Principal</div>
+                <div class="preview-layout">
+                    <div class="preview-display">
+                        <div class="preview-frame" id="preview-frame">
+                            <div class="preview-top-area">
+                                <div class="preview-video-main">Vídeo Principal</div>
                             </div>
-                            <div class="preview-middle">
-                                <div class="preview-headline" id="preview-headline">Headline Impactante</div>
+                            <div class="preview-middle-area">
+                                <div class="preview-headline-text" id="preview-headline">Headline Impactante</div>
                             </div>
-                            <div class="preview-bottom">
-                                <div class="preview-retention-video">Vídeo de Retenção</div>
+                            <div class="preview-bottom-area">
+                                <div class="preview-video-retention">Vídeo de Retenção</div>
                             </div>
-                            <div class="preview-overlay">
-                                <div class="preview-captions">Legendas animadas</div>
-                                <div class="preview-part-number" id="preview-part">PARTE 1/<span id="preview-total">0</span></div>
+                            <div class="preview-overlay-elements">
+                                <div class="preview-captions-text">Legendas animadas</div>
+                                <div class="preview-part-badge" id="preview-part">PARTE 1/<span id="preview-total">0</span></div>
                             </div>
                         </div>
                     </div>
-                    <div class="style-controls-panel">
-                        <div class="style-group">
+                    <div class="preview-controls">
+                        <div class="control-group">
                             <label>Fonte da Headline</label>
-                            <select id="headline-font" class="style-select" onchange="updatePreview()">
+                            <select id="headline-font-select" class="control-select" onchange="updatePreviewStyle()">
                                 <option value="Inter">Inter</option>
                                 <option value="Roboto">Roboto</option>
                                 <option value="Montserrat">Montserrat</option>
                             </select>
                         </div>
-                        <div class="style-group">
+                        <div class="control-group">
                             <label>Estilo da Headline</label>
-                            <select id="headline-style" class="style-select" onchange="updatePreview()">
+                            <select id="headline-style-select" class="control-select" onchange="updatePreviewStyle()">
                                 <option value="bold">Bold</option>
                                 <option value="impact">Impact</option>
                                 <option value="modern">Modern</option>
                             </select>
                         </div>
-                        <button class="btn-generate" onclick="generateSeries()">
+                        <button class="btn-generate-final" onclick="generateSeries()">
                             <span>Gerar Série Completa</span>
                         </button>
                     </div>
                 </div>
             </section>
-        </div>
+        </main>
 
         <!-- Loading Overlay -->
         <div id="loading-overlay" class="loading-overlay hidden">
-            <div class="loading-content">
-                <div class="spinner"></div>
+            <div class="loading-box">
+                <div class="loading-spinner"></div>
                 <h3>Gerando série...</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
+                <div class="loading-progress-bar">
+                    <div class="loading-progress-fill" id="loading-progress"></div>
                 </div>
-                <p id="progress-text">0%</p>
+                <p class="loading-percent" id="loading-percent">0%</p>
             </div>
         </div>
 
         <!-- Success Modal -->
-        <div id="success-modal" class="modal hidden">
-            <div class="modal-content">
-                <div class="modal-icon">✅</div>
+        <div id="success-modal" class="success-modal hidden">
+            <div class="success-modal-content">
+                <div class="success-icon">✓</div>
                 <h2>Série gerada com sucesso!</h2>
-                <p id="series-info"></p>
-                <div class="modal-actions">
-                    <button class="btn-primary" onclick="downloadSeries()">Download ZIP</button>
-                    <button class="btn-secondary" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
+                <p id="success-message"></p>
+                <div class="success-actions">
+                    <button class="btn-download" onclick="downloadSeries()">Download ZIP</button>
+                    <button class="btn-tiktok" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
                 </div>
             </div>
         </div>
