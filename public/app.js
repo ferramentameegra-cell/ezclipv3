@@ -37,21 +37,28 @@ function switchTab(tabName) {
     appState.currentTab = tabName;
     
     // Atualizar tabs visuais
-    document.querySelectorAll('.nav-link').forEach(tab => {
+    document.querySelectorAll('.nav-item').forEach(tab => {
         tab.classList.remove('active');
     });
     const navLink = document.querySelector(`[data-tab="${tabName}"]`);
     if (navLink) navLink.classList.add('active');
     
     // Mostrar conteúdo da tab
-    document.querySelectorAll('.tab-panel').forEach(panel => {
+    document.querySelectorAll('.tab-content').forEach(panel => {
         panel.classList.remove('active');
     });
-    const panel = document.getElementById(`panel-${tabName}`);
+    const panel = document.getElementById(`tab-${tabName}`);
     if (panel) panel.classList.add('active');
     
     // Scroll para o topo
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function scrollToTool() {
+    const toolSection = document.getElementById('tool-section');
+    if (toolSection) {
+        toolSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 // ========== AUTHENTICATION ==========
@@ -64,15 +71,14 @@ function checkAuth() {
 }
 
 function updateUserUI() {
-    const userSection = document.getElementById('user-section');
-    const btnLoginNav = document.getElementById('btn-login-nav');
+    const navLoginBtn = document.getElementById('nav-login-btn');
     const userMenu = document.getElementById('user-menu');
     const userInitial = document.getElementById('user-initial');
     const userNameDropdown = document.getElementById('user-name-dropdown');
     const userEmailDropdown = document.getElementById('user-email-dropdown');
     
     if (appState.currentUser) {
-        if (btnLoginNav) btnLoginNav.classList.add('hidden');
+        if (navLoginBtn) navLoginBtn.classList.add('hidden');
         if (userMenu) userMenu.classList.remove('hidden');
         if (userInitial) {
             const name = appState.currentUser.name || appState.currentUser.email;
@@ -81,7 +87,7 @@ function updateUserUI() {
         if (userNameDropdown) userNameDropdown.textContent = appState.currentUser.name || 'Usuário';
         if (userEmailDropdown) userEmailDropdown.textContent = appState.currentUser.email;
     } else {
-        if (btnLoginNav) btnLoginNav.classList.remove('hidden');
+        if (navLoginBtn) navLoginBtn.classList.remove('hidden');
         if (userMenu) userMenu.classList.add('hidden');
     }
 }
@@ -192,14 +198,14 @@ async function handleRegister(event) {
 }
 
 function showRegister() {
-    const loginCard = document.querySelector('.login-card-modern');
+    const loginCard = document.getElementById('login-card');
     const registerCard = document.getElementById('register-card');
     if (loginCard) loginCard.classList.add('hidden');
     if (registerCard) registerCard.classList.remove('hidden');
 }
 
 function showLogin() {
-    const loginCard = document.querySelector('.login-card-modern');
+    const loginCard = document.getElementById('login-card');
     const registerCard = document.getElementById('register-card');
     if (registerCard) registerCard.classList.add('hidden');
     if (loginCard) loginCard.classList.remove('hidden');
@@ -295,26 +301,26 @@ function filterCursos(category) {
 }
 
 function renderCursos(cursos) {
-    const grid = document.getElementById('cursos-grid-modern');
+    const grid = document.getElementById('cursos-grid');
     if (!grid) return;
     
     grid.innerHTML = '';
     
     cursos.forEach(curso => {
         const card = document.createElement('div');
-        card.className = 'curso-card-modern';
+        card.className = 'curso-card';
         card.innerHTML = `
-            <div class="curso-image-modern">${curso.image}</div>
-            <div class="curso-content-modern">
-                <span class="curso-category-modern">${curso.category.toUpperCase()}</span>
-                <h3 class="curso-title-modern">${curso.title}</h3>
-                <p class="curso-description-modern">${curso.description}</p>
-                <div class="curso-footer-modern">
+            <div class="curso-image">${curso.image}</div>
+            <div class="curso-content">
+                <span class="curso-category">${curso.category.toUpperCase()}</span>
+                <h3 class="curso-title">${curso.title}</h3>
+                <p class="curso-description">${curso.description}</p>
+                <div class="curso-footer">
                     <div>
-                        <span class="curso-price-old-modern">R$ ${curso.oldPrice}</span>
-                        <span class="curso-price-modern">R$ ${curso.price}</span>
+                        <span class="curso-price-old">R$ ${curso.oldPrice}</span>
+                        <span class="curso-price">R$ ${curso.price}</span>
                     </div>
-                    <button class="btn-comprar-modern" onclick="comprarCurso(${curso.id})">
+                    <button class="btn-comprar" onclick="comprarCurso(${curso.id})">
                         Comprar
                     </button>
                 </div>
@@ -433,11 +439,11 @@ function showStatus(message, type) {
 }
 
 function showTrimSection() {
-    const trimSection = document.getElementById('section-trim');
-    if (trimSection) {
-        trimSection.classList.remove('hidden');
+    const trimCard = document.getElementById('trim-card');
+    if (trimCard) {
+        trimCard.classList.remove('hidden');
         setTimeout(() => {
-            trimSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            trimCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
     }
 }
@@ -592,7 +598,7 @@ function formatTime(seconds) {
 function selectDuration(seconds) {
     appState.cutDuration = seconds;
     
-    document.querySelectorAll('.duration-btn-modern').forEach(btn => {
+    document.querySelectorAll('.duration-option').forEach(btn => {
         btn.classList.remove('active');
         if (parseInt(btn.dataset.duration) === seconds) {
             btn.classList.add('active');
@@ -634,11 +640,11 @@ function calculateClips() {
 }
 
 function showNextSteps() {
-    const nicheStep = document.getElementById('section-niche');
-    if (nicheStep) {
-        nicheStep.classList.remove('hidden');
+    const nicheCard = document.getElementById('niche-card');
+    if (nicheCard) {
+        nicheCard.classList.remove('hidden');
         setTimeout(() => {
-            nicheStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            nicheCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
     }
 }
@@ -648,14 +654,14 @@ async function loadNiches() {
         const response = await fetch(`${API_BASE}/api/niches`);
         const data = await response.json();
         
-        const container = document.getElementById('niches-grid-modern');
+        const container = document.getElementById('niches-grid');
         if (!container) return;
         
         container.innerHTML = '';
         
         data.niches.forEach(niche => {
             const card = document.createElement('div');
-            card.className = 'niche-card-modern';
+            card.className = 'niche-card';
             card.innerHTML = `
                 <h3>${niche.name}</h3>
                 <p>${niche.description}</p>
@@ -669,18 +675,18 @@ async function loadNiches() {
 }
 
 async function selectNiche(nicheId, cardElement) {
-    document.querySelectorAll('.niche-card-modern').forEach(card => {
+    document.querySelectorAll('.niche-card').forEach(card => {
         card.classList.remove('selected');
     });
     
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    const retentionStep = document.getElementById('section-retention');
-    if (retentionStep) {
-        retentionStep.classList.remove('hidden');
+    const retentionCard = document.getElementById('retention-card');
+    if (retentionCard) {
+        retentionCard.classList.remove('hidden');
         setTimeout(() => {
-            retentionStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            retentionCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
     }
     
@@ -692,14 +698,14 @@ async function loadRetentionVideos(nicheId) {
         const response = await fetch(`${API_BASE}/api/retention/niche/${nicheId}`);
         const data = await response.json();
         
-        const container = document.getElementById('retention-grid-modern');
+        const container = document.getElementById('retention-grid');
         if (!container) return;
         
         container.innerHTML = '';
         
         data.videos.forEach(video => {
             const card = document.createElement('div');
-            card.className = 'retention-card-modern';
+            card.className = 'retention-card';
             card.innerHTML = `
                 <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🎬</div>
                 <h4 style="font-weight: 600; margin-bottom: 0.5rem;">${video.name}</h4>
@@ -711,9 +717,9 @@ async function loadRetentionVideos(nicheId) {
             container.appendChild(card);
         });
         
-        const previewStep = document.getElementById('section-preview');
-        if (previewStep) {
-            previewStep.classList.remove('hidden');
+        const previewCard = document.getElementById('preview-card');
+        if (previewCard) {
+            previewCard.classList.remove('hidden');
         }
     } catch (error) {
         console.error('Erro ao carregar vídeos de retenção:', error);
@@ -721,7 +727,7 @@ async function loadRetentionVideos(nicheId) {
 }
 
 function selectRetentionVideo(videoId, cardElement) {
-    document.querySelectorAll('.retention-card-modern').forEach(card => {
+    document.querySelectorAll('.retention-card').forEach(card => {
         card.classList.remove('selected');
     });
     
