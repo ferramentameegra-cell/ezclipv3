@@ -46,13 +46,59 @@ export const processVideo = async (req, res) => {
       return res.status(400).json({ error: 'URL do YouTube não fornecida' });
     }
 
-    if (!ytdl.validateURL(youtubeUrl)) {
-      return res.status(400).json({ error: 'URL do YouTube inválida' });
+    // Validar e normalizar URL
+    let normalizedUrl = youtubeUrl.trim();
+    
+    // Extrair ID do vídeo de diferentes formatos de URL
+    let videoId = null;
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/.*[?&]v=([^&\n?#]+)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = normalizedUrl.match(pattern);
+      if (match) {
+        videoId = match[1];
+        break;
+      }
     }
 
-    const videoId = uuidv4();
-    const info = await ytdl.getInfo(youtubeUrl);
-    const videoPath = path.join(__dirname, '../../uploads', `${videoId}.mp4`);
+    if (!videoId) {
+      return res.status(400).json({ error: 'URL do YouTube inválida. Use formato: https://youtube.com/watch?v=VIDEO_ID ou https://youtu.be/VIDEO_ID' });
+    }
+
+    // Tentar obter informações do vídeo com retry e opções
+    let info;
+    try {
+      info = await ytdl.getInfo(videoId, {
+        requestOptions: {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          }
+        }
+      });
+    } catch (ytdlError) {
+      // Se falhar, tentar com a URL completa
+      try {
+        info = await ytdl.getInfo(normalizedUrl, {
+          requestOptions: {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+          }
+        });
+      } catch (secondError) {
+        console.error('Erro ao obter info do YouTube:', secondError);
+        return res.status(500).json({ 
+          error: 'Erro ao processar vídeo do YouTube. Verifique se a URL está correta e o vídeo está disponível.',
+          details: secondError.message 
+        });
+      }
+    }
+
+    const storedVideoId = uuidv4();
+    const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
 
     // Criar diretório se não existir
     const uploadDir = path.dirname(videoPath);
@@ -60,26 +106,37 @@ export const processVideo = async (req, res) => {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
+    const duration = parseInt(info.videoDetails.lengthSeconds) || 0;
+    const thumbnail = info.videoDetails.thumbnails?.[info.videoDetails.thumbnails.length - 1]?.url || 
+                     info.videoDetails.thumbnails?.[0]?.url || '';
+
     const videoInfo = {
-      id: videoId,
-      youtubeUrl,
-      title: info.videoDetails.title,
-      duration: parseInt(info.videoDetails.lengthSeconds),
-      thumbnail: info.videoDetails.thumbnails[0]?.url,
+      id: storedVideoId,
+      youtubeUrl: normalizedUrl,
+      youtubeVideoId: videoId,
+      title: info.videoDetails.title || 'Vídeo sem título',
+      duration: duration,
+      thumbnail: thumbnail,
       path: videoPath,
-      processedAt: new Date()
+      processedAt: new Date(),
+      // URL para streaming direto (não baixar, apenas usar para preview)
+      streamUrl: `https://www.youtube.com/embed/${videoId}`
     };
 
-    videoStore.set(videoId, videoInfo);
+    videoStore.set(storedVideoId, videoInfo);
 
-    // Download do vídeo (em produção, fazer isso em background)
     res.json({
-      videoId,
-      message: 'Vídeo do YouTube processado',
+      videoId: storedVideoId,
+      message: 'Vídeo do YouTube processado com sucesso',
       video: videoInfo
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Erro completo:', error);
+    res.status(500).json({ 
+      error: 'Erro ao processar vídeo do YouTube',
+      details: error.message,
+      suggestion: 'Verifique se a URL está correta e tente novamente'
+    });
   }
 };
 
@@ -93,6 +150,50 @@ export const getVideoInfo = (req, res) => {
     }
 
     res.json({ video });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const streamVideo = (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const video = videoStore.get(videoId);
+
+    if (!video) {
+      return res.status(404).json({ error: 'Vídeo não encontrado' });
+    }
+
+    if (!video.path || !fs.existsSync(video.path)) {
+      return res.status(404).json({ error: 'Arquivo de vídeo não encontrado' });
+    }
+
+    const stat = fs.statSync(video.path);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(video.path, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': video.mimetype || 'video/mp4',
+      };
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': video.mimetype || 'video/mp4',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(video.path).pipe(res);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

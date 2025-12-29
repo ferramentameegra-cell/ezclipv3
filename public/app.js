@@ -55,7 +55,9 @@ async function uploadVideo(file) {
             appState.videoId = data.videoId;
             appState.videoInfo = data.video;
             showVideoPreview(data.video);
-            nextStep();
+            // Ir para step 2 (trim) automaticamente
+            goToStep(2);
+            setupTrimVideo(data.video);
         } else {
             alert('Erro ao fazer upload: ' + data.error);
         }
@@ -74,6 +76,12 @@ async function processYouTube() {
         return;
     }
 
+    // Mostrar loading
+    const button = event.target;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Processando...';
+
     try {
         const response = await fetch(`${API_BASE}/api/video/youtube`, {
             method: 'POST',
@@ -89,13 +97,18 @@ async function processYouTube() {
             appState.videoId = data.videoId;
             appState.videoInfo = data.video;
             showVideoPreview(data.video);
-            nextStep();
+            // Ir para step 2 (trim) automaticamente
+            goToStep(2);
+            setupTrimVideo(data.video);
         } else {
-            alert('Erro ao processar YouTube: ' + data.error);
+            alert('Erro ao processar YouTube: ' + (data.error || data.details || 'Erro desconhecido'));
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao processar vídeo do YouTube');
+        alert('Erro ao processar vídeo do YouTube: ' + error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
     }
 }
 
@@ -111,6 +124,85 @@ function showVideoPreview(video) {
     `;
 }
 
+// Configurar vídeo no trim
+function setupTrimVideo(video) {
+    const trimVideo = document.getElementById('trim-video');
+    const trimStartInput = document.getElementById('trim-start');
+    const trimEndInput = document.getElementById('trim-end');
+    
+    // Se for vídeo do YouTube, usar iframe
+    if (video.youtubeVideoId || video.youtubeUrl) {
+        const videoId = video.youtubeVideoId || extractYouTubeId(video.youtubeUrl);
+        if (videoId) {
+            // Criar iframe do YouTube
+            trimVideo.style.display = 'none';
+            const iframe = document.createElement('iframe');
+            iframe.id = 'youtube-player';
+            iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
+            iframe.width = '100%';
+            iframe.height = '400';
+            iframe.style.border = 'none';
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+            iframe.allowFullscreen = true;
+            
+            // Remover iframe anterior se existir
+            const existingIframe = document.getElementById('youtube-player');
+            if (existingIframe) {
+                existingIframe.remove();
+            }
+            
+            trimVideo.parentElement.appendChild(iframe);
+        }
+    } else if (video.path) {
+        // Vídeo local
+        trimVideo.src = `${API_BASE}/api/video/stream/${video.id}`;
+        trimVideo.style.display = 'block';
+    }
+    
+    // Configurar valores padrão
+    trimStartInput.value = 0;
+    trimStartInput.max = video.duration || 0;
+    trimEndInput.value = video.duration || '';
+    trimEndInput.max = video.duration || 0;
+    trimEndInput.placeholder = `Máximo: ${formatDuration(video.duration || 0)}`;
+    
+    // Atualizar estimativa inicial
+    updateTrimEstimate();
+}
+
+// Extrair ID do YouTube
+function extractYouTubeId(url) {
+    const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+        /youtube\.com\/.*[?&]v=([^&\n?#]+)/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+    }
+    return null;
+}
+
+// Atualizar estimativa de cortes
+function updateTrimEstimate() {
+    const trimStart = parseInt(document.getElementById('trim-start').value) || 0;
+    const trimEnd = parseInt(document.getElementById('trim-end').value);
+    const duration = appState.videoInfo?.duration || 0;
+    
+    const effectiveDuration = trimEnd ? (trimEnd - trimStart) : (duration - trimStart);
+    
+    // Assumindo cortes de 60 segundos
+    const estimatedCuts = Math.max(1, Math.floor(effectiveDuration / 60));
+    
+    const estimateText = document.getElementById('trim-estimate');
+    if (effectiveDuration > 0) {
+        estimateText.textContent = `Este vídeo gerará aproximadamente ${estimatedCuts} partes`;
+    } else {
+        estimateText.textContent = 'Defina o trim para calcular o número de partes';
+    }
+}
+
 // Calcular cortes
 function calculateCuts() {
     const trimStart = parseInt(document.getElementById('trim-start').value) || 0;
@@ -122,8 +214,12 @@ function calculateCuts() {
     const duration = appState.videoInfo?.duration || 0;
     const effectiveDuration = trimEnd ? (trimEnd - trimStart) : (duration - trimStart);
     
+    if (effectiveDuration <= 0) {
+        alert('Por favor, defina um trim válido (fim maior que início)');
+        return;
+    }
+    
     // Assumindo cortes de 60 segundos
-    const cutsPerMinute = 1;
     const estimatedCuts = Math.max(1, Math.floor(effectiveDuration / 60));
     
     appState.numberOfCuts = estimatedCuts;
@@ -369,6 +465,11 @@ function nextStep() {
         appState.currentStep++;
         updateStepDisplay();
     }
+}
+
+function goToStep(step) {
+    appState.currentStep = step;
+    updateStepDisplay();
 }
 
 function updateStepDisplay() {

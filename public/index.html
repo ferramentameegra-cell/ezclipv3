@@ -74,16 +74,16 @@
                 <div class="trim-controls">
                     <div class="trim-input-group">
                         <label>Início (segundos)</label>
-                        <input type="number" id="trim-start" value="0" min="0" class="input">
+                        <input type="number" id="trim-start" value="0" min="0" class="input" oninput="updateTrimEstimate()">
                     </div>
                     <div class="trim-input-group">
                         <label>Fim (segundos)</label>
-                        <input type="number" id="trim-end" class="input">
+                        <input type="number" id="trim-end" class="input" oninput="updateTrimEstimate()">
                     </div>
                     <div class="trim-info">
-                        <p id="trim-estimate" class="estimate-text"></p>
+                        <p id="trim-estimate" class="estimate-text">Defina o trim para calcular o número de partes</p>
                     </div>
-                    <button class="btn-primary" onclick="calculateCuts()">Calcular cortes</button>
+                    <button class="btn-primary" onclick="calculateCuts()">Calcular cortes e continuar</button>
                 </div>
             </div>
         </div>
