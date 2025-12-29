@@ -167,10 +167,19 @@ function setupTrimVideo(video) {
     
     // Configurar valores padrão
     trimStartInput.value = 0;
-    trimStartInput.max = video.duration || 0;
-    trimEndInput.value = video.duration || '';
-    trimEndInput.max = video.duration || 0;
-    trimEndInput.placeholder = `Máximo: ${formatDuration(video.duration || 0)}`;
+    
+    // Se não tiver duração (modo limitado), permitir input livre
+    if (video.duration && video.duration > 0) {
+        trimStartInput.max = video.duration;
+        trimEndInput.value = video.duration;
+        trimEndInput.max = video.duration;
+        trimEndInput.placeholder = `Máximo: ${formatDuration(video.duration)}`;
+    } else {
+        // Modo limitado - permitir que usuário defina manualmente
+        trimStartInput.max = '';
+        trimEndInput.placeholder = 'Digite a duração em segundos (ex: 3600 para 1 hora)';
+        trimEndInput.title = 'Como o vídeo está em modo limitado, defina a duração manualmente em segundos';
+    }
     
     // Atualizar estimativa inicial
     updateTrimEstimate();
