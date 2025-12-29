@@ -6,8 +6,8 @@ const appState = {
     retentionVideoId: 'random',
     numberOfCuts: 0,
     trimStart: 0,
-    trimEnd: null,
-    cutDuration: 60, // Duração padrão por corte em segundos
+    trimEnd: 0,
+    cutDuration: 60,
     headlineStyle: 'bold',
     font: 'Inter',
     captionStyle: 'tiktok',
@@ -20,86 +20,42 @@ const API_BASE = window.location.origin;
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
     loadNiches();
-    setupFileUpload();
-    setupRetentionRadio();
+    setupYouTubeInput();
 });
 
-// Setup file upload
-function setupFileUpload() {
-    const fileInput = document.getElementById('video-file');
-    const fileName = document.getElementById('file-name');
-    
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            fileName.textContent = file.name;
-            await uploadVideo(file);
+// Setup YouTube input com Enter key
+function setupYouTubeInput() {
+    const input = document.getElementById('youtube-url-input');
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            processYouTube();
         }
     });
-}
-
-// Setup retention radio buttons
-function setupRetentionRadio() {
-    document.querySelectorAll('input[name="retention"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            if (e.target.value === 'none') {
-                appState.retentionVideoId = null;
-            } else if (e.target.value === 'random') {
-                appState.retentionVideoId = 'random';
-            }
-        });
-    });
-}
-
-// Upload de vídeo
-async function uploadVideo(file) {
-    try {
-        const formData = new FormData();
-        formData.append('video', file);
-
-        const response = await fetch(`${API_BASE}/api/video/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await response.json();
-        
-        if (response.ok) {
-            appState.videoId = data.videoId;
-            appState.videoInfo = data.video;
-            showVideoPreview(data.video);
-            showTrimSection();
-            setupTrimVideo(data.video);
-        } else {
-            alert('Erro ao fazer upload: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao fazer upload do vídeo');
-    }
 }
 
 // Processar YouTube
 async function processYouTube() {
-    const url = document.getElementById('youtube-url').value;
+    const url = document.getElementById('youtube-url-input').value.trim();
+    const btn = document.getElementById('btn-process-youtube');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoader = btn.querySelector('.btn-loader');
+    const statusMsg = document.getElementById('youtube-status');
     
     if (!url) {
-        alert('Por favor, insira uma URL do YouTube');
+        showStatus('Por favor, insira uma URL do YouTube', 'error');
         return;
     }
 
     // Mostrar loading
-    const button = event.target;
-    const originalText = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Processando...';
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoader.classList.remove('hidden');
+    statusMsg.classList.add('hidden');
 
     try {
         const response = await fetch(`${API_BASE}/api/video/youtube`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ youtubeUrl: url })
         });
 
@@ -109,68 +65,55 @@ async function processYouTube() {
             appState.videoId = data.videoId;
             appState.videoInfo = data.video;
             
-            // Mostrar aviso se estiver em modo limitado
-            if (data.warning || data.video.limited) {
-                const warningMsg = data.warning || 'Algumas informações do vídeo não puderam ser obtidas automaticamente. Você pode continuar normalmente.';
-                if (confirm(warningMsg + '\n\nDeseja continuar?')) {
-                    showVideoPreview(data.video);
-                    showTrimSection();
-                    setupTrimVideo(data.video);
-                }
-            } else {
-                showVideoPreview(data.video);
-                showTrimSection();
-                setupTrimVideo(data.video);
-            }
+            showStatus('Vídeo processado com sucesso!', 'success');
+            showTrimTool(data.video);
         } else {
-            const errorMsg = data.error || data.details || 'Erro desconhecido';
-            const suggestion = data.suggestion || '';
-            const fullMessage = suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg;
-            alert(fullMessage);
-            console.error('Erro detalhado:', data);
+            showStatus(data.error || 'Erro ao processar vídeo', 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao processar vídeo do YouTube: ' + error.message);
+        showStatus('Erro ao processar vídeo do YouTube', 'error');
     } finally {
-        button.disabled = false;
-        button.textContent = originalText;
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoader.classList.add('hidden');
     }
 }
 
-// Mostrar preview do vídeo
-function showVideoPreview(video) {
-    const preview = document.getElementById('video-preview');
-    preview.classList.remove('hidden');
-    preview.innerHTML = `
-        <div class="video-info">
-            <h3>${video.title || video.originalName}</h3>
-            ${video.duration ? `<p>Duração: ${formatDuration(video.duration)}</p>` : ''}
-        </div>
-    `;
+// Mostrar status
+function showStatus(message, type) {
+    const statusMsg = document.getElementById('youtube-status');
+    statusMsg.textContent = message;
+    statusMsg.className = `status-message ${type}`;
+    statusMsg.classList.remove('hidden');
 }
 
-// Mostrar seção de trim
-function showTrimSection() {
-    const trimSection = document.getElementById('section-trim');
-    trimSection.classList.remove('hidden');
-    // Scroll suave para a seção
+// Mostrar trim tool
+function showTrimTool(video) {
+    const trimStep = document.getElementById('step-trim');
+    trimStep.classList.remove('hidden');
+    
+    // Configurar vídeo
+    setupVideoPlayer(video);
+    
+    // Configurar controles
+    setupTrimControls(video);
+    
+    // Scroll suave
     setTimeout(() => {
-        trimSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        trimStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
 }
 
-// Configurar vídeo no trim
-function setupTrimVideo(video) {
-    const trimContainer = document.getElementById('trim-video-container');
-    trimContainer.innerHTML = ''; // Limpar container
+// Configurar player de vídeo
+function setupVideoPlayer(video) {
+    const container = document.getElementById('video-player-container');
+    container.innerHTML = '';
     
-    // Se for vídeo do YouTube, usar iframe
     if (video.youtubeVideoId || video.youtubeUrl) {
         const videoId = video.youtubeVideoId || extractYouTubeId(video.youtubeUrl);
         if (videoId) {
             const iframe = document.createElement('iframe');
-            iframe.id = 'youtube-player';
             iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
             iframe.width = '100%';
             iframe.height = '400';
@@ -178,37 +121,137 @@ function setupTrimVideo(video) {
             iframe.style.borderRadius = '8px';
             iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
             iframe.allowFullscreen = true;
-            trimContainer.appendChild(iframe);
+            container.appendChild(iframe);
         }
-    } else if (video.path) {
-        // Vídeo local
-        const videoEl = document.createElement('video');
-        videoEl.id = 'trim-video';
-        videoEl.src = `${API_BASE}/api/video/stream/${video.id}`;
-        videoEl.controls = true;
-        videoEl.style.width = '100%';
-        videoEl.style.borderRadius = '8px';
-        trimContainer.appendChild(videoEl);
+    }
+}
+
+// Configurar controles de trim
+function setupTrimControls(video) {
+    const duration = video.duration || 0;
+    const startSlider = document.getElementById('trim-start-slider');
+    const startInput = document.getElementById('trim-start-input');
+    const endSlider = document.getElementById('trim-end-slider');
+    const endInput = document.getElementById('trim-end-input');
+    
+    // Configurar máximos
+    startSlider.max = duration;
+    startInput.max = duration;
+    endSlider.max = duration;
+    endInput.max = duration;
+    
+    // Configurar valores iniciais
+    endSlider.value = duration;
+    endInput.value = duration;
+    appState.trimEnd = duration;
+    
+    // Atualizar displays
+    updateTimeDisplay('start', 0);
+    updateTimeDisplay('end', duration);
+    
+    // Calcular clips inicial
+    calculateClips();
+}
+
+// Atualizar tempo inicial do slider
+function updateStartTime(value) {
+    const numValue = parseInt(value);
+    appState.trimStart = numValue;
+    
+    document.getElementById('trim-start-input').value = numValue;
+    updateTimeDisplay('start', numValue);
+    
+    // Garantir que fim > início
+    const endValue = parseInt(document.getElementById('trim-end-slider').value);
+    if (endValue <= numValue) {
+        const newEnd = numValue + 1;
+        document.getElementById('trim-end-slider').value = newEnd;
+        document.getElementById('trim-end-input').value = newEnd;
+        appState.trimEnd = newEnd;
+        updateTimeDisplay('end', newEnd);
     }
     
-    // Configurar inputs
-    const trimStartInput = document.getElementById('trim-start');
-    const trimEndInput = document.getElementById('trim-end');
+    calculateClips();
+}
+
+// Atualizar tempo inicial do input
+function updateStartTimeFromInput(value) {
+    const numValue = parseInt(value) || 0;
+    const max = parseInt(document.getElementById('trim-start-slider').max);
+    const clampedValue = Math.min(Math.max(0, numValue), max);
     
-    trimStartInput.value = 0;
+    document.getElementById('trim-start-slider').value = clampedValue;
+    updateStartTime(clampedValue);
+}
+
+// Atualizar tempo final do slider
+function updateEndTime(value) {
+    const numValue = parseInt(value);
+    appState.trimEnd = numValue;
     
-    if (video.duration && video.duration > 0) {
-        trimStartInput.max = video.duration;
-        trimEndInput.value = video.duration;
-        trimEndInput.max = video.duration;
-        trimEndInput.placeholder = `Máximo: ${formatDuration(video.duration)}`;
-    } else {
-        trimStartInput.max = '';
-        trimEndInput.placeholder = 'Digite a duração em segundos (ex: 3600 para 1 hora)';
+    document.getElementById('trim-end-input').value = numValue;
+    updateTimeDisplay('end', numValue);
+    
+    // Garantir que fim > início
+    const startValue = parseInt(document.getElementById('trim-start-slider').value);
+    if (numValue <= startValue) {
+        const newStart = numValue - 1;
+        document.getElementById('trim-start-slider').value = Math.max(0, newStart);
+        document.getElementById('trim-start-input').value = Math.max(0, newStart);
+        appState.trimStart = Math.max(0, newStart);
+        updateTimeDisplay('start', Math.max(0, newStart));
     }
     
-    // Calcular estimativa inicial
-    calculateCutsEstimate();
+    calculateClips();
+}
+
+// Atualizar tempo final do input
+function updateEndTimeFromInput(value) {
+    const numValue = parseInt(value) || 0;
+    const max = parseInt(document.getElementById('trim-end-slider').max);
+    const clampedValue = Math.min(Math.max(0, numValue), max);
+    
+    document.getElementById('trim-end-slider').value = clampedValue;
+    updateEndTime(clampedValue);
+}
+
+// Atualizar display de tempo
+function updateTimeDisplay(type, seconds) {
+    const display = document.getElementById(`${type}-time-display`);
+    display.textContent = formatTime(seconds);
+}
+
+// Formatar tempo (MM:SS)
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Calcular número de clips
+function calculateClips() {
+    const start = appState.trimStart;
+    const end = appState.trimEnd;
+    const duration = parseInt(document.querySelector('input[name="clip-duration"]:checked').value);
+    
+    appState.cutDuration = duration;
+    
+    const totalDuration = end - start;
+    const clips = totalDuration > 0 ? Math.floor(totalDuration / duration) : 0;
+    
+    appState.numberOfCuts = clips;
+    
+    // Atualizar UI
+    const clipsCount = document.getElementById('clips-count');
+    clipsCount.textContent = clips;
+    
+    // Atualizar preview
+    document.getElementById('preview-total').textContent = clips;
+    
+    // Mostrar próximas etapas se tiver clips
+    if (clips > 0) {
+        showNextSteps();
+    }
 }
 
 // Extrair ID do YouTube
@@ -225,44 +268,13 @@ function extractYouTubeId(url) {
     return null;
 }
 
-// Calcular estimativa de cortes (nova função melhorada)
-function calculateCutsEstimate() {
-    const trimStart = parseInt(document.getElementById('trim-start').value) || 0;
-    const trimEnd = parseInt(document.getElementById('trim-end').value);
-    const duration = appState.videoInfo?.duration || 0;
-    
-    // Obter duração do corte selecionada
-    const cutDurationRadio = document.querySelector('input[name="cut-duration"]:checked');
-    const cutDuration = parseInt(cutDurationRadio?.value || 60);
-    appState.cutDuration = cutDuration;
-    
-    // Calcular duração efetiva
-    let effectiveDuration = 0;
-    if (trimEnd && trimEnd > trimStart) {
-        effectiveDuration = trimEnd - trimStart;
-    } else if (duration > trimStart) {
-        effectiveDuration = duration - trimStart;
+// Mostrar próximas etapas
+function showNextSteps() {
+    const nicheStep = document.getElementById('step-niche');
+    if (!nicheStep.classList.contains('visible')) {
+        nicheStep.classList.remove('hidden');
+        nicheStep.classList.add('visible');
     }
-    
-    // Calcular número de cortes
-    const cutsCount = effectiveDuration > 0 ? Math.max(1, Math.floor(effectiveDuration / cutDuration)) : 0;
-    appState.numberOfCuts = cutsCount;
-    
-    // Atualizar UI
-    const cutsCountEl = document.getElementById('cuts-count');
-    if (cutsCountEl) {
-        if (cutsCount > 0) {
-            cutsCountEl.textContent = `${cutsCount} partes`;
-            cutsCountEl.style.color = 'var(--primary)';
-        } else {
-            cutsCountEl.textContent = 'Defina o trim';
-            cutsCountEl.style.color = 'var(--text-muted)';
-        }
-    }
-    
-    // Salvar valores no estado
-    appState.trimStart = trimStart;
-    appState.trimEnd = trimEnd || duration;
 }
 
 // Carregar nichos
@@ -298,11 +310,13 @@ async function selectNiche(nicheId, cardElement) {
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    // Mostrar seção de retenção
-    const retentionSection = document.getElementById('section-retention');
-    retentionSection.classList.remove('hidden');
+    // Mostrar retenção
+    const retentionStep = document.getElementById('step-retention');
+    retentionStep.classList.remove('hidden');
+    retentionStep.classList.add('visible');
+    
     setTimeout(() => {
-        retentionSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        retentionStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
     
     await loadRetentionVideos(nicheId);
@@ -331,9 +345,10 @@ async function loadRetentionVideos(nicheId) {
             grid.appendChild(card);
         });
         
-        // Mostrar seção de preview após selecionar retenção
-        const previewSection = document.getElementById('section-preview');
-        previewSection.classList.remove('hidden');
+        // Mostrar preview
+        const previewStep = document.getElementById('step-preview');
+        previewStep.classList.remove('hidden');
+        previewStep.classList.add('visible');
     } catch (error) {
         console.error('Erro ao carregar vídeos de retenção:', error);
     }
@@ -347,15 +362,12 @@ function selectRetentionVideo(videoId, cardElement) {
     
     cardElement.classList.add('selected');
     appState.retentionVideoId = videoId;
-    
-    // Mostrar seção de preview
-    const previewSection = document.getElementById('section-preview');
-    previewSection.classList.remove('hidden');
-    setTimeout(() => {
-        previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-    
     updatePreview();
+}
+
+// Atualizar retenção
+function updateRetention(value) {
+    appState.retentionVideoId = value;
 }
 
 // Atualizar preview
@@ -377,10 +389,6 @@ function updatePreview() {
     } else {
         headline.style.fontWeight = '600';
     }
-    
-    // Atualizar número da parte
-    const partNumber = document.getElementById('preview-part');
-    partNumber.textContent = `PARTE 1/${appState.numberOfCuts || 42}`;
 }
 
 // Gerar série
@@ -396,9 +404,7 @@ async function generateSeries() {
     try {
         const response = await fetch(`${API_BASE}/api/generate/series`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 videoId: appState.videoId,
                 nicheId: appState.nicheId,
@@ -484,11 +490,4 @@ async function downloadSeries() {
 // Abrir TikTok Studio
 function openTikTokStudio() {
     window.open('https://www.tiktok.com/studio', '_blank');
-}
-
-// Formatar duração
-function formatDuration(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
