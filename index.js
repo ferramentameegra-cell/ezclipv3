@@ -43,11 +43,24 @@ app.use(express.urlencoded({
   limit: process.env.MAX_URL_SIZE || '50mb' 
 }));
 
-// Servir arquivos estáticos
+// Servir arquivos estáticos com cache control para desenvolvimento
 app.use(express.static("public", {
-  maxAge: process.env.STATIC_MAX_AGE || '1d',
-  etag: true
+  maxAge: process.env.NODE_ENV === 'production' ? (process.env.STATIC_MAX_AGE || '1d') : '0',
+  etag: true,
+  lastModified: true
 }));
+
+// Middleware para forçar refresh em desenvolvimento
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    if (req.path.match(/\.(css|js|html)$/)) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+    }
+    next();
+  });
+}
 
 // Importar rotas (síncrono - não bloqueia startup)
 import videoRoutes from "./src/routes/video.js";
