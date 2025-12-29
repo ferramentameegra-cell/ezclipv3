@@ -1,6 +1,6 @@
 {
   "name": "ezv2",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -9,8 +9,8 @@
     "build": "echo 'Build complete'"
   },
   "engines": {
-    "node": "20",
-    "npm": "10"
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
