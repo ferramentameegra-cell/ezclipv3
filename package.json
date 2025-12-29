@@ -9,8 +9,8 @@
     "build": "echo 'Build complete'"
   },
   "engines": {
-    "node": "20.x",
-    "npm": "10.x"
+    "node": "20",
+    "npm": "10"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
