@@ -34,3 +34,4 @@ A forma mais fácil é conectar o GitHub diretamente no Railway:
 
 Isso fará deploy automático sem precisar de GitHub Actions!
 
+

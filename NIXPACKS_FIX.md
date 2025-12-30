@@ -41,3 +41,4 @@ CMD ["node", "index.js"]
 
 E no Railway, configure para usar Dockerfile ao invés de Nixpacks.
 
+

@@ -46,3 +46,4 @@ bash setup-github-secrets.sh
 
 **Nota:** O script requer que você tenha `jq` instalado e forneça o Railway Token e Project ID quando solicitado.
 
+

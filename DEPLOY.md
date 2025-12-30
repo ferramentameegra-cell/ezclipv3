@@ -59,3 +59,4 @@ Acesse para verificar se está funcionando:
 - Os uploads serão armazenados temporariamente no sistema de arquivos do Railway (volátil)
 - Para armazenamento persistente, configure o Cloudflare R2
 
+

@@ -38,3 +38,4 @@ jobs:
           railway link ${{ secrets.RAILWAY_PROJECT_ID }}
           railway up --detach
 
+

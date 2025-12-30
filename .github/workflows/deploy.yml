@@ -32,3 +32,4 @@ jobs:
           railway login --token $RAILWAY_TOKEN
           railway up --service ezv2
 
+

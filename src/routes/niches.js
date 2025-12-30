@@ -11,3 +11,4 @@ router.get('/:nicheId', getNicheDetails);
 
 export default router;
 
+

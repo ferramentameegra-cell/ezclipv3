@@ -28,3 +28,4 @@ railway up
 echo "✅ Deploy concluído!"
 echo "🌐 Acesse o dashboard do Railway para ver a URL do seu projeto"
 
+

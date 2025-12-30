@@ -80,3 +80,4 @@ Seu projeto estará rodando no Railway e acessível pela URL fornecida.
 ### FFmpeg não encontrado
 - O `nixpacks.toml` já configura FFmpeg ✅
 
+

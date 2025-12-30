@@ -1394,3 +1394,4 @@ Para fazer alterações:
 4. Execute `git push origin main`
 5. O Railway fará deploy automaticamente (se configurado)
 
+

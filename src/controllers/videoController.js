@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 // Armazenar informações dos vídeos processados
 const videoStore = new Map();
 
+// Exportar videoStore para uso em outros módulos
+export { videoStore };
+
 export const uploadVideo = async (req, res) => {
   try {
     if (!req.file) {

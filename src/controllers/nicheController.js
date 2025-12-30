@@ -29,3 +29,4 @@ export const getNicheDetails = (req, res) => {
   }
 };
 
+
