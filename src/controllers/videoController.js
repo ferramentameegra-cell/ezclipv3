@@ -3,6 +3,7 @@ import ytdl from '@distube/ytdl-core';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { downloadYouTubeVideo, isVideoDownloaded } from '../services/youtubeDownloader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,6 +126,25 @@ export const processVideo = async (req, res) => {
         console.error('Todas as tentativas falharam, usando fallback:', errorDetails);
         
         const storedVideoId = uuidv4();
+        const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
+        
+        // Criar diretório se não existir
+        const uploadDir = path.dirname(videoPath);
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        // Tentar baixar mesmo em modo fallback
+        console.log(`Tentando baixar vídeo em modo fallback: ${videoId}`);
+        let downloaded = false;
+        try {
+          await downloadYouTubeVideo(videoId, videoPath);
+          downloaded = fs.existsSync(videoPath) && fs.statSync(videoPath).size > 0;
+          console.log(`Download fallback ${downloaded ? 'bem-sucedido' : 'falhou'}`);
+        } catch (downloadError) {
+          console.error('Erro no download fallback:', downloadError);
+        }
+
         const fallbackVideo = {
           id: storedVideoId,
           youtubeUrl: normalizedUrl,
@@ -132,9 +152,10 @@ export const processVideo = async (req, res) => {
           title: 'Vídeo do YouTube',
           duration: 0, // Usuário pode definir manualmente
           thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-          path: '',
+          path: videoPath,
           processedAt: new Date(),
-          streamUrl: `https://www.youtube.com/embed/${videoId}`,
+          localVideoUrl: `/api/video/play/${storedVideoId}`,
+          downloaded: downloaded,
           limited: true,
           error: errorDetails.message
         };
@@ -143,9 +164,9 @@ export const processVideo = async (req, res) => {
         
         return res.status(200).json({
           videoId: storedVideoId,
-          message: 'Vídeo processado (modo limitado)',
+          message: downloaded ? 'Vídeo baixado (informações limitadas)' : 'Vídeo processado (modo limitado)',
           video: fallbackVideo,
-          warning: 'Não foi possível obter todas as informações automaticamente. Você pode continuar e definir a duração manualmente no trim.'
+          warning: downloaded ? null : 'Não foi possível obter todas as informações automaticamente. Você pode continuar e definir a duração manualmente no trim.'
         });
       }
     }
@@ -163,6 +184,17 @@ export const processVideo = async (req, res) => {
     const thumbnail = info.videoDetails.thumbnails?.[info.videoDetails.thumbnails.length - 1]?.url || 
                      info.videoDetails.thumbnails?.[0]?.url || '';
 
+    // BAIXAR VÍDEO AUTOMATICAMENTE
+    console.log(`Baixando vídeo do YouTube: ${videoId}`);
+    try {
+      await downloadYouTubeVideo(videoId, videoPath);
+      console.log(`Vídeo baixado com sucesso: ${videoPath}`);
+    } catch (downloadError) {
+      console.error('Erro ao baixar vídeo:', downloadError);
+      // Continuar mesmo se o download falhar (modo limitado)
+      // O vídeo será baixado durante a geração se necessário
+    }
+
     const videoInfo = {
       id: storedVideoId,
       youtubeUrl: normalizedUrl,
@@ -172,15 +204,16 @@ export const processVideo = async (req, res) => {
       thumbnail: thumbnail,
       path: videoPath,
       processedAt: new Date(),
-      // URL para streaming direto (não baixar, apenas usar para preview)
-      streamUrl: `https://www.youtube.com/embed/${videoId}`
+      // URL para servir o vídeo local baixado
+      localVideoUrl: `/api/video/play/${storedVideoId}`,
+      downloaded: fs.existsSync(videoPath) && fs.statSync(videoPath).size > 0
     };
 
     videoStore.set(storedVideoId, videoInfo);
 
     res.json({
       videoId: storedVideoId,
-      message: 'Vídeo do YouTube processado com sucesso',
+      message: 'Vídeo do YouTube processado e baixado com sucesso',
       video: videoInfo
     });
   } catch (error) {
@@ -266,4 +299,7 @@ export const streamVideo = (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Nova rota para servir vídeo baixado (alias para streamVideo)
+export const playVideo = streamVideo;
 
