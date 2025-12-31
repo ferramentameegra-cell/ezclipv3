@@ -633,12 +633,21 @@ function selectDuration(seconds) {
 }
 
 function calculateClips() {
-    const start = appState.trimStart;
-    const end = appState.trimEnd;
-    const duration = appState.cutDuration;
+    // VALIDAR: Usar apenas valores do trim (não duração total do vídeo)
+    const start = Math.max(0, Math.floor(appState.trimStart || 0));
+    const end = Math.max(start + 1, Math.floor(appState.trimEnd || 0));
+    const duration = appState.cutDuration || 60;
     
-    const totalDuration = end - start;
-    const clips = totalDuration > 0 && duration > 0 ? Math.floor(totalDuration / duration) : 0;
+    // CÁLCULO CORRETO: Baseado apenas no intervalo trimado
+    const trimmedSeconds = end - start;
+    const clips = trimmedSeconds > 0 && duration > 0 ? Math.floor(trimmedSeconds / duration) : 0;
+    
+    // VALIDAR: Garantir que valores estão corretos
+    if (start < 0 || end <= start) {
+        console.warn('[CALC] Valores de trim inválidos:', { start, end });
+        appState.numberOfCuts = 0;
+        return;
+    }
     
     appState.numberOfCuts = clips;
     
@@ -658,10 +667,15 @@ function calculateClips() {
     
     if (previewTotal) previewTotal.textContent = clips;
     
-    // Log para debug (pode ser removido em produção)
-    if (clips > 0) {
-        console.log(`Cálculo de clips: ${totalDuration}s de vídeo / ${duration}s por clip = ${clips} clips`);
-    }
+    // Log detalhado para validação
+    console.log(`[CALC] Cálculo de clips:`, {
+        trimStart: start,
+        trimEnd: end,
+        trimmedDuration: trimmedSeconds,
+        clipDuration: duration,
+        clips: clips,
+        formula: `floor(${trimmedSeconds} / ${duration}) = ${clips}`
+    });
     
     if (clips > 0) {
         showNextSteps();

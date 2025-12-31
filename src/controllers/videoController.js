@@ -184,15 +184,36 @@ export const processVideo = async (req, res) => {
     const thumbnail = info.videoDetails.thumbnails?.[info.videoDetails.thumbnails.length - 1]?.url || 
                      info.videoDetails.thumbnails?.[0]?.url || '';
 
-    // BAIXAR VÍDEO AUTOMATICAMENTE
-    console.log(`Baixando vídeo do YouTube: ${videoId}`);
+    // BAIXAR VÍDEO AUTOMATICAMENTE - AGUARDAR CONCLUSÃO
+    console.log(`[DOWNLOAD] Iniciando download do vídeo do YouTube: ${videoId}`);
+    let downloadSuccess = false;
+    let downloadError = null;
+    
     try {
       await downloadYouTubeVideo(videoId, videoPath);
-      console.log(`Vídeo baixado com sucesso: ${videoPath}`);
-    } catch (downloadError) {
-      console.error('Erro ao baixar vídeo:', downloadError);
-      // Continuar mesmo se o download falhar (modo limitado)
-      // O vídeo será baixado durante a geração se necessário
+      
+      // VALIDAR que o arquivo foi baixado corretamente
+      if (fs.existsSync(videoPath)) {
+        const stats = fs.statSync(videoPath);
+        if (stats.size > 0) {
+          downloadSuccess = true;
+          console.log(`[DOWNLOAD] Vídeo baixado com sucesso: ${videoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+        } else {
+          downloadError = new Error('Arquivo baixado está vazio');
+          console.error('[DOWNLOAD] Arquivo baixado está vazio');
+        }
+      } else {
+        downloadError = new Error('Arquivo não foi criado após download');
+        console.error('[DOWNLOAD] Arquivo não foi criado');
+      }
+    } catch (error) {
+      downloadError = error;
+      console.error('[DOWNLOAD] Erro ao baixar vídeo:', error.message);
+    }
+
+    // Se download falhou, tentar novamente ou retornar erro
+    if (!downloadSuccess) {
+      console.warn('[DOWNLOAD] Download falhou, mas continuando. Vídeo será baixado durante geração se necessário.');
     }
 
     const videoInfo = {
@@ -206,7 +227,8 @@ export const processVideo = async (req, res) => {
       processedAt: new Date(),
       // URL para servir o vídeo local baixado
       localVideoUrl: `/api/video/play/${storedVideoId}`,
-      downloaded: fs.existsSync(videoPath) && fs.statSync(videoPath).size > 0
+      downloaded: downloadSuccess,
+      downloadError: downloadError ? downloadError.message : null
     };
 
     videoStore.set(storedVideoId, videoInfo);

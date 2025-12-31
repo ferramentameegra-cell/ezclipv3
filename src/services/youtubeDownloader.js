@@ -21,6 +21,13 @@ export async function downloadYouTubeVideo(videoId, outputPath) {
         fs.mkdirSync(dir, { recursive: true });
       }
 
+      // Remover arquivo existente se houver (para garantir download limpo)
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+
+      console.log(`[DOWNLOAD] Iniciando download: ${videoId} -> ${outputPath}`);
+
       // Baixar vídeo com melhor qualidade disponível
       const videoStream = ytdl(videoId, {
         quality: 'highestvideo',
@@ -39,26 +46,62 @@ export async function downloadYouTubeVideo(videoId, outputPath) {
       });
 
       const writeStream = fs.createWriteStream(outputPath);
+      let bytesDownloaded = 0;
+      let lastProgress = 0;
+
+      // Monitorar progresso do download
+      videoStream.on('info', (info) => {
+        console.log(`[DOWNLOAD] Informações do vídeo: ${info.videoDetails.title}`);
+      });
+
+      videoStream.on('progress', (chunkLength, downloaded, total) => {
+        bytesDownloaded = downloaded;
+        const percent = total > 0 ? ((downloaded / total) * 100).toFixed(1) : '?';
+        if (percent !== lastProgress) {
+          console.log(`[DOWNLOAD] Progresso: ${percent}% (${(downloaded / 1024 / 1024).toFixed(2)} MB)`);
+          lastProgress = percent;
+        }
+      });
 
       videoStream.pipe(writeStream);
 
       videoStream.on('error', (error) => {
+        console.error('[DOWNLOAD] Erro no stream:', error);
+        writeStream.destroy();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath).catch(() => {});
+        }
         reject(new Error(`Erro ao baixar vídeo: ${error.message}`));
       });
 
       writeStream.on('error', (error) => {
+        console.error('[DOWNLOAD] Erro ao escrever arquivo:', error);
+        videoStream.destroy();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath).catch(() => {});
+        }
         reject(new Error(`Erro ao salvar vídeo: ${error.message}`));
       });
 
       writeStream.on('finish', () => {
-        if (fs.existsSync(outputPath)) {
-          resolve(outputPath);
-        } else {
-          reject(new Error('Arquivo não foi salvo corretamente'));
-        }
+        // VALIDAR: Arquivo deve existir e ter tamanho > 0
+        setTimeout(() => {
+          if (fs.existsSync(outputPath)) {
+            const stats = fs.statSync(outputPath);
+            if (stats.size > 0) {
+              console.log(`[DOWNLOAD] Download concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              resolve(outputPath);
+            } else {
+              reject(new Error('Arquivo baixado está vazio'));
+            }
+          } else {
+            reject(new Error('Arquivo não foi salvo corretamente'));
+          }
+        }, 500); // Pequeno delay para garantir que o sistema de arquivos atualizou
       });
 
     } catch (error) {
+      console.error('[DOWNLOAD] Erro geral:', error);
       reject(error);
     }
   });

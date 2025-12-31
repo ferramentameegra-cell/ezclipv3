@@ -45,36 +45,85 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // Determinar caminho do vídeo fonte
     let sourceVideoPath = video.path;
     
-    // Se o vídeo é do YouTube e ainda não foi baixado, baixar agora
-    if (video.youtubeVideoId && (!sourceVideoPath || !isVideoDownloaded(sourceVideoPath))) {
-      job.progress = 5;
-      if (jobsMap) jobsMap.set(job.id, job);
+    // VALIDAR: Se o vídeo é do YouTube e ainda não foi baixado, baixar agora
+    if (video.youtubeVideoId) {
+      const needsDownload = !sourceVideoPath || !isVideoDownloaded(sourceVideoPath);
       
-      const downloadPath = path.join(__dirname, '../../uploads', `${videoId}_downloaded.mp4`);
-      
-      console.log(`Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
-      await downloadYouTubeVideo(video.youtubeVideoId, downloadPath);
-      
-      // Atualizar caminho no videoStore
-      video.path = downloadPath;
-      videoStore.set(videoId, video);
-      sourceVideoPath = downloadPath;
-      
-      job.progress = 20;
-      if (jobsMap) jobsMap.set(job.id, job);
+      if (needsDownload) {
+        job.progress = 5;
+        if (jobsMap) jobsMap.set(job.id, job);
+        
+        const downloadPath = path.join(__dirname, '../../uploads', `${videoId}_downloaded.mp4`);
+        
+        console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
+        try {
+          await downloadYouTubeVideo(video.youtubeVideoId, downloadPath);
+          
+          // VALIDAR download
+          if (!fs.existsSync(downloadPath)) {
+            throw new Error('Arquivo não foi criado após download');
+          }
+          
+          const stats = fs.statSync(downloadPath);
+          if (stats.size === 0) {
+            throw new Error('Arquivo baixado está vazio');
+          }
+          
+          console.log(`[PROCESSING] Vídeo baixado: ${downloadPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+          
+          // Atualizar caminho no videoStore
+          video.path = downloadPath;
+          video.downloaded = true;
+          videoStore.set(videoId, video);
+          sourceVideoPath = downloadPath;
+          
+          job.progress = 20;
+          if (jobsMap) jobsMap.set(job.id, job);
+        } catch (downloadError) {
+          console.error('[PROCESSING] Erro ao baixar vídeo:', downloadError);
+          throw new Error(`Falha ao baixar vídeo do YouTube: ${downloadError.message}`);
+        }
+      } else {
+        console.log(`[PROCESSING] Vídeo já baixado: ${sourceVideoPath}`);
+      }
     }
 
-    if (!sourceVideoPath || !fs.existsSync(sourceVideoPath)) {
+    // VALIDAR: Arquivo deve existir e ter tamanho > 0
+    if (!sourceVideoPath) {
+      throw new Error('Caminho do vídeo não definido');
+    }
+    
+    if (!fs.existsSync(sourceVideoPath)) {
       throw new Error(`Arquivo de vídeo não encontrado: ${sourceVideoPath}`);
     }
+    
+    const stats = fs.statSync(sourceVideoPath);
+    if (stats.size === 0) {
+      throw new Error(`Arquivo de vídeo está vazio: ${sourceVideoPath}`);
+    }
+    
+    console.log(`[PROCESSING] Usando vídeo local: ${sourceVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
 
-    // Determinar tempos de trim
+    // Determinar tempos de trim - VALIDAR valores
     const videoDuration = video.duration || 0;
-    const startTime = Math.max(0, trimStart || 0);
-    const endTime = trimEnd && trimEnd > 0 ? Math.min(trimEnd, videoDuration) : videoDuration;
+    const startTime = Math.max(0, Math.floor(trimStart || 0));
+    const endTime = trimEnd && trimEnd > 0 ? Math.min(Math.floor(trimEnd), videoDuration || Infinity) : (videoDuration || Infinity);
 
+    // VALIDAR: Tempos de trim devem ser válidos
     if (endTime <= startTime) {
-      throw new Error('Tempo final deve ser maior que tempo inicial');
+      throw new Error(`Tempo final (${endTime}s) deve ser maior que tempo inicial (${startTime}s)`);
+    }
+    
+    if (startTime < 0) {
+      throw new Error(`Tempo inicial não pode ser negativo: ${startTime}`);
+    }
+    
+    const trimmedDuration = endTime - startTime;
+    console.log(`[PROCESSING] Trim configurado: ${startTime}s - ${endTime}s (duração: ${trimmedDuration}s)`);
+    
+    // VALIDAR: Duração do trim deve ser suficiente para pelo menos 1 clip
+    if (trimmedDuration < cutDuration) {
+      throw new Error(`Duração do trim (${trimmedDuration}s) é menor que duração do clip (${cutDuration}s)`);
     }
 
     // Aplicar trim se necessário
