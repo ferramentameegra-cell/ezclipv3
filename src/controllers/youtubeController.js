@@ -58,47 +58,69 @@ export const downloadYouTubeVideoEndpoint = async (req, res) => {
 
     console.log(`[YOUTUBE] Iniciando download: ${youtubeUrl} -> ${videoPath}`);
 
-    // Tentar yt-dlp primeiro (mais robusto)
+    // Tentar yt-dlp-wrap primeiro (compatível com containers)
     let downloadSuccess = false;
     let downloadError = null;
+    let finalVideoPath = videoPath;
 
-    const ytdlpAvailable = await isYtDlpAvailable();
-    if (ytdlpAvailable) {
-      try {
-        await downloadWithYtDlp(youtubeUrl.trim(), videoPath);
+    try {
+      const ytdlpAvailable = await isYtDlpAvailable();
+      if (ytdlpAvailable) {
+        console.log(`[YOUTUBE] Tentando download com yt-dlp-wrap...`);
+        finalVideoPath = await downloadWithYtDlp(youtubeUrl.trim(), videoPath);
         downloadSuccess = true;
-        console.log(`[YOUTUBE] Download concluído com yt-dlp: ${videoPath}`);
-      } catch (error) {
-        console.warn(`[YOUTUBE] yt-dlp falhou, tentando ytdl-core: ${error.message}`);
-        downloadError = error;
+        console.log(`[YOUTUBE] Download concluído com yt-dlp-wrap: ${finalVideoPath}`);
+      } else {
+        throw new Error('yt-dlp-wrap não disponível');
       }
-    }
-
-    // Fallback para ytdl-core
-    if (!downloadSuccess) {
+    } catch (error) {
+      console.warn(`[YOUTUBE] yt-dlp-wrap falhou, tentando ytdl-core: ${error.message}`);
+      downloadError = error;
+      
+      // Fallback para ytdl-core
       try {
+        console.log(`[YOUTUBE] Tentando download com ytdl-core...`);
         await downloadYouTubeVideo(videoId, videoPath);
+        finalVideoPath = videoPath;
         downloadSuccess = true;
-        console.log(`[YOUTUBE] Download concluído com ytdl-core: ${videoPath}`);
-      } catch (error) {
-        console.error(`[YOUTUBE] Erro no download: ${error.message}`);
-        downloadError = error;
+        console.log(`[YOUTUBE] Download concluído com ytdl-core: ${finalVideoPath}`);
+      } catch (fallbackError) {
+        console.error(`[YOUTUBE] Erro no download (ytdl-core também falhou): ${fallbackError.message}`);
+        downloadError = fallbackError;
       }
     }
 
     // Validar download
-    if (!downloadSuccess || !fs.existsSync(videoPath)) {
+    if (!downloadSuccess || !fs.existsSync(finalVideoPath)) {
+      const errorMessage = downloadError?.message || 'Erro desconhecido';
+      console.error(`[YOUTUBE] Falha no download: ${errorMessage}`);
       return res.status(500).json({ 
-        error: `Falha ao baixar vídeo: ${downloadError?.message || 'Erro desconhecido'}` 
+        error: `Falha ao baixar vídeo: ${errorMessage}`,
+        details: process.env.NODE_ENV === 'development' ? downloadError?.stack : undefined
       });
     }
 
-    const stats = fs.statSync(videoPath);
+    const stats = fs.statSync(finalVideoPath);
     if (stats.size === 0) {
-      fs.unlinkSync(videoPath);
+      fs.unlinkSync(finalVideoPath);
       return res.status(500).json({ 
         error: 'Arquivo baixado está vazio' 
       });
+    }
+
+    // Atualizar caminho se yt-dlp-wrap retornou caminho diferente
+    if (finalVideoPath !== videoPath) {
+      // Mover arquivo para o caminho esperado se necessário
+      try {
+        if (fs.existsSync(videoPath)) {
+          fs.unlinkSync(videoPath);
+        }
+        fs.renameSync(finalVideoPath, videoPath);
+        finalVideoPath = videoPath;
+        console.log(`[YOUTUBE] Arquivo movido para caminho esperado: ${videoPath}`);
+      } catch (moveError) {
+        console.warn(`[YOUTUBE] Não foi possível mover arquivo, usando caminho original: ${moveError.message}`);
+      }
     }
 
     // Obter informações do vídeo (duração)
@@ -106,12 +128,13 @@ export const downloadYouTubeVideoEndpoint = async (req, res) => {
     try {
       const ffmpeg = (await import('fluent-ffmpeg')).default;
       await new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        ffmpeg.ffprobe(finalVideoPath, (err, metadata) => {
           if (err) {
             console.warn(`[YOUTUBE] Erro ao obter metadados: ${err.message}`);
             resolve();
           } else {
             duration = Math.floor(metadata.format.duration || 0);
+            console.log(`[YOUTUBE] Duração do vídeo: ${duration}s`);
             resolve();
           }
         });
@@ -125,13 +148,13 @@ export const downloadYouTubeVideoEndpoint = async (req, res) => {
       id: storedVideoId,
       youtubeUrl: youtubeUrl.trim(),
       youtubeVideoId: videoId,
-      path: videoPath,
+      path: finalVideoPath,
       duration: duration,
       fileSize: stats.size,
       downloaded: true,
       downloadedAt: new Date(),
-      localVideoUrl: `/api/video/play/${storedVideoId}`,
-      playableUrl: `/api/video/play/${storedVideoId}`
+      localVideoUrl: `/api/youtube/play/${storedVideoId}`,
+      playableUrl: `/api/youtube/play/${storedVideoId}`
     };
 
     youtubeVideoStore.set(storedVideoId, videoInfo);
