@@ -1,5 +1,5 @@
 import { trimVideo as trimVideoService } from '../services/videoTrimmer.js';
-import { youtubeVideoStore } from './youtubeController.js';
+import { videoStore } from './downloadController.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,8 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * POST /api/trim
  * Aplicar trim no vídeo baixado
- * Retorna vídeo trimado e URL jogável
  */
 export const applyTrim = async (req, res) => {
   try {
@@ -17,18 +17,23 @@ export const applyTrim = async (req, res) => {
 
     if (!videoId || startTime === undefined || endTime === undefined) {
       return res.status(400).json({ 
+        success: false,
         error: 'Campos obrigatórios: videoId, startTime, endTime' 
       });
     }
 
-    const video = youtubeVideoStore.get(videoId);
+    const video = videoStore.get(videoId);
     if (!video) {
-      return res.status(404).json({ error: 'Vídeo não encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Vídeo não encontrado' 
+      });
     }
 
     // Validar que vídeo está baixado
     if (!video.path || !fs.existsSync(video.path)) {
       return res.status(400).json({ 
+        success: false,
         error: 'Vídeo ainda não foi baixado' 
       });
     }
@@ -36,6 +41,7 @@ export const applyTrim = async (req, res) => {
     const stats = fs.statSync(video.path);
     if (stats.size === 0) {
       return res.status(400).json({ 
+        success: false,
         error: 'Arquivo de vídeo está vazio' 
       });
     }
@@ -47,12 +53,14 @@ export const applyTrim = async (req, res) => {
 
     if (end > maxDuration) {
       return res.status(400).json({ 
+        success: false,
         error: `Tempo final (${end}s) excede duração do vídeo (${maxDuration}s)` 
       });
     }
 
     if (end <= start) {
       return res.status(400).json({ 
+        success: false,
         error: 'Tempo final deve ser maior que tempo inicial' 
       });
     }
@@ -67,6 +75,7 @@ export const applyTrim = async (req, res) => {
     // Validar arquivo trimado
     if (!fs.existsSync(trimmedPath)) {
       return res.status(500).json({ 
+        success: false,
         error: 'Arquivo trimado não foi criado' 
       });
     }
@@ -74,6 +83,7 @@ export const applyTrim = async (req, res) => {
     const trimmedStats = fs.statSync(trimmedPath);
     if (trimmedStats.size === 0) {
       return res.status(500).json({ 
+        success: false,
         error: 'Arquivo trimado está vazio' 
       });
     }
@@ -83,15 +93,14 @@ export const applyTrim = async (req, res) => {
     video.trimStart = start;
     video.trimEnd = end;
     video.trimmedDuration = end - start;
-    video.trimmedVideoUrl = `/api/video/play-trimmed/${videoId}`;
-    youtubeVideoStore.set(videoId, video);
+    videoStore.set(videoId, video);
 
     console.log(`[TRIM] Trim aplicado com sucesso: ${trimmedPath} (${(trimmedStats.size / 1024 / 1024).toFixed(2)} MB)`);
 
     res.json({
       success: true,
       videoId,
-      trimmedVideoUrl: video.trimmedVideoUrl,
+      trimmedVideoUrl: `/api/play-trimmed/${videoId}`,
       startTime: start,
       endTime: end,
       trimmedDuration: video.trimmedDuration,
@@ -100,20 +109,24 @@ export const applyTrim = async (req, res) => {
 
   } catch (error) {
     console.error('[TRIM] Erro:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 };
 
 /**
+ * POST /api/trim/count-clips
  * Calcular quantos clips podem ser gerados
- * Baseado na duração trimada e duração do clip selecionada
  */
-export const calculateClipsCount = (req, res) => {
+export const countClips = (req, res) => {
   try {
     const { videoId, startTime, endTime, clipDuration } = req.body;
 
     if (startTime === undefined || endTime === undefined || !clipDuration) {
       return res.status(400).json({ 
+        success: false,
         error: 'Campos obrigatórios: startTime, endTime, clipDuration' 
       });
     }
@@ -124,17 +137,19 @@ export const calculateClipsCount = (req, res) => {
 
     if (end <= start) {
       return res.status(400).json({ 
+        success: false,
         error: 'Tempo final deve ser maior que tempo inicial' 
       });
     }
 
     if (duration !== 60 && duration !== 120) {
       return res.status(400).json({ 
+        success: false,
         error: 'Duração do clip deve ser 60 ou 120 segundos' 
       });
     }
 
-    // CÁLCULO PRECISO: Baseado apenas na duração trimada
+    // CÁLCULO: Baseado na duração trimada
     const trimmedDuration = end - start;
     const clipsCount = Math.floor(trimmedDuration / duration);
 
@@ -155,18 +170,22 @@ export const calculateClipsCount = (req, res) => {
     });
 
   } catch (error) {
-    console.error('[CALC] Erro:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[COUNT-CLIPS] Erro:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 };
 
 /**
+ * GET /api/play-trimmed/:videoId
  * Servir vídeo trimado
  */
 export const playTrimmedVideo = (req, res) => {
   try {
     const { videoId } = req.params;
-    const video = youtubeVideoStore.get(videoId);
+    const video = videoStore.get(videoId);
 
     if (!video || !video.trimmedPath) {
       return res.status(404).json({ error: 'Vídeo trimado não encontrado' });
@@ -203,7 +222,7 @@ export const playTrimmedVideo = (req, res) => {
       fs.createReadStream(video.trimmedPath).pipe(res);
     }
   } catch (error) {
-    console.error('[TRIM] Erro ao servir vídeo trimado:', error);
+    console.error('[PLAY-TRIMMED] Erro ao servir vídeo trimado:', error);
     res.status(500).json({ error: error.message });
   }
 };

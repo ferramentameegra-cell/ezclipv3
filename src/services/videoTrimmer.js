@@ -66,11 +66,12 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
  * @param {string} inputPath - Caminho do vídeo original (já pode estar cortado)
  * @param {string} outputDir - Diretório onde salvar os clips
  * @param {number} clipDuration - Duração de cada clip em segundos
+ * @param {number} numberOfClips - Número total de clips a gerar
  * @param {number} startTime - Tempo inicial em segundos (geralmente 0 se já cortado)
  * @param {number} endTime - Tempo final em segundos (duração total do vídeo)
  * @returns {Promise<Array<string>>} - Array com caminhos dos clips gerados
  */
-export async function splitVideoIntoClips(inputPath, outputDir, clipDuration, startTime, endTime) {
+export async function splitVideoIntoClips(inputPath, outputDir, clipDuration, numberOfClips, startTime = 0, endTime = null) {
   return new Promise(async (resolve, reject) => {
     if (!fs.existsSync(inputPath)) {
       return reject(new Error(`Arquivo de entrada não encontrado: ${inputPath}`));
@@ -82,17 +83,15 @@ export async function splitVideoIntoClips(inputPath, outputDir, clipDuration, st
     }
 
     const clips = [];
-    const totalDuration = endTime - startTime;
-    const numberOfClips = Math.floor(totalDuration / clipDuration);
     
     if (numberOfClips === 0) {
-      return reject(new Error('Duração do clip maior que o intervalo selecionado'));
+      return reject(new Error('Número de clips deve ser maior que zero'));
     }
 
     // Processar clips sequencialmente para evitar sobrecarga de memória
     for (let i = 0; i < numberOfClips; i++) {
       const clipStartTime = startTime + (i * clipDuration);
-      const clipEndTime = Math.min(clipStartTime + clipDuration, endTime);
+      const clipEndTime = Math.min(clipStartTime + clipDuration, endTime || Infinity);
       const clipPath = path.join(outputDir, `clip_${String(i + 1).padStart(3, '0')}.mp4`);
 
       try {
