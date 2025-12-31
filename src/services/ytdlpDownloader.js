@@ -1,29 +1,10 @@
-import YTDlpWrap from 'yt-dlp-wrap';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { downloadYouTubeVideo as downloadWithYtdlCore } from './youtubeDownloader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Instância global do yt-dlp-wrap
-let ytDlpWrapInstance = null;
-
-/**
- * Inicializar yt-dlp-wrap (baixa binário automaticamente se necessário)
- */
-function getYtDlpWrap() {
-  if (!ytDlpWrapInstance) {
-    try {
-      ytDlpWrapInstance = new YTDlpWrap();
-      console.log('[YT-DLP-WRAP] Instância criada');
-    } catch (error) {
-      console.error('[YT-DLP-WRAP] Erro ao criar instância:', error);
-      throw new Error(`Falha ao inicializar yt-dlp-wrap: ${error.message}`);
-    }
-  }
-  return ytDlpWrapInstance;
-}
 
 /**
  * Sanitizar URL do YouTube
@@ -61,17 +42,59 @@ export function sanitizeYouTubeUrl(url) {
 }
 
 /**
- * Baixa vídeo do YouTube usando yt-dlp-wrap (compatível com containers)
+ * Extrair video ID de URL do YouTube
+ */
+function extractVideoId(url) {
+  try {
+    const urlObj = new URL(url.trim());
+    
+    // youtube.com/watch?v=VIDEO_ID
+    if (urlObj.hostname.includes('youtube.com')) {
+      return urlObj.searchParams.get('v');
+    }
+    
+    // youtu.be/VIDEO_ID
+    if (urlObj.hostname === 'youtu.be') {
+      return urlObj.pathname.slice(1);
+    }
+    
+    // Fallback: regex
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /youtube\.com\/.*[?&]v=([^&\n?#]+)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = url.trim().match(pattern);
+      if (match) {
+        return match[1];
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn(`[EXTRACT] Erro ao extrair video ID: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Baixa vídeo do YouTube usando ytdl-core (compatível com containers)
+ * ytdl-core é uma biblioteca Node.js pura, não requer binários do sistema
  * @param {string} videoUrl - URL completa do vídeo do YouTube
  * @param {string} outputPath - Caminho onde salvar o vídeo
  * @returns {Promise<string>} - Caminho do arquivo baixado
  */
 export async function downloadWithYtDlp(videoUrl, outputPath) {
-  let finalOutputPath = outputPath;
-  
   try {
     // Sanitizar URL antes de baixar
     const sanitizedUrl = sanitizeYouTubeUrl(videoUrl);
+    
+    // Extrair video ID
+    const videoId = extractVideoId(sanitizedUrl);
+    if (!videoId) {
+      throw new Error('Não foi possível extrair ID do vídeo da URL');
+    }
     
     // Garantir que o diretório existe
     const dir = path.dirname(outputPath);
@@ -84,63 +107,28 @@ export async function downloadWithYtDlp(videoUrl, outputPath) {
       fs.unlinkSync(outputPath);
     }
 
-    console.log(`[YT-DLP-WRAP] Iniciando download: ${sanitizedUrl} -> ${outputPath}`);
+    console.log(`[YT-DLP] Iniciando download: ${sanitizedUrl} (ID: ${videoId}) -> ${outputPath}`);
 
-    // Obter instância do yt-dlp-wrap
-    const ytDlp = getYtDlpWrap();
-
-    // Configurar opções de download
-    const downloadOptions = [
-      '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-      '--merge-output-format', 'mp4',
-      '--no-playlist',
-      '--no-warnings',
-      '--quiet',
-      '--no-progress',
-      '-o', outputPath
-    ];
-
-    // Executar download
-    console.log(`[YT-DLP-WRAP] Executando download com opções: ${downloadOptions.join(' ')}`);
-    
-    await ytDlp.execPromise([sanitizedUrl, ...downloadOptions]);
+    // Usar ytdl-core (biblioteca Node.js pura, compatível com containers)
+    // downloadWithYtdlCore já faz o download completo
+    await downloadWithYtdlCore(videoId, outputPath);
 
     // Validar que o arquivo foi criado
     if (!fs.existsSync(outputPath)) {
-      // yt-dlp pode adicionar extensão automaticamente
-      const possiblePaths = [
-        outputPath,
-        outputPath.replace('.mp4', ''),
-        outputPath + '.mp4',
-        path.join(path.dirname(outputPath), path.basename(outputPath, path.extname(outputPath)) + '.mp4')
-      ];
-      
-      let found = false;
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          finalOutputPath = possiblePath;
-          found = true;
-          console.log(`[YT-DLP-WRAP] Arquivo encontrado em: ${finalOutputPath}`);
-          break;
-        }
-      }
-      
-      if (!found) {
-        throw new Error('Arquivo não foi criado após download');
-      }
+      throw new Error('Arquivo não foi criado após download');
     }
 
-    const stats = fs.statSync(finalOutputPath);
+    const stats = fs.statSync(outputPath);
     if (stats.size === 0) {
-      fs.unlinkSync(finalOutputPath);
+      fs.unlinkSync(outputPath);
       throw new Error('Arquivo baixado está vazio');
     }
 
-    console.log(`[YT-DLP-WRAP] Download concluído: ${finalOutputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`[YT-DLP] Download concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
 
-    return finalOutputPath;
+    return outputPath;
   } catch (error) {
-    console.error('[YT-DLP-WRAP] Erro no download:', {
+    console.error('[YT-DLP] Erro no download:', {
       message: error.message,
       stack: error.stack,
       url: videoUrl,
@@ -152,16 +140,7 @@ export async function downloadWithYtDlp(videoUrl, outputPath) {
       try {
         fs.unlinkSync(outputPath);
       } catch (unlinkError) {
-        console.error('[YT-DLP-WRAP] Erro ao remover arquivo corrompido:', unlinkError);
-      }
-    }
-    
-    // Limpar também o caminho final se diferente
-    if (finalOutputPath !== outputPath && fs.existsSync(finalOutputPath)) {
-      try {
-        fs.unlinkSync(finalOutputPath);
-      } catch (unlinkError) {
-        console.error('[YT-DLP-WRAP] Erro ao remover arquivo final corrompido:', unlinkError);
+        console.error('[YT-DLP] Erro ao remover arquivo corrompido:', unlinkError);
       }
     }
 
@@ -170,17 +149,11 @@ export async function downloadWithYtDlp(videoUrl, outputPath) {
 }
 
 /**
- * Verifica se yt-dlp-wrap está disponível
+ * Verifica se yt-dlp está disponível
+ * Como estamos usando ytdl-core (Node.js puro), sempre retorna true
  * @returns {Promise<boolean>}
  */
 export async function isYtDlpAvailable() {
-  try {
-    const ytDlp = getYtDlpWrap();
-    // Tentar obter versão para verificar se está funcionando
-    await ytDlp.execPromise(['--version']);
-    return true;
-  } catch (error) {
-    console.warn('[YT-DLP-WRAP] yt-dlp-wrap não disponível:', error.message);
-    return false;
-  }
+  // ytdl-core está sempre disponível (é uma dependência npm)
+  return true;
 }
