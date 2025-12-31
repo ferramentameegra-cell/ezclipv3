@@ -225,8 +225,10 @@ export const processVideo = async (req, res) => {
 
     res.json({
       videoId: storedVideoId,
-      message: 'Vídeo do YouTube processado e baixado com sucesso',
-      video: videoInfo
+      message: 'Vídeo do YouTube processado. Download iniciado em background.',
+      video: videoInfo,
+      downloadStatus: 'queued',
+      downloadJobId: downloadJob.id
     });
   } catch (error) {
     console.error('Erro completo no processVideo:', {
