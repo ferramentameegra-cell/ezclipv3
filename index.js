@@ -64,6 +64,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Importar rotas (síncrono - não bloqueia startup)
 import videoRoutes from "./src/routes/video.js";
+import trimRoutes from "./src/routes/trim.js";
 import nicheRoutes from "./src/routes/niches.js";
 import retentionRoutes from "./src/routes/retention.js";
 import generateRoutes from "./src/routes/generate.js";
@@ -99,6 +100,7 @@ if (process.env.ENABLE_CLEANUP !== 'false') {
 
 // Rotas da API
 app.use("/api/video", videoRoutes);
+app.use("/api/trim", trimRoutes);
 app.use("/api/niches", nicheRoutes);
 app.use("/api/retention", retentionRoutes);
 app.use("/api/generate", generateRoutes);

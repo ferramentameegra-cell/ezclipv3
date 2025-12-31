@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadVideo, processVideo, getVideoInfo, streamVideo, playVideo } from '../controllers/videoController.js';
+import { uploadVideo, processVideo, getVideoInfo, streamVideo, playVideo, checkDownloadStatus } from '../controllers/videoController.js';
 
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
@@ -10,6 +10,9 @@ router.post('/upload', upload.single('video'), uploadVideo);
 
 // Processar vídeo do YouTube
 router.post('/youtube', processVideo);
+
+// Verificar status do download
+router.get('/download-status/:videoId', checkDownloadStatus);
 
 // Obter informações do vídeo
 router.get('/info/:videoId', getVideoInfo);
@@ -21,4 +24,3 @@ router.get('/stream/:videoId', streamVideo);
 router.get('/play/:videoId', playVideo);
 
 export default router;
-

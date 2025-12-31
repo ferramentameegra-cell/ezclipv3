@@ -2,17 +2,39 @@ import ytdl from '@distube/ytdl-core';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { downloadWithYtDlp, isYtDlpAvailable } from './ytdlpDownloader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
  * Baixa vídeo do YouTube para processamento local
- * @param {string} videoId - ID do vídeo do YouTube
+ * Usa yt-dlp se disponível (mais robusto), senão usa ytdl-core
+ * @param {string} videoId - ID do vídeo do YouTube ou URL completa
  * @param {string} outputPath - Caminho onde salvar o vídeo
  * @returns {Promise<string>} - Caminho do arquivo baixado
  */
 export async function downloadYouTubeVideo(videoId, outputPath) {
+  // Tentar yt-dlp primeiro (mais robusto)
+  const ytdlpAvailable = await isYtDlpAvailable();
+  
+  if (ytdlpAvailable) {
+    try {
+      // Construir URL completa se necessário
+      const videoUrl = videoId.startsWith('http') 
+        ? videoId 
+        : `https://www.youtube.com/watch?v=${videoId}`;
+      
+      console.log('[DOWNLOAD] Usando yt-dlp (mais robusto)');
+      return await downloadWithYtDlp(videoUrl, outputPath);
+    } catch (error) {
+      console.warn('[DOWNLOAD] yt-dlp falhou, tentando ytdl-core:', error.message);
+      // Fallback para ytdl-core
+    }
+  }
+  
+  // Fallback para ytdl-core
+  console.log('[DOWNLOAD] Usando ytdl-core');
   return new Promise((resolve, reject) => {
     try {
       // Garantir que o diretório existe

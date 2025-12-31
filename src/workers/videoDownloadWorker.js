@@ -43,13 +43,17 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
       throw new Error('Arquivo baixado está vazio');
     }
 
-    // Atualizar videoStore
+    // Atualizar videoStore com status de download completo
     const video = videoStore.get(videoId);
     if (video) {
       video.downloaded = true;
       video.path = videoPath;
       video.downloadError = null;
+      video.downloadCompletedAt = new Date();
+      video.fileSize = stats.size;
+      video.localVideoUrl = `/api/video/play/${videoId}`;
       videoStore.set(videoId, video);
+      console.log(`[WORKER] VideoStore atualizado: ${videoId} - Download completo`);
     }
 
     await job.progress(100);

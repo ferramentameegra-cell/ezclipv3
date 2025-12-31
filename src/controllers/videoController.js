@@ -317,3 +317,28 @@ export const streamVideo = (req, res) => {
 // Nova rota para servir vídeo baixado (alias para streamVideo)
 export const playVideo = streamVideo;
 
+// Verificar status do download
+export const checkDownloadStatus = (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const video = videoStore.get(videoId);
+
+    if (!video) {
+      return res.status(404).json({ error: 'Vídeo não encontrado' });
+    }
+
+    const downloaded = video.path && fs.existsSync(video.path) && fs.statSync(video.path).size > 0;
+
+    res.json({
+      videoId,
+      downloaded,
+      downloadJobId: video.downloadJobId || null,
+      downloadError: video.downloadError || null,
+      videoPath: downloaded ? video.path : null,
+      localVideoUrl: downloaded ? `/api/video/play/${videoId}` : null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
