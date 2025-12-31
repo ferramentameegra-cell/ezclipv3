@@ -704,7 +704,7 @@ async function calculateClips() {
     // Também calcular via API para validação
     if (appState.videoId) {
         try {
-            const response = await fetch(`${API_BASE}/api/youtube/calculate-clips`, {
+            const response = await fetch(`${API_BASE}/api/trim/count-clips`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
