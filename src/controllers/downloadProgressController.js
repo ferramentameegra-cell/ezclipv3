@@ -71,16 +71,23 @@ export const downloadWithProgress = async (req, res) => {
     let downloadSuccess = false;
     let downloadError = null;
 
-    // Tentar yt-dlp com progresso primeiro
+    // Tentar yt-dlp com progresso
     try {
       await downloadYouTubeVideoWithProgress(
         sanitizedUrl,
         videoPath,
-        (percent) => {
+        (percent, downloaded, total, status) => {
+          const message = status === 'finished' 
+            ? 'Download concluído' 
+            : `Baixando... ${percent.toFixed(1)}%`;
+          
           sendEvent({ 
             success: true,
             progress: percent,
-            message: `Baixando... ${percent.toFixed(1)}%`,
+            downloaded: downloaded,
+            total: total,
+            status: status,
+            message: message,
             videoId: storedVideoId
           });
         }
@@ -88,15 +95,16 @@ export const downloadWithProgress = async (req, res) => {
       downloadSuccess = true;
       console.log(`[DOWNLOAD-PROGRESS] Download concluído com yt-dlp: ${videoPath}`);
     } catch (ytdlpError) {
-      console.warn(`[DOWNLOAD-PROGRESS] yt-dlp falhou, tentando ytdl-core: ${ytdlpError.message}`);
+      console.error(`[DOWNLOAD-PROGRESS] yt-dlp falhou: ${ytdlpError.message}`);
       downloadError = ytdlpError;
       
-      // Fallback para ytdl-core (sem progresso granular)
+      // Tentar fallback para ytdl-core (sem progresso granular)
       try {
         sendEvent({ 
           success: true,
           progress: 50,
-          message: 'Usando método alternativo...',
+          status: 'downloading',
+          message: 'Tentando método alternativo...',
           videoId: storedVideoId
         });
 
@@ -106,13 +114,14 @@ export const downloadWithProgress = async (req, res) => {
         sendEvent({ 
           success: true,
           progress: 100,
+          status: 'finished',
           message: 'Download concluído',
           videoId: storedVideoId
         });
 
         console.log(`[DOWNLOAD-PROGRESS] Download concluído com ytdl-core: ${videoPath}`);
       } catch (fallbackError) {
-        console.error(`[DOWNLOAD-PROGRESS] Erro no download: ${fallbackError.message}`);
+        console.error(`[DOWNLOAD-PROGRESS] Erro no download (fallback também falhou): ${fallbackError.message}`);
         downloadError = fallbackError;
       }
     }

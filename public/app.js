@@ -707,127 +707,179 @@ function extractYouTubeId(url) {
 }
 
 function setupTrimControls() {
-    const startSlider = document.getElementById('trim-start-slider');
-    const startInput = document.getElementById('trim-start-input');
-    const endSlider = document.getElementById('trim-end-slider');
-    const endInput = document.getElementById('trim-end-input');
-    
-    if (!startSlider || !startInput || !endSlider || !endInput) {
-        return;
-    }
-    
-    startSlider.addEventListener('input', (e) => {
-        const value = parseInt(e.target.value);
-        updateStartTime(value);
-    });
-    
-    startInput.addEventListener('input', (e) => {
-        const value = parseInt(e.target.value) || 0;
-        updateStartTime(value);
-    });
-    
-    endSlider.addEventListener('input', (e) => {
-        const value = parseInt(e.target.value);
-        updateEndTime(value);
-    });
-    
-    endInput.addEventListener('input', (e) => {
-        const value = parseInt(e.target.value) || 0;
-        updateEndTime(value);
-    });
+    // Timeline drag-based trim tool será inicializado quando vídeo for carregado
+    // Não precisa de inicialização aqui
 }
 
 /**
- * REFATORADO: Configurar controles de trim automaticamente
- * Aparece assim que vídeo é baixado
+ * REFATORADO: Configurar timeline drag-based trim tool
+ * Timeline estilo YouTube Studio/Premiere com handles arrastáveis
  */
 function setupTrimControlsForVideo(video) {
     const duration = video.duration || appState.videoInfo?.duration || 0;
-    const startSlider = document.getElementById('trim-start-slider');
-    const startInput = document.getElementById('trim-start-input');
-    const endSlider = document.getElementById('trim-end-slider');
-    const endInput = document.getElementById('trim-end-input');
-    
-    if (!startSlider || !startInput || !endSlider || !endInput) {
-        console.warn('[TRIM] Controles de trim não encontrados');
-        return;
-    }
     
     if (duration === 0) {
         console.warn('[TRIM] Duração do vídeo não disponível');
         return;
     }
     
-    // Configurar limites
-    startSlider.max = duration;
-    endSlider.max = duration;
-    endSlider.min = 0;
-    startSlider.min = 0;
-    startInput.max = duration;
-    endInput.max = duration;
-    
-    // Inicializar valores
+    // Inicializar estado
     appState.trimStart = 0;
     appState.trimEnd = duration;
+    appState.videoDuration = duration;
     
-    startSlider.value = 0;
-    startInput.value = 0;
-    endSlider.value = duration;
-    endInput.value = duration;
+    // Inicializar timeline drag-based
+    initializeTimeline(duration);
     
-    // Atualizar displays
-    updateTimeDisplay('start', 0);
-    updateTimeDisplay('end', duration);
-    
-    // Calcular clips inicial (60s e 120s)
+    // Calcular clips inicial
     calculateClips();
     
-    console.log('[TRIM] Controles configurados para vídeo de', duration, 'segundos');
+    console.log('[TRIM] Timeline drag-based configurada para vídeo de', duration, 'segundos');
 }
 
-function updateStartTime(seconds) {
-    const max = parseInt(document.getElementById('trim-start-slider')?.max || 3600);
-    const value = Math.max(0, Math.min(seconds, max));
+/**
+ * Inicializar timeline drag-based trim tool
+ */
+function initializeTimeline(duration) {
+    const track = document.getElementById('timeline-track');
+    const selected = document.getElementById('timeline-selected');
+    const handleStart = document.getElementById('timeline-handle-start');
+    const handleEnd = document.getElementById('timeline-handle-end');
     
-    appState.trimStart = value;
-    
-    const startSlider = document.getElementById('trim-start-slider');
-    const startInput = document.getElementById('trim-start-input');
-    if (startSlider) startSlider.value = value;
-    if (startInput) startInput.value = value;
-    updateTimeDisplay('start', value);
-    
-    const endValue = appState.trimEnd;
-    if (endValue <= value) {
-        const newEnd = Math.min(value + 1, max);
-        updateEndTime(newEnd);
+    if (!track || !selected || !handleStart || !handleEnd) {
+        console.warn('[TIMELINE] Elementos não encontrados');
+        return;
     }
     
-    calculateClips();
-}
-
-function updateEndTime(seconds) {
-    const max = parseInt(document.getElementById('trim-end-slider')?.max || 3600);
-    const min = appState.trimStart;
-    const value = Math.max(min + 1, Math.min(seconds, max));
+    const trackRect = track.getBoundingClientRect();
+    const trackWidth = trackRect.width;
     
-    appState.trimEnd = value;
+    // Configurar posições iniciais (0% a 100%)
+    let startPercent = 0;
+    let endPercent = 100;
     
-    const endSlider = document.getElementById('trim-end-slider');
-    const endInput = document.getElementById('trim-end-input');
-    if (endSlider) endSlider.value = value;
-    if (endInput) endInput.value = value;
-    updateTimeDisplay('end', value);
-    
-    calculateClips();
-}
-
-function updateTimeDisplay(type, seconds) {
-    const display = document.getElementById(`${type}-time-display`);
-    if (display) {
-        display.textContent = formatTime(seconds);
+    // Atualizar visual da timeline
+    function updateTimeline() {
+        const startPx = (startPercent / 100) * trackWidth;
+        const endPx = (endPercent / 100) * trackWidth;
+        const selectedWidth = endPx - startPx;
+        
+        selected.style.left = startPx + 'px';
+        selected.style.width = selectedWidth + 'px';
+        
+        handleStart.style.left = startPx + 'px';
+        handleEnd.style.left = endPx + 'px';
+        
+        // Calcular tempos em segundos
+        const startTime = (startPercent / 100) * duration;
+        const endTime = (endPercent / 100) * duration;
+        const trimDuration = endTime - startTime;
+        
+        // Atualizar estado
+        appState.trimStart = Math.floor(startTime);
+        appState.trimEnd = Math.floor(endTime);
+        
+        // Atualizar timecodes
+        document.getElementById('start-timecode').textContent = formatTime(appState.trimStart);
+        document.getElementById('end-timecode').textContent = formatTime(appState.trimEnd);
+        document.getElementById('trim-duration').textContent = formatTime(Math.floor(trimDuration));
+        document.getElementById('handle-start-timecode').textContent = formatTime(appState.trimStart);
+        document.getElementById('handle-end-timecode').textContent = formatTime(appState.trimEnd);
+        
+        // Calcular clips em tempo real
+        calculateClips();
     }
+    
+    // Converter posição do mouse para percentual
+    function getPercentFromEvent(e) {
+        const rect = track.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        return Math.max(0, Math.min(100, (x / rect.width) * 100));
+    }
+    
+    // Drag handle start
+    let isDraggingStart = false;
+    handleStart.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDraggingStart = true;
+    });
+    
+    handleStart.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDraggingStart = true;
+    });
+    
+    // Drag handle end
+    let isDraggingEnd = false;
+    handleEnd.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDraggingEnd = true;
+    });
+    
+    handleEnd.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDraggingEnd = true;
+    });
+    
+    // Mouse move
+    document.addEventListener('mousemove', (e) => {
+        if (isDraggingStart || isDraggingEnd) {
+            const percent = getPercentFromEvent(e);
+            
+            if (isDraggingStart) {
+                startPercent = Math.max(0, Math.min(percent, endPercent - 1));
+            } else if (isDraggingEnd) {
+                endPercent = Math.max(startPercent + 1, Math.min(100, percent));
+            }
+            
+            updateTimeline();
+        }
+    });
+    
+    document.addEventListener('touchmove', (e) => {
+        if (isDraggingStart || isDraggingEnd) {
+            e.preventDefault();
+            const percent = getPercentFromEvent(e);
+            
+            if (isDraggingStart) {
+                startPercent = Math.max(0, Math.min(percent, endPercent - 1));
+            } else if (isDraggingEnd) {
+                endPercent = Math.max(startPercent + 1, Math.min(100, percent));
+            }
+            
+            updateTimeline();
+        }
+    });
+    
+    // Mouse up
+    document.addEventListener('mouseup', () => {
+        isDraggingStart = false;
+        isDraggingEnd = false;
+    });
+    
+    document.addEventListener('touchend', () => {
+        isDraggingStart = false;
+        isDraggingEnd = false;
+    });
+    
+    // Clique na track para mover playhead (opcional)
+    track.addEventListener('click', (e) => {
+        if (!isDraggingStart && !isDraggingEnd) {
+            // Pode implementar playhead se necessário
+        }
+    });
+    
+    // Atualizar inicialmente
+    updateTimeline();
+    
+    // Atualizar ao redimensionar
+    window.addEventListener('resize', () => {
+        updateTimeline();
+    });
 }
+
+// Funções updateStartTime e updateEndTime removidas - agora usamos timeline drag-based
+// updateTimeDisplay também removida - timecodes atualizados diretamente na timeline
 
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);

@@ -194,21 +194,34 @@
                                 </div>
                             </div>
                             <div class="trim-controls-area">
-                                <div class="time-control">
-                                    <div class="time-header">
-                                        <label>Início</label>
-                                        <span class="time-display" id="start-time-display">00:00</span>
+                                <!-- Timeline Drag-Based Trim Tool -->
+                                <div class="timeline-container">
+                                    <div class="timeline-header">
+                                        <div class="timeline-timecodes">
+                                            <span class="timecode-label">Início:</span>
+                                            <span class="timecode-value" id="start-timecode">00:00</span>
+                                            <span class="timecode-label">Fim:</span>
+                                            <span class="timecode-value" id="end-timecode">00:00</span>
+                                            <span class="timecode-label">Duração:</span>
+                                            <span class="timecode-value" id="trim-duration">00:00</span>
+                                        </div>
                                     </div>
-                                    <input type="range" id="trim-start-slider" class="slider" min="0" max="0" value="0" step="1">
-                                    <input type="number" id="trim-start-input" class="time-input" min="0" value="0" step="1">
-                                </div>
-                                <div class="time-control">
-                                    <div class="time-header">
-                                        <label>Fim</label>
-                                        <span class="time-display" id="end-time-display">00:00</span>
+                                    <div class="timeline-track" id="timeline-track">
+                                        <div class="timeline-bg"></div>
+                                        <div class="timeline-selected" id="timeline-selected"></div>
+                                        <div class="timeline-handle timeline-handle-start" id="timeline-handle-start">
+                                            <div class="handle-icon"></div>
+                                            <div class="handle-timecode" id="handle-start-timecode">00:00</div>
+                                        </div>
+                                        <div class="timeline-handle timeline-handle-end" id="timeline-handle-end">
+                                            <div class="handle-icon"></div>
+                                            <div class="handle-timecode" id="handle-end-timecode">00:00</div>
+                                        </div>
+                                        <div class="timeline-playhead" id="timeline-playhead"></div>
                                     </div>
-                                    <input type="range" id="trim-end-slider" class="slider" min="0" max="0" value="0" step="1">
-                                    <input type="number" id="trim-end-input" class="time-input" min="0" value="0" step="1">
+                                    <div class="timeline-footer">
+                                        <div class="timeline-scrubber-hint">Arraste os handles para definir o intervalo</div>
+                                    </div>
                                 </div>
                                 <div class="duration-selector">
                                     <label>Duração por clip</label>
