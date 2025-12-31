@@ -515,51 +515,7 @@ function showTrimSection() {
     }
 }
 
-function setupVideoPlayer(video) {
-    const container = document.getElementById('video-player-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    // Usar vídeo local baixado se disponível
-    if (video.localVideoUrl) {
-        const videoElement = document.createElement('video');
-        videoElement.src = video.localVideoUrl;
-        videoElement.controls = true;
-        videoElement.style.width = '100%';
-        videoElement.style.height = '100%';
-        videoElement.style.borderRadius = '12px';
-        videoElement.style.objectFit = 'contain';
-        videoElement.preload = 'metadata';
-        
-        // Adicionar suporte a range requests para melhor performance
-        videoElement.addEventListener('loadstart', () => {
-            console.log('Carregando vídeo local:', video.localVideoUrl);
-        });
-        
-        videoElement.addEventListener('error', (e) => {
-            console.error('Erro ao carregar vídeo local:', e);
-            // Fallback: mostrar mensagem
-            container.innerHTML = '<div class="video-placeholder"><p>Carregando vídeo...</p></div>';
-        });
-        
-        container.appendChild(videoElement);
-    } else if (video.path) {
-        // Fallback: usar rota de stream se localVideoUrl não estiver disponível
-        const videoElement = document.createElement('video');
-        videoElement.src = `${API_BASE}/api/video/play/${video.id}`;
-        videoElement.controls = true;
-        videoElement.style.width = '100%';
-        videoElement.style.height = '100%';
-        videoElement.style.borderRadius = '12px';
-        videoElement.style.objectFit = 'contain';
-        videoElement.preload = 'metadata';
-        container.appendChild(videoElement);
-    } else {
-        // Último fallback: mostrar placeholder
-        container.innerHTML = '<div class="video-placeholder"><p>Vídeo não disponível. Aguarde o download...</p></div>';
-    }
-}
+// Função removida - substituída por renderVideoPlayer
 
 function extractYouTubeId(url) {
     const patterns = [
