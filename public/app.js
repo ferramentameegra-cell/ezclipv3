@@ -872,9 +872,13 @@ function initializeTimeline(duration) {
     // Atualizar inicialmente
     updateTimeline();
     
-    // Atualizar ao redimensionar
+    // Atualizar ao redimensionar (debounced)
+    let resizeTimeout;
     window.addEventListener('resize', () => {
-        updateTimeline();
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            updateTimeline();
+        }, 100);
     });
 }
 
