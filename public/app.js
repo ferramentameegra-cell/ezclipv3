@@ -375,12 +375,16 @@ function isValidYouTubeUrl(url) {
     return patterns.some(pattern => pattern.test(url));
 }
 
+/**
+ * REFATORADO: Download automático de vídeo YouTube
+ * Quando URL é submetida, baixa imediatamente e renderiza player
+ */
 async function handleYouTubeSubmit() {
     const input = document.getElementById('youtube-url');
     const url = input.value.trim();
     const btn = document.getElementById('btn-process');
-    const btnText = btn.querySelector('.btn-text');
-    const btnSpinner = btn.querySelector('.btn-spinner');
+    const btnText = btn?.querySelector('.btn-text');
+    const btnSpinner = btn?.querySelector('.btn-spinner');
     const statusMsg = document.getElementById('youtube-status');
     
     if (!url) {
@@ -393,13 +397,19 @@ async function handleYouTubeSubmit() {
         return;
     }
     
-    btn.disabled = true;
-    btnText.classList.add('hidden');
-    btnSpinner.classList.remove('hidden');
-    statusMsg.classList.add('hidden');
+    // Estado de loading
+    if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.classList.add('hidden');
+        if (btnSpinner) btnSpinner.classList.remove('hidden');
+    }
+    if (statusMsg) statusMsg.classList.add('hidden');
+    
+    showStatus('Baixando vídeo do YouTube...', 'info');
     
     try {
-        const response = await fetch(`${API_BASE}/api/video/youtube`, {
+        // NOVO ENDPOINT: Download direto e completo
+        const response = await fetch(`${API_BASE}/api/youtube/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ youtubeUrl: url })
@@ -407,27 +417,84 @@ async function handleYouTubeSubmit() {
         
         const data = await response.json();
         
-        if (response.ok) {
+        if (response.ok && data.success) {
+            // Vídeo baixado e pronto
             appState.videoId = data.videoId;
-            appState.videoInfo = data.video;
+            appState.videoInfo = {
+                id: data.videoId,
+                playableUrl: data.playableUrl,
+                localVideoUrl: data.localVideoUrl,
+                duration: data.duration,
+                downloaded: true
+            };
             
-            showStatus('Vídeo processado com sucesso!', 'success');
+            showStatus('Vídeo baixado com sucesso!', 'success');
             
+            // Renderizar player IMEDIATAMENTE com arquivo baixado
+            renderVideoPlayer(data.playableUrl);
+            
+            // Exibir trim tool AUTOMATICAMENTE
             showTrimSection();
-            setupVideoPlayer(data.video);
-            setupTrimControlsForVideo(data.video);
+            setupTrimControlsForVideo({
+                duration: data.duration,
+                playableUrl: data.playableUrl
+            });
             
         } else {
-            showStatus(data.error || 'Erro ao processar vídeo', 'error');
+            showStatus(data.error || 'Erro ao baixar vídeo', 'error');
         }
     } catch (error) {
         console.error('Erro:', error);
-        showStatus('Erro ao processar vídeo do YouTube. Verifique sua conexão.', 'error');
+        showStatus('Erro ao baixar vídeo do YouTube. Verifique sua conexão.', 'error');
     } finally {
-        btn.disabled = false;
-        btnText.classList.remove('hidden');
-        btnSpinner.classList.add('hidden');
+        if (btn) {
+            btn.disabled = false;
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
+        }
     }
+}
+
+/**
+ * REFATORADO: Renderizar player com vídeo local baixado
+ * NUNCA usa iframe/embed do YouTube
+ */
+function renderVideoPlayer(playableUrl) {
+    const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // SEMPRE usar elemento <video> HTML5 com arquivo local
+    const videoElement = document.createElement('video');
+    videoElement.src = playableUrl;
+    videoElement.controls = true;
+    videoElement.style.width = '100%';
+    videoElement.style.height = '100%';
+    videoElement.style.borderRadius = '12px';
+    videoElement.style.objectFit = 'contain';
+    videoElement.preload = 'metadata';
+    videoElement.crossOrigin = 'anonymous';
+    
+    videoElement.addEventListener('loadedmetadata', () => {
+        console.log('[PLAYER] Vídeo local carregado:', playableUrl);
+        // Atualizar duração no estado se necessário
+        if (videoElement.duration) {
+            appState.videoInfo = appState.videoInfo || {};
+            appState.videoInfo.duration = Math.floor(videoElement.duration);
+            if (!appState.trimEnd && appState.videoInfo.duration) {
+                appState.trimEnd = appState.videoInfo.duration;
+                updateTrimControls();
+            }
+        }
+    });
+    
+    videoElement.addEventListener('error', (e) => {
+        console.error('[PLAYER] Erro ao carregar vídeo local:', e);
+        container.innerHTML = '<div class="video-placeholder"><p>Erro ao carregar vídeo. Verifique se o download foi concluído.</p></div>';
+    });
+    
+    container.appendChild(videoElement);
 }
 
 function showStatus(message, type) {
