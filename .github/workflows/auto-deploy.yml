@@ -12,31 +12,30 @@ jobs:
     permissions:
       contents: read
       deployments: write
-    
-   steps:
-  - name: Checkout code
-    uses: actions/checkout@v4
 
-  - name: Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '20'
-      cache: 'npm'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  - name: Install dependencies
-    run: npm ci
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-  - name: Install Railway CLI
-    run: npm install -g @railway/cli
+      - name: Install dependencies
+        run: npm ci
 
-  - name: Deploy to Railway
-    env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-    run: railway up --detach
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
 
-  - name: Deployment status
-    if: success()
-    run: |
-      echo "✅ Deploy concluído com sucesso!"
-      echo "🌐 Verifique o status em: https://railway.app"
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --detach
 
+      - name: Deployment status
+        if: success()
+        run: |
+          echo "✅ Deploy concluído com sucesso!"
+          echo "🌐 Verifique o status em: https://railway.app"
