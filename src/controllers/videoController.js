@@ -184,37 +184,26 @@ export const processVideo = async (req, res) => {
     const thumbnail = info.videoDetails.thumbnails?.[info.videoDetails.thumbnails.length - 1]?.url || 
                      info.videoDetails.thumbnails?.[0]?.url || '';
 
-    // BAIXAR VÍDEO AUTOMATICAMENTE - AGUARDAR CONCLUSÃO
-    console.log(`[DOWNLOAD] Iniciando download do vídeo do YouTube: ${videoId}`);
-    let downloadSuccess = false;
-    let downloadError = null;
+    // ENFILEIRAR DOWNLOAD ASSÍNCRONO (Arquitetura Escalável)
+    console.log(`[API] Enfileirando download do vídeo do YouTube: ${videoId}`);
     
-    try {
-      await downloadYouTubeVideo(videoId, videoPath);
-      
-      // VALIDAR que o arquivo foi baixado corretamente
-      if (fs.existsSync(videoPath)) {
-        const stats = fs.statSync(videoPath);
-        if (stats.size > 0) {
-          downloadSuccess = true;
-          console.log(`[DOWNLOAD] Vídeo baixado com sucesso: ${videoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-        } else {
-          downloadError = new Error('Arquivo baixado está vazio');
-          console.error('[DOWNLOAD] Arquivo baixado está vazio');
-        }
-      } else {
-        downloadError = new Error('Arquivo não foi criado após download');
-        console.error('[DOWNLOAD] Arquivo não foi criado');
-      }
-    } catch (error) {
-      downloadError = error;
-      console.error('[DOWNLOAD] Erro ao baixar vídeo:', error.message);
-    }
+    // Importar queue dinamicamente
+    const { videoDownloadQueue } = await import('../queue/queue.js');
+    
+    // Adicionar job à fila (processamento assíncrono)
+    const downloadJob = await videoDownloadQueue.add('download-youtube-video', {
+      videoId: storedVideoId,
+      youtubeVideoId: videoId,
+      videoPath: videoPath
+    }, {
+      jobId: `download-${storedVideoId}`,
+      priority: 1
+    });
 
-    // Se download falhou, tentar novamente ou retornar erro
-    if (!downloadSuccess) {
-      console.warn('[DOWNLOAD] Download falhou, mas continuando. Vídeo será baixado durante geração se necessário.');
-    }
+    console.log(`[API] Download enfileirado: Job ${downloadJob.id}`);
+    
+    // Download será processado assincronamente pelo worker
+    // A API retorna imediatamente (stateless)
 
     const videoInfo = {
       id: storedVideoId,
@@ -227,8 +216,9 @@ export const processVideo = async (req, res) => {
       processedAt: new Date(),
       // URL para servir o vídeo local baixado
       localVideoUrl: `/api/video/play/${storedVideoId}`,
-      downloaded: downloadSuccess,
-      downloadError: downloadError ? downloadError.message : null
+      downloaded: false, // Será atualizado pelo worker quando download completar
+      downloadJobId: downloadJob.id,
+      downloadError: null
     };
 
     videoStore.set(storedVideoId, videoInfo);

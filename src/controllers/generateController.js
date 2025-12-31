@@ -3,16 +3,14 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import archiver from 'archiver';
-import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
 import { videoStore } from './videoController.js';
+import { videoProcessQueue } from '../queue/queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Armazenar status de jobs (stateless - pode usar Redis em produção)
 const jobs = new Map();
-
-// Configurar videoStore no processador
-setVideoStore(videoStore);
 
 // Exportar jobs para uso no service
 export { jobs };
@@ -57,8 +55,43 @@ export const generateSeries = async (req, res) => {
 
     jobs.set(jobId, job);
 
-    // Processar em background
-    generateVideoSeries(job, jobs).catch(error => {
+    // ENFILEIRAR PROCESSAMENTO ASSÍNCRONO (Arquitetura Escalável)
+    console.log(`[API] Enfileirando processamento de série: ${seriesId}`);
+    
+    const processJob = await videoProcessQueue.add('generate-video-series', {
+      jobId,
+      seriesId,
+      videoId,
+      nicheId,
+      retentionVideoId: retentionVideoId || 'random',
+      numberOfCuts,
+      headlineStyle: headlineStyle || 'bold',
+      font: font || 'Inter',
+      trimStart: trimStart || 0,
+      trimEnd: trimEnd || null,
+      cutDuration: req.body.cutDuration || 60
+    }, {
+      jobId: `process-${jobId}`,
+      priority: 1
+    });
+
+    console.log(`[API] Processamento enfileirado: Job ${processJob.id}`);
+
+    // Monitorar progresso do job
+    processJob.on('progress', (progress) => {
+      job.progress = progress;
+      jobs.set(jobId, job);
+    });
+
+    processJob.on('completed', (result) => {
+      job.status = 'completed';
+      job.progress = 100;
+      job.completedAt = new Date();
+      job.clipsCount = result.clipsCount;
+      jobs.set(jobId, job);
+    });
+
+    processJob.on('failed', (error) => {
       job.status = 'error';
       job.error = error.message;
       jobs.set(jobId, job);
@@ -67,7 +100,7 @@ export const generateSeries = async (req, res) => {
     res.json({
       jobId,
       seriesId,
-      message: 'Geração de série iniciada',
+      message: 'Geração de série iniciada (processamento assíncrono)',
       status: 'processing'
     });
   } catch (error) {

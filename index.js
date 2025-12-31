@@ -69,6 +69,34 @@ import retentionRoutes from "./src/routes/retention.js";
 import generateRoutes from "./src/routes/generate.js";
 import authRoutes from "./src/routes/auth.js";
 
+// Importar workers para processamento assíncrono (não bloqueia startup)
+if (process.env.ENABLE_WORKERS !== 'false') {
+  import('./src/workers/videoDownloadWorker.js').catch(err => {
+    console.warn('[STARTUP] Workers de download não iniciados:', err.message);
+  });
+  import('./src/workers/videoProcessWorker.js').catch(err => {
+    console.warn('[STARTUP] Workers de processamento não iniciados:', err.message);
+  });
+}
+
+// Importar limpeza de arquivos (executa periodicamente)
+if (process.env.ENABLE_CLEANUP !== 'false') {
+  import('./src/services/fileCleanup.js').then(({ cleanupOldFiles }) => {
+    // Limpar arquivos antigos a cada 6 horas
+    const cleanupInterval = parseInt(process.env.CLEANUP_INTERVAL_HOURS || '6', 10) * 60 * 60 * 1000;
+    
+    // Executar limpeza imediatamente e depois periodicamente
+    cleanupOldFiles(24).catch(console.error);
+    setInterval(() => {
+      cleanupOldFiles(24).catch(console.error);
+    }, cleanupInterval);
+    
+    console.log(`[STARTUP] Limpeza automática de arquivos configurada (intervalo: ${cleanupInterval / 1000 / 60 / 60}h)`);
+  }).catch(err => {
+    console.warn('[STARTUP] Limpeza automática não configurada:', err.message);
+  });
+}
+
 // Rotas da API
 app.use("/api/video", videoRoutes);
 app.use("/api/niches", nicheRoutes);
