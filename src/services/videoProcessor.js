@@ -45,7 +45,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // Determinar caminho do vídeo fonte
     let sourceVideoPath = video.path;
     
-    // VALIDAR: Se o vídeo é do YouTube e ainda não foi baixado, baixar agora
+    // VALIDAR: Se o vídeo é do YouTube, GARANTIR que está baixado ANTES de processar
     if (video.youtubeVideoId) {
       const needsDownload = !sourceVideoPath || !isVideoDownloaded(sourceVideoPath);
       
@@ -55,36 +55,71 @@ export const generateVideoSeries = async (job, jobsMap) => {
         
         const downloadPath = path.join(__dirname, '../../uploads', `${videoId}_downloaded.mp4`);
         
-        console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
-        try {
-          await downloadYouTubeVideo(video.youtubeVideoId, downloadPath);
+        console.log(`[PROCESSING] Verificando status do download: ${video.youtubeVideoId}`);
+        
+        // Se há um job de download em andamento, aguardar conclusão
+        if (video.downloadJobId) {
+          console.log(`[PROCESSING] Download em andamento (Job: ${video.downloadJobId}), aguardando conclusão...`);
           
-          // VALIDAR download
-          if (!fs.existsSync(downloadPath)) {
-            throw new Error('Arquivo não foi criado após download');
+          // Aguardar até 5 minutos pelo download
+          const maxWaitTime = 300000; // 5 minutos
+          const checkInterval = 2000; // Verificar a cada 2 segundos
+          const startTime = Date.now();
+          
+          while (!isVideoDownloaded(downloadPath) && (Date.now() - startTime) < maxWaitTime) {
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            
+            // Verificar se download foi completado
+            if (fs.existsSync(downloadPath)) {
+              const stats = fs.statSync(downloadPath);
+              if (stats.size > 0) {
+                console.log(`[PROCESSING] Download completado durante espera: ${downloadPath}`);
+                break; // Download completo
+              }
+            }
+            
+            // Atualizar progresso
+            const elapsed = Date.now() - startTime;
+            job.progress = 5 + Math.floor((elapsed / maxWaitTime) * 15);
+            if (jobsMap) jobsMap.set(job.id, job);
           }
-          
-          const stats = fs.statSync(downloadPath);
-          if (stats.size === 0) {
-            throw new Error('Arquivo baixado está vazio');
-          }
-          
-          console.log(`[PROCESSING] Vídeo baixado: ${downloadPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-          
-          // Atualizar caminho no videoStore
-          video.path = downloadPath;
-          video.downloaded = true;
-          videoStore.set(videoId, video);
-          sourceVideoPath = downloadPath;
-          
-          job.progress = 20;
-          if (jobsMap) jobsMap.set(job.id, job);
-        } catch (downloadError) {
-          console.error('[PROCESSING] Erro ao baixar vídeo:', downloadError);
-          throw new Error(`Falha ao baixar vídeo do YouTube: ${downloadError.message}`);
         }
+        
+        // Se ainda não baixado, baixar agora (fallback)
+        if (!isVideoDownloaded(downloadPath)) {
+          console.log(`[PROCESSING] Iniciando download direto: ${video.youtubeVideoId}`);
+          try {
+            await downloadYouTubeVideo(video.youtubeVideoId, downloadPath);
+          } catch (downloadError) {
+            console.error('[PROCESSING] Erro ao baixar vídeo:', downloadError);
+            throw new Error(`Falha ao baixar vídeo do YouTube: ${downloadError.message}`);
+          }
+        }
+        
+        // VALIDAR download completo ANTES de continuar
+        if (!fs.existsSync(downloadPath)) {
+          throw new Error('Arquivo não foi criado após download. Download deve completar antes de processar.');
+        }
+        
+        const stats = fs.statSync(downloadPath);
+        if (stats.size === 0) {
+          throw new Error('Arquivo baixado está vazio. Download deve completar antes de processar.');
+        }
+        
+        console.log(`[PROCESSING] Vídeo baixado e validado: ${downloadPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+        
+        // Atualizar caminho no videoStore
+        video.path = downloadPath;
+        video.downloaded = true;
+        video.downloadCompletedAt = new Date();
+        video.fileSize = stats.size;
+        videoStore.set(videoId, video);
+        sourceVideoPath = downloadPath;
+        
+        job.progress = 20;
+        if (jobsMap) jobsMap.set(job.id, job);
       } else {
-        console.log(`[PROCESSING] Vídeo já baixado: ${sourceVideoPath}`);
+        console.log(`[PROCESSING] Vídeo já baixado e validado: ${sourceVideoPath}`);
       }
     }
 
