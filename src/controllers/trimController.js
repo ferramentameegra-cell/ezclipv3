@@ -179,6 +179,13 @@ export const countClips = (req, res) => {
 };
 
 /**
+ * POST /api/trim/count-clips (alias para compatibilidade)
+ * Calcular quantos clips podem ser gerados
+ * Mantido como alias para calculateClipsCount para compatibilidade com rotas antigas
+ */
+export const calculateClipsCount = countClips;
+
+/**
  * GET /api/play-trimmed/:videoId
  * Servir vídeo trimado
  */
