@@ -408,11 +408,11 @@ async function handleYouTubeSubmit() {
     showStatus('Baixando vídeo do YouTube...', 'info');
     
     try {
-        // NOVO ENDPOINT: Download direto e completo
-        const response = await fetch(`${API_BASE}/api/youtube/download`, {
+        // NOVO ENDPOINT: POST /api/download
+        const response = await fetch(`${API_BASE}/api/download`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ youtubeUrl: url })
+            body: JSON.stringify({ url: url })
         });
         
         const data = await response.json();

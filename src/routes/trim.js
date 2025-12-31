@@ -1,13 +1,12 @@
 import express from 'express';
-import { applyTrim, calculateClipsCount } from '../controllers/trimController.js';
+import { applyTrim, countClips } from '../controllers/trimController.js';
 
 const router = express.Router();
 
-// Aplicar trim no vídeo
-router.post('/apply', applyTrim);
+// Aplicar trim
+router.post('/', applyTrim);
 
 // Calcular quantidade de clips
-router.post('/calculate-clips', calculateClipsCount);
+router.post('/count-clips', countClips);
 
 export default router;
-

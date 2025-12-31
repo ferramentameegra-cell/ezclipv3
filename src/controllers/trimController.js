@@ -117,7 +117,7 @@ export const applyTrim = async (req, res) => {
 };
 
 /**
- * POST /api/count-clips
+ * POST /api/trim/count-clips
  * Calcular quantos clips podem ser gerados
  */
 export const countClips = (req, res) => {
