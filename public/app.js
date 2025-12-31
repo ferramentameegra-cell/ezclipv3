@@ -605,35 +605,52 @@ function setupTrimControls() {
     });
 }
 
+/**
+ * REFATORADO: Configurar controles de trim automaticamente
+ * Aparece assim que vídeo é baixado
+ */
 function setupTrimControlsForVideo(video) {
-    const duration = video.duration || 0;
+    const duration = video.duration || appState.videoInfo?.duration || 0;
     const startSlider = document.getElementById('trim-start-slider');
     const startInput = document.getElementById('trim-start-input');
     const endSlider = document.getElementById('trim-end-slider');
     const endInput = document.getElementById('trim-end-input');
     
     if (!startSlider || !startInput || !endSlider || !endInput) {
+        console.warn('[TRIM] Controles de trim não encontrados');
         return;
     }
     
-    startSlider.max = duration || 3600;
-    startInput.max = duration || 3600;
-    endSlider.max = duration || 3600;
-    endInput.max = duration || 3600;
+    if (duration === 0) {
+        console.warn('[TRIM] Duração do vídeo não disponível');
+        return;
+    }
     
-    const initialEnd = duration > 0 ? duration : 0;
+    // Configurar limites
+    startSlider.max = duration;
+    endSlider.max = duration;
+    endSlider.min = 0;
+    startSlider.min = 0;
+    startInput.max = duration;
+    endInput.max = duration;
+    
+    // Inicializar valores
+    appState.trimStart = 0;
+    appState.trimEnd = duration;
+    
     startSlider.value = 0;
     startInput.value = 0;
-    endSlider.value = initialEnd;
-    endInput.value = initialEnd;
+    endSlider.value = duration;
+    endInput.value = duration;
     
-    appState.trimStart = 0;
-    appState.trimEnd = initialEnd;
-    
+    // Atualizar displays
     updateTimeDisplay('start', 0);
-    updateTimeDisplay('end', initialEnd);
+    updateTimeDisplay('end', duration);
     
+    // Calcular clips inicial (60s e 120s)
     calculateClips();
+    
+    console.log('[TRIM] Controles configurados para vídeo de', duration, 'segundos');
 }
 
 function updateStartTime(seconds) {
@@ -699,54 +716,113 @@ function selectDuration(seconds) {
     calculateClips();
 }
 
-function calculateClips() {
-    // VALIDAR: Usar apenas valores do trim (não duração total do vídeo)
+/**
+ * REFATORADO: Calcular clips dinamicamente
+ * Calcula para 60s e 120s automaticamente
+ * Usa novo endpoint da API
+ */
+async function calculateClips() {
     const start = Math.max(0, Math.floor(appState.trimStart || 0));
     const end = Math.max(start + 1, Math.floor(appState.trimEnd || 0));
     const duration = appState.cutDuration || 60;
     
-    // CÁLCULO CORRETO: Baseado apenas no intervalo trimado
-    const trimmedSeconds = end - start;
-    const clips = trimmedSeconds > 0 && duration > 0 ? Math.floor(trimmedSeconds / duration) : 0;
-    
-    // VALIDAR: Garantir que valores estão corretos
+    // Validar valores
     if (start < 0 || end <= start) {
         console.warn('[CALC] Valores de trim inválidos:', { start, end });
         appState.numberOfCuts = 0;
+        updateClipsDisplay(0, 0, 0);
         return;
     }
     
-    appState.numberOfCuts = clips;
+    // Calcular localmente para resposta imediata
+    const trimmedSeconds = end - start;
+    const clips60s = Math.floor(trimmedSeconds / 60);
+    const clips120s = Math.floor(trimmedSeconds / 120);
+    const selectedClips = Math.floor(trimmedSeconds / duration);
     
+    appState.numberOfCuts = selectedClips;
+    
+    // Atualizar display imediatamente
+    updateClipsDisplay(clips60s, clips120s, selectedClips);
+    
+    // Também calcular via API para validação
+    if (appState.videoId) {
+        try {
+            const response = await fetch(`${API_BASE}/api/youtube/calculate-clips`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    videoId: appState.videoId,
+                    startTime: start,
+                    endTime: end,
+                    clipDuration: duration
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                // Atualizar com dados da API (mais preciso)
+                updateClipsDisplay(data.clips60s, data.clips120s, data.selectedClipsCount);
+                console.log('[CALC] Cálculo validado pela API:', data);
+            }
+        } catch (error) {
+            console.warn('[CALC] Erro ao calcular via API:', error);
+            // Continuar com cálculo local
+        }
+    }
+    
+    if (selectedClips > 0) {
+        showNextSteps();
+    }
+}
+
+/**
+ * Atualizar display de clips (60s e 120s)
+ */
+function updateClipsDisplay(clips60s, clips120s, selectedClips) {
     const clipsCount = document.getElementById('clips-count');
     const clipsResult = document.getElementById('clips-result');
     const previewTotal = document.getElementById('preview-total');
     
-    if (clipsCount) clipsCount.textContent = clips;
+    // Atualizar contador principal
+    if (clipsCount) clipsCount.textContent = selectedClips;
+    if (previewTotal) previewTotal.textContent = selectedClips;
+    
+    // Exibir ambos os valores (60s e 120s)
+    let clipsInfo = document.getElementById('clips-info');
+    if (!clipsInfo) {
+        // Criar elemento se não existir
+        clipsInfo = document.createElement('div');
+        clipsInfo.id = 'clips-info';
+        const clipsResult = document.getElementById('clips-result');
+        if (clipsResult) {
+            clipsResult.appendChild(clipsInfo);
+        }
+    }
+    
+    if (clipsInfo) {
+        clipsInfo.innerHTML = `
+            <div style="display: flex; gap: 16px; margin-top: 8px; font-size: 0.875rem; color: var(--text-secondary);">
+                <div><strong>60s:</strong> ${clips60s} clips</div>
+                <div><strong>120s:</strong> ${clips120s} clips</div>
+            </div>
+        `;
+    }
     
     if (clipsResult) {
-        if (clips > 0) {
+        if (selectedClips > 0) {
             clipsResult.style.opacity = '1';
         } else {
             clipsResult.style.opacity = '0.5';
         }
     }
     
-    if (previewTotal) previewTotal.textContent = clips;
-    
-    // Log detalhado para validação
-    console.log(`[CALC] Cálculo de clips:`, {
-        trimStart: start,
-        trimEnd: end,
-        trimmedDuration: trimmedSeconds,
-        clipDuration: duration,
-        clips: clips,
-        formula: `floor(${trimmedSeconds} / ${duration}) = ${clips}`
+    console.log(`[CALC] Clips calculados:`, {
+        clips60s,
+        clips120s,
+        selectedClips,
+        trimmedDuration: appState.trimEnd - appState.trimStart
     });
-    
-    if (clips > 0) {
-        showNextSteps();
-    }
 }
 
 function showNextSteps() {
