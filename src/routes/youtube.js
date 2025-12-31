@@ -9,8 +9,12 @@ import {
   calculateClipsCount, 
   playTrimmedVideo 
 } from '../controllers/trimController.js';
+import { getYouTubeInfo } from '../controllers/youtubeInfoController.js';
 
 const router = express.Router();
+
+// Obter informações do vídeo (thumbnail, título, duração) antes do download
+router.get('/info', getYouTubeInfo);
 
 // Download de vídeo do YouTube
 router.post('/download', downloadYouTubeVideoEndpoint);

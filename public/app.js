@@ -357,12 +357,22 @@ function setupYouTubeInput() {
         }
     });
     
+    // Debounce para buscar preview quando URL válida é colada
+    let previewTimeout = null;
     input.addEventListener('input', () => {
         const url = input.value.trim();
         if (isValidYouTubeUrl(url)) {
             btn.disabled = false;
+            
+            // Buscar preview após 1 segundo de inatividade
+            clearTimeout(previewTimeout);
+            previewTimeout = setTimeout(() => {
+                loadYouTubePreview(url);
+            }, 1000);
         } else {
             btn.disabled = url.length === 0;
+            clearTimeout(previewTimeout);
+            clearVideoPreview();
         }
     });
 }
@@ -376,8 +386,79 @@ function isValidYouTubeUrl(url) {
 }
 
 /**
- * REFATORADO: Download automático de vídeo YouTube
- * Quando URL é submetida, baixa imediatamente e renderiza player
+ * Carregar preview do vídeo YouTube (thumbnail, título, duração)
+ */
+async function loadYouTubePreview(url) {
+    try {
+        const response = await fetch(`${API_BASE}/api/youtube/info?url=${encodeURIComponent(url)}`);
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            displayYouTubePreview(data);
+            appState.youtubePreview = data;
+        }
+    } catch (error) {
+        console.warn('[PREVIEW] Erro ao carregar preview:', error);
+    }
+}
+
+/**
+ * Exibir preview do vídeo YouTube (thumbnail)
+ */
+function displayYouTubePreview(videoInfo) {
+    const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="youtube-preview" style="position: relative; width: 100%; height: 100%; border-radius: 12px; overflow: hidden;">
+            <img src="${videoInfo.thumbnail}" alt="${videoInfo.title}" style="width: 100%; height: 100%; object-fit: cover;">
+            <div class="preview-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 100%); display: flex; flex-direction: column; justify-content: flex-end; padding: 16px; color: white;">
+                <h4 style="margin: 0 0 8px 0; font-size: 1rem; font-weight: 600; line-height: 1.3;">${videoInfo.title}</h4>
+                <div style="display: flex; gap: 12px; font-size: 0.875rem; opacity: 0.9;">
+                    <span>${formatDuration(videoInfo.duration)}</span>
+                    <span>•</span>
+                    <span>${videoInfo.author}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Mostrar container de vídeo
+    const trimCard = document.getElementById('trim-card');
+    if (trimCard) {
+        trimCard.classList.remove('hidden');
+    }
+}
+
+/**
+ * Limpar preview
+ */
+function clearVideoPreview() {
+    const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="video-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+            </svg>
+            <p>Carregando vídeo...</p>
+        </div>
+    `;
+}
+
+/**
+ * Formatar duração em segundos para MM:SS
+ */
+function formatDuration(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * REFATORADO: Download automático de vídeo YouTube com progresso em tempo real
+ * Quando URL é submetida, baixa com progresso SSE e renderiza player
  */
 async function handleYouTubeSubmit() {
     const input = document.getElementById('youtube-url');
@@ -405,53 +486,148 @@ async function handleYouTubeSubmit() {
     }
     if (statusMsg) statusMsg.classList.add('hidden');
     
-    showStatus('Baixando vídeo do YouTube...', 'info');
-    
     try {
-        // NOVO ENDPOINT: Download direto e completo
-        const response = await fetch(`${API_BASE}/api/youtube/download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ youtubeUrl: url })
-        });
+        // Iniciar download com progresso SSE
+        await downloadWithProgress(url);
         
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-            // Vídeo baixado e pronto
-            appState.videoId = data.videoId;
-            appState.videoInfo = {
-                id: data.videoId,
-                playableUrl: data.playableUrl,
-                localVideoUrl: data.localVideoUrl,
-                duration: data.duration,
-                downloaded: true
-            };
-            
-            showStatus('Vídeo baixado com sucesso!', 'success');
-            
-            // Renderizar player IMEDIATAMENTE com arquivo baixado
-            renderVideoPlayer(data.playableUrl);
-            
-            // Exibir trim tool AUTOMATICAMENTE
-            showTrimSection();
-            setupTrimControlsForVideo({
-                duration: data.duration,
-                playableUrl: data.playableUrl
-            });
-            
-        } else {
-            showStatus(data.error || 'Erro ao baixar vídeo', 'error');
-        }
     } catch (error) {
         console.error('Erro:', error);
         showStatus('Erro ao baixar vídeo do YouTube. Verifique sua conexão.', 'error');
+        clearDownloadProgress();
     } finally {
         if (btn) {
             btn.disabled = false;
             if (btnText) btnText.classList.remove('hidden');
             if (btnSpinner) btnSpinner.classList.add('hidden');
         }
+    }
+}
+
+/**
+ * Download com progresso em tempo real usando SSE
+ */
+async function downloadWithProgress(url) {
+    return new Promise((resolve, reject) => {
+        const eventSource = new EventSource(`${API_BASE}/api/download/progress?url=${encodeURIComponent(url)}`);
+        let lastProgress = 0;
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.error) {
+                    eventSource.close();
+                    showStatus(data.error, 'error');
+                    clearDownloadProgress();
+                    reject(new Error(data.error));
+                    return;
+                }
+                
+                if (data.progress !== undefined) {
+                    lastProgress = data.progress;
+                    updateDownloadProgress(data.progress, data.message || 'Baixando...');
+                }
+                
+                if (data.completed && data.videoId) {
+                    eventSource.close();
+                    
+                    // Vídeo baixado e pronto
+                    appState.videoId = data.videoId;
+                    appState.videoInfo = {
+                        id: data.videoId,
+                        playableUrl: data.playableUrl,
+                        duration: data.duration,
+                        downloaded: true
+                    };
+                    
+                    showStatus('Vídeo baixado com sucesso!', 'success');
+                    
+                    // Renderizar player IMEDIATAMENTE com arquivo baixado
+                    renderVideoPlayer(data.playableUrl);
+                    
+                    // Exibir trim tool AUTOMATICAMENTE
+                    showTrimSection();
+                    setupTrimControlsForVideo({
+                        duration: data.duration,
+                        playableUrl: data.playableUrl
+                    });
+                    
+                    clearDownloadProgress();
+                    resolve(data);
+                }
+            } catch (error) {
+                console.error('[SSE] Erro ao processar evento:', error);
+            }
+        };
+        
+        eventSource.onerror = (error) => {
+            console.error('[SSE] Erro na conexão:', error);
+            eventSource.close();
+            clearDownloadProgress();
+            showStatus('Erro na conexão de download', 'error');
+            reject(error);
+        };
+    });
+}
+
+/**
+ * Atualizar progresso do download sobre o thumbnail
+ */
+function updateDownloadProgress(percent, message) {
+    const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
+    // Encontrar ou criar overlay de progresso
+    let progressOverlay = container.querySelector('.download-progress-overlay');
+    if (!progressOverlay) {
+        progressOverlay = document.createElement('div');
+        progressOverlay.className = 'download-progress-overlay';
+        progressOverlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 10;
+            border-radius: 12px;
+        `;
+        
+        const preview = container.querySelector('.youtube-preview');
+        if (preview) {
+            preview.style.position = 'relative';
+            preview.appendChild(progressOverlay);
+        } else {
+            container.appendChild(progressOverlay);
+        }
+    }
+    
+    progressOverlay.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 2rem; font-weight: 700; margin-bottom: 12px;">${Math.round(percent)}%</div>
+            <div style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 20px;">${message}</div>
+            <div style="width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
+                <div style="width: ${percent}%; height: 100%; background: #4F46E5; transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Limpar overlay de progresso
+ */
+function clearDownloadProgress() {
+    const container = document.getElementById('video-player-container');
+    if (!container) return;
+    
+    const progressOverlay = container.querySelector('.download-progress-overlay');
+    if (progressOverlay) {
+        progressOverlay.remove();
     }
 }
 
