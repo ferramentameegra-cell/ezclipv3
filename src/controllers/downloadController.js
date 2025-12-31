@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { downloadYouTubeVideo } from '../services/youtubeDownloader.js';
+import { downloadYouTubeVideo as downloadVideoService } from '../services/youtubeDownloader.js';
 import { sanitizeYouTubeUrl, extractVideoId } from '../services/youtubeUrlUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,7 +53,7 @@ export const downloadYouTubeVideo = async (req, res) => {
 
     try {
       // Baixar vídeo usando ytdl-core (Node.js puro, compatível com containers)
-      await downloadYouTubeVideo(videoId, videoPath);
+      await downloadVideoService(videoId, videoPath);
 
       // Validar download
       if (!fs.existsSync(videoPath)) {
