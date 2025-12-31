@@ -65,11 +65,16 @@ if (process.env.NODE_ENV !== 'production') {
 // Importar rotas (síncrono - não bloqueia startup)
 import videoRoutes from "./src/routes/video.js";
 import youtubeRoutes from "./src/routes/youtube.js";
+import downloadRoutes from "./src/routes/download.js";
 import trimRoutes from "./src/routes/trim.js";
+import clipsRoutes from "./src/routes/clips.js";
 import nicheRoutes from "./src/routes/niches.js";
 import retentionRoutes from "./src/routes/retention.js";
 import generateRoutes from "./src/routes/generate.js";
 import authRoutes from "./src/routes/auth.js";
+import { playVideo } from "./src/controllers/downloadController.js";
+import { playTrimmedVideo } from "./src/controllers/trimController.js";
+import { downloadClip } from "./src/controllers/clipsController.js";
 
 // Importar workers para processamento assíncrono (não bloqueia startup)
 if (process.env.ENABLE_WORKERS !== 'false') {
@@ -102,11 +107,18 @@ if (process.env.ENABLE_CLEANUP !== 'false') {
 // Rotas da API
 app.use("/api/video", videoRoutes);
 app.use("/api/youtube", youtubeRoutes);
+app.use("/api/download", downloadRoutes);
 app.use("/api/trim", trimRoutes);
+app.use("/api/clips", clipsRoutes);
 app.use("/api/niches", nicheRoutes);
 app.use("/api/retention", retentionRoutes);
 app.use("/api/generate", generateRoutes);
 app.use("/api/auth", authRoutes);
+
+// Rotas de playback
+app.get("/api/play/:videoId", playVideo);
+app.get("/api/play-trimmed/:videoId", playTrimmedVideo);
+app.get("/api/download-clip/:videoId/:filename", downloadClip);
 
 // Rota principal - Health check básico
 app.get("/", (req, res) => {
