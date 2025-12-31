@@ -8,79 +8,133 @@ const redisConfig = {
   password: process.env.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
-  // Para Railway e outros serviços cloud
-  ...(process.env.REDIS_URL && {
-    host: undefined,
-    port: undefined,
-    path: undefined,
-    url: process.env.REDIS_URL
-  })
+  lazyConnect: true, // Não conectar automaticamente
+  retryStrategy: (times) => {
+    // Parar tentativas após 3 tentativas
+    if (times > 3) {
+      return null; // Para retry
+    }
+    return Math.min(times * 200, 2000);
+  }
 };
 
-// Criar conexão Redis
-let redisClient;
-try {
-  if (process.env.REDIS_URL) {
-    redisClient = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false
+// Criar conexão Redis com tratamento de erros robusto
+let redisClient = null;
+let useRedis = false;
+
+// Função para criar cliente Redis com tratamento de erros
+function createRedisClient() {
+  try {
+    let client;
+    
+    if (process.env.REDIS_URL) {
+      client = new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: true,
+        retryStrategy: (times) => {
+          if (times > 3) return null;
+          return Math.min(times * 200, 2000);
+        }
+      });
+    } else if (process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost') {
+      client = new Redis(redisConfig);
+    } else {
+      // Desenvolvimento local sem Redis - não criar cliente
+      console.log('[QUEUE] Redis não configurado, usando fallback em memória');
+      return null;
+    }
+
+    // Tratar erros de conexão (evitar erros não tratados)
+    client.on('error', (error) => {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        console.warn('[QUEUE] Redis não disponível, usando fallback em memória');
+        useRedis = false;
+        // Não propagar erro - usar fallback silenciosamente
+      } else {
+        console.error('[QUEUE] Erro Redis:', error.message);
+      }
     });
-  } else {
-    redisClient = new Redis(redisConfig);
+
+    client.on('connect', () => {
+      console.log('[QUEUE] Redis conectado com sucesso');
+      useRedis = true;
+    });
+
+    client.on('ready', () => {
+      console.log('[QUEUE] Redis pronto para uso');
+      useRedis = true;
+    });
+
+    // Tentar conectar (lazy connect)
+    client.connect().catch((error) => {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        console.warn('[QUEUE] Redis não disponível na inicialização, usando fallback');
+        useRedis = false;
+      }
+    });
+
+    return client;
+  } catch (error) {
+    console.warn('[QUEUE] Erro ao criar cliente Redis, usando fallback:', error.message);
+    return null;
   }
-} catch (error) {
-  console.warn('[QUEUE] Redis não disponível, usando memória local:', error.message);
-  redisClient = null;
 }
 
-// Criar filas de jobs
+// Criar cliente apenas se Redis estiver configurado
+if (process.env.REDIS_URL || (process.env.REDIS_HOST && process.env.REDIS_HOST !== 'localhost')) {
+  redisClient = createRedisClient();
+}
+
+// Fallback para memória local (desenvolvimento sem Redis)
+const memoryFallback = {
+  createClient: () => {
+    return {
+      get: () => Promise.resolve(null),
+      set: () => Promise.resolve('OK'),
+      del: () => Promise.resolve(1),
+      exists: () => Promise.resolve(0),
+      keys: () => Promise.resolve([]),
+      expire: () => Promise.resolve(1),
+      ttl: () => Promise.resolve(-1),
+      pttl: () => Promise.resolve(-1),
+      hget: () => Promise.resolve(null),
+      hset: () => Promise.resolve(1),
+      hdel: () => Promise.resolve(1),
+      hgetall: () => Promise.resolve({}),
+      sadd: () => Promise.resolve(1),
+      srem: () => Promise.resolve(1),
+      smembers: () => Promise.resolve([]),
+      sismember: () => Promise.resolve(0),
+      zadd: () => Promise.resolve(1),
+      zrem: () => Promise.resolve(1),
+      zrange: () => Promise.resolve([]),
+      zrangebyscore: () => Promise.resolve([]),
+      zcard: () => Promise.resolve(0),
+      zscore: () => Promise.resolve(null),
+      zremrangebyscore: () => Promise.resolve(0),
+      lpush: () => Promise.resolve(1),
+      rpop: () => Promise.resolve(null),
+      llen: () => Promise.resolve(0),
+      lrange: () => Promise.resolve([]),
+      lrem: () => Promise.resolve(0),
+      publish: () => Promise.resolve(1),
+      subscribe: () => Promise.resolve(),
+      unsubscribe: () => Promise.resolve(),
+      psubscribe: () => Promise.resolve(),
+      punsubscribe: () => Promise.resolve(),
+      on: () => {},
+      removeListener: () => {},
+      quit: () => Promise.resolve('OK'),
+      disconnect: () => Promise.resolve(),
+      ping: () => Promise.resolve('PONG')
+    };
+  }
+};
+
+// Criar filas de jobs com fallback seguro
 export const videoDownloadQueue = new Bull('video-download', {
-  redis: redisClient || {
-    // Fallback para desenvolvimento sem Redis
-    createClient: () => {
-      console.warn('[QUEUE] Usando armazenamento em memória (Redis não disponível)');
-      return {
-        get: () => Promise.resolve(null),
-        set: () => Promise.resolve('OK'),
-        del: () => Promise.resolve(1),
-        exists: () => Promise.resolve(0),
-        keys: () => Promise.resolve([]),
-        expire: () => Promise.resolve(1),
-        ttl: () => Promise.resolve(-1),
-        pttl: () => Promise.resolve(-1),
-        hget: () => Promise.resolve(null),
-        hset: () => Promise.resolve(1),
-        hdel: () => Promise.resolve(1),
-        hgetall: () => Promise.resolve({}),
-        sadd: () => Promise.resolve(1),
-        srem: () => Promise.resolve(1),
-        smembers: () => Promise.resolve([]),
-        sismember: () => Promise.resolve(0),
-        zadd: () => Promise.resolve(1),
-        zrem: () => Promise.resolve(1),
-        zrange: () => Promise.resolve([]),
-        zrangebyscore: () => Promise.resolve([]),
-        zcard: () => Promise.resolve(0),
-        zscore: () => Promise.resolve(null),
-        zremrangebyscore: () => Promise.resolve(0),
-        lpush: () => Promise.resolve(1),
-        rpop: () => Promise.resolve(null),
-        llen: () => Promise.resolve(0),
-        lrange: () => Promise.resolve([]),
-        lrem: () => Promise.resolve(0),
-        publish: () => Promise.resolve(1),
-        subscribe: () => Promise.resolve(),
-        unsubscribe: () => Promise.resolve(),
-        psubscribe: () => Promise.resolve(),
-        punsubscribe: () => Promise.resolve(),
-        on: () => {},
-        removeListener: () => {},
-        quit: () => Promise.resolve('OK'),
-        disconnect: () => Promise.resolve(),
-        ping: () => Promise.resolve('PONG')
-      };
-    }
-  },
+  redis: redisClient || memoryFallback,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -98,50 +152,7 @@ export const videoDownloadQueue = new Bull('video-download', {
 });
 
 export const videoProcessQueue = new Bull('video-process', {
-  redis: redisClient || {
-    createClient: () => {
-      return {
-        get: () => Promise.resolve(null),
-        set: () => Promise.resolve('OK'),
-        del: () => Promise.resolve(1),
-        exists: () => Promise.resolve(0),
-        keys: () => Promise.resolve([]),
-        expire: () => Promise.resolve(1),
-        ttl: () => Promise.resolve(-1),
-        pttl: () => Promise.resolve(-1),
-        hget: () => Promise.resolve(null),
-        hset: () => Promise.resolve(1),
-        hdel: () => Promise.resolve(1),
-        hgetall: () => Promise.resolve({}),
-        sadd: () => Promise.resolve(1),
-        srem: () => Promise.resolve(1),
-        smembers: () => Promise.resolve([]),
-        sismember: () => Promise.resolve(0),
-        zadd: () => Promise.resolve(1),
-        zrem: () => Promise.resolve(1),
-        zrange: () => Promise.resolve([]),
-        zrangebyscore: () => Promise.resolve([]),
-        zcard: () => Promise.resolve(0),
-        zscore: () => Promise.resolve(null),
-        zremrangebyscore: () => Promise.resolve(0),
-        lpush: () => Promise.resolve(1),
-        rpop: () => Promise.resolve(null),
-        llen: () => Promise.resolve(0),
-        lrange: () => Promise.resolve([]),
-        lrem: () => Promise.resolve(0),
-        publish: () => Promise.resolve(1),
-        subscribe: () => Promise.resolve(),
-        unsubscribe: () => Promise.resolve(),
-        psubscribe: () => Promise.resolve(),
-        punsubscribe: () => Promise.resolve(),
-        on: () => {},
-        removeListener: () => {},
-        quit: () => Promise.resolve('OK'),
-        disconnect: () => Promise.resolve(),
-        ping: () => Promise.resolve('PONG')
-      };
-    }
-  },
+  redis: redisClient || memoryFallback,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -176,4 +187,3 @@ videoProcessQueue.on('failed', (job, err) => {
 });
 
 export { redisClient };
-
