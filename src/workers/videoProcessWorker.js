@@ -1,19 +1,15 @@
 import { videoProcessQueue } from '../queue/queue.js';
 import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
 import { videoStore } from '../controllers/videoController.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Configurar videoStore no processador
 setVideoStore(videoStore);
 
+// 📁 Diretório base seguro para Railway
+const BASE_UPLOAD_DIR = '/tmp/uploads';
+
 /**
  * Worker para processar geração de séries de vídeos
- * Executa de forma assíncrona e escalável
  */
 videoProcessQueue.process('generate-video-series', async (job) => {
   const {
@@ -33,7 +29,6 @@ videoProcessQueue.process('generate-video-series', async (job) => {
   console.log(`[WORKER] Iniciando processamento de série: ${seriesId}`);
 
   try {
-    // Criar objeto job compatível com videoProcessor
     const jobData = {
       id: jobId,
       seriesId,
@@ -48,21 +43,16 @@ videoProcessQueue.process('generate-video-series', async (job) => {
       cutDuration: cutDuration || 60,
       status: 'processing',
       createdAt: new Date(),
-      progress: 0
+      progress: 0,
+
+      // 🔑 MUITO IMPORTANTE
+      baseDir: BASE_UPLOAD_DIR
     };
 
-    // Map para armazenar progresso (compatível com videoProcessor)
     const jobsMap = new Map();
     jobsMap.set(jobId, jobData);
 
-    // Função para atualizar progresso via job queue
-    const updateProgress = async (progress) => {
-      jobData.progress = progress;
-      jobsMap.set(jobId, jobData);
-      await job.progress(progress);
-    };
-
-    // Substituir atualização de progresso no videoProcessor
+    // Atualizar progresso no Bull
     const originalSet = jobsMap.set.bind(jobsMap);
     jobsMap.set = (key, value) => {
       originalSet(key, value);
@@ -71,7 +61,7 @@ videoProcessQueue.process('generate-video-series', async (job) => {
       }
     };
 
-    // Processar série
+    // 🚀 Processa a série
     await generateVideoSeries(jobData, jobsMap);
 
     console.log(`[WORKER] Série processada com sucesso: ${seriesId}`);
@@ -89,4 +79,3 @@ videoProcessQueue.process('generate-video-series', async (job) => {
 });
 
 console.log('[WORKER] Video Process Worker iniciado');
-
