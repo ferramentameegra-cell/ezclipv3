@@ -1,204 +1,468 @@
 import express from "express";
+
 import cors from "cors";
+
 import dotenv from "dotenv";
+
 import path from "path";
+
 import { fileURLToPath } from "url";
+
 import fs from "fs";
 
-// Configurar dotenv com valores padrão seguros
+
+
+// Configurar dotenv
+
 dotenv.config();
 
+
+
 const __filename = fileURLToPath(import.meta.url);
+
 const __dirname = path.dirname(__filename);
 
-// Criar diretórios necessários de forma síncrona (não bloqueia)
+
+
+// ==============================
+
+// 📁 DIRETÓRIOS (RAILWAY SAFE)
+
+// ==============================
+
+// ⚠️ Tudo que grava arquivo deve usar /tmp
+
+const BASE_TMP_DIR = "/tmp/uploads";
+
+const SERIES_DIR = path.join(BASE_TMP_DIR, "series");
+
+
+
 try {
-  const uploadsDir = path.join(__dirname, 'uploads');
-  const seriesDir = path.join(__dirname, 'uploads', 'series');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
+
+  if (!fs.existsSync(BASE_TMP_DIR)) {
+
+    fs.mkdirSync(BASE_TMP_DIR, { recursive: true });
+
   }
-  if (!fs.existsSync(seriesDir)) {
-    fs.mkdirSync(seriesDir, { recursive: true });
+
+
+
+  if (!fs.existsSync(SERIES_DIR)) {
+
+    fs.mkdirSync(SERIES_DIR, { recursive: true });
+
   }
+
 } catch (error) {
-  console.warn('Warning: Could not create upload directories:', error.message);
+
+  console.warn("Warning: Could not create upload directories:", error.message);
+
 }
+
+
 
 const app = express();
 
-// Middleware - Configuração básica e segura
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
-}));
 
-app.use(express.json({ 
-  limit: process.env.MAX_JSON_SIZE || '50mb',
-  strict: true
-}));
 
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: process.env.MAX_URL_SIZE || '50mb' 
-}));
+// ==============================
 
-// Servir arquivos estáticos com cache control para desenvolvimento
-app.use(express.static("public", {
-  maxAge: process.env.NODE_ENV === 'production' ? (process.env.STATIC_MAX_AGE || '1d') : '0',
-  etag: true,
-  lastModified: true
-}));
+// 🌐 MIDDLEWARES
 
-// Middleware para forçar refresh em desenvolvimento
-if (process.env.NODE_ENV !== 'production') {
+// ==============================
+
+app.use(
+
+  cors({
+
+    origin: process.env.CORS_ORIGIN || "*",
+
+    credentials: true,
+
+  })
+
+);
+
+
+
+app.use(
+
+  express.json({
+
+    limit: process.env.MAX_JSON_SIZE || "50mb",
+
+    strict: true,
+
+  })
+
+);
+
+
+
+app.use(
+
+  express.urlencoded({
+
+    extended: true,
+
+    limit: process.env.MAX_URL_SIZE || "50mb",
+
+  })
+
+);
+
+
+
+// ==============================
+
+// 📦 ARQUIVOS ESTÁTICOS
+
+// ==============================
+
+app.use(
+
+  express.static("public", {
+
+    maxAge:
+
+      process.env.NODE_ENV === "production"
+
+        ? process.env.STATIC_MAX_AGE || "1d"
+
+        : "0",
+
+    etag: true,
+
+    lastModified: true,
+
+  })
+
+);
+
+
+
+// Forçar refresh em dev
+
+if (process.env.NODE_ENV !== "production") {
+
   app.use((req, res, next) => {
+
     if (req.path.match(/\.(css|js|html)$/)) {
-      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
+
+      res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+
+      res.set("Pragma", "no-cache");
+
+      res.set("Expires", "0");
+
     }
+
     next();
+
   });
+
 }
 
-// Importar rotas (síncrono - não bloqueia startup)
+
+
+// ==============================
+
+// 📥 ROTAS
+
+// ==============================
+
 import videoRoutes from "./src/routes/video.js";
+
 import youtubeRoutes from "./src/routes/youtube.js";
+
 import downloadRoutes from "./src/routes/download.js";
+
 import trimRoutes from "./src/routes/trim.js";
+
 import clipsRoutes from "./src/routes/clips.js";
+
 import nicheRoutes from "./src/routes/niches.js";
+
 import retentionRoutes from "./src/routes/retention.js";
+
 import generateRoutes from "./src/routes/generate.js";
+
 import authRoutes from "./src/routes/auth.js";
+
+
+
 import { playVideo } from "./src/controllers/downloadController.js";
+
 import { playTrimmedVideo } from "./src/controllers/trimController.js";
+
 import { downloadClip } from "./src/controllers/clipsController.js";
 
-// Importar workers para processamento assíncrono (não bloqueia startup)
-if (process.env.ENABLE_WORKERS !== 'false') {
-  import('./src/workers/videoDownloadWorker.js').catch(err => {
-    console.warn('[STARTUP] Workers de download não iniciados:', err.message);
+
+
+// ==============================
+
+// ⚙️ WORKERS
+
+// ==============================
+
+if (process.env.ENABLE_WORKERS !== "false") {
+
+  import("./src/workers/videoDownloadWorker.js").catch((err) => {
+
+    console.warn("[STARTUP] Download worker não iniciado:", err.message);
+
   });
-  import('./src/workers/videoProcessWorker.js').catch(err => {
-    console.warn('[STARTUP] Workers de processamento não iniciados:', err.message);
+
+
+
+  import("./src/workers/videoProcessWorker.js").catch((err) => {
+
+    console.warn("[STARTUP] Process worker não iniciado:", err.message);
+
   });
+
 }
 
-// Importar limpeza de arquivos (executa periodicamente)
-if (process.env.ENABLE_CLEANUP !== 'false') {
-  import('./src/services/fileCleanup.js').then(({ cleanupOldFiles }) => {
-    // Limpar arquivos antigos a cada 6 horas
-    const cleanupInterval = parseInt(process.env.CLEANUP_INTERVAL_HOURS || '6', 10) * 60 * 60 * 1000;
-    
-    // Executar limpeza imediatamente e depois periodicamente
-    cleanupOldFiles(24).catch(console.error);
-    setInterval(() => {
+
+
+// ==============================
+
+// 🧹 LIMPEZA AUTOMÁTICA
+
+// ==============================
+
+if (process.env.ENABLE_CLEANUP !== "false") {
+
+  import("./src/services/fileCleanup.js")
+
+    .then(({ cleanupOldFiles }) => {
+
+      const intervalHours = parseInt(
+
+        process.env.CLEANUP_INTERVAL_HOURS || "6",
+
+        10
+
+      );
+
+
+
+      const intervalMs = intervalHours * 60 * 60 * 1000;
+
+
+
       cleanupOldFiles(24).catch(console.error);
-    }, cleanupInterval);
-    
-    console.log(`[STARTUP] Limpeza automática de arquivos configurada (intervalo: ${cleanupInterval / 1000 / 60 / 60}h)`);
-  }).catch(err => {
-    console.warn('[STARTUP] Limpeza automática não configurada:', err.message);
-  });
+
+
+
+      setInterval(() => {
+
+        cleanupOldFiles(24).catch(console.error);
+
+      }, intervalMs);
+
+
+
+      console.log(
+
+        `[STARTUP] Limpeza automática configurada (${intervalHours}h)`
+
+      );
+
+    })
+
+    .catch((err) => {
+
+      console.warn(
+
+        "[STARTUP] Limpeza automática não configurada:",
+
+        err.message
+
+      );
+
+    });
+
 }
 
-// Rotas da API
+
+
+// ==============================
+
+// 🔗 REGISTRO DE ROTAS
+
+// ==============================
+
 app.use("/api/video", videoRoutes);
+
 app.use("/api/youtube", youtubeRoutes);
+
 app.use("/api/download", downloadRoutes);
+
 app.use("/api/trim", trimRoutes);
+
 app.use("/api/clips", clipsRoutes);
+
 app.use("/api/niches", nicheRoutes);
+
 app.use("/api/retention", retentionRoutes);
+
 app.use("/api/generate", generateRoutes);
+
 app.use("/api/auth", authRoutes);
 
-// Rotas de playback
+
+
+// Playback / download
+
 app.get("/api/play/:videoId", playVideo);
+
 app.get("/api/play-trimmed/:videoId", playTrimmedVideo);
+
 app.get("/api/download-clip/:videoId/:filename", downloadClip);
 
-// Rota principal - Health check básico
+
+
+// ==============================
+
+// ❤️ HEALTH
+
+// ==============================
+
 app.get("/", (req, res) => {
-  res.json({ 
+
+  res.json({
+
     status: "EZ Clips AI V2 - Retention Engine online 🚀",
+
     version: "2.0.0",
-    timestamp: new Date().toISOString()
-  });
-});
 
-// Health check endpoint (usado pelo Railway)
-app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "ok", 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+
   });
+
 });
 
-// Ready check endpoint
+
+
+app.get("/health", (req, res) => {
+
+  res.status(200).json({
+
+    status: "ok",
+
+    uptime: process.uptime(),
+
+    timestamp: new Date().toISOString(),
+
+  });
+
+});
+
+
+
 app.get("/ready", (req, res) => {
-  res.status(200).json({ 
+
+  res.status(200).json({
+
     status: "ready",
-    timestamp: new Date().toISOString()
+
+    timestamp: new Date().toISOString(),
+
   });
+
 });
 
-// 404 handler (deve vir antes do error handler)
+
+
+// ==============================
+
+// ❌ 404
+
+// ==============================
+
 app.use((req, res) => {
+
   res.status(404).json({
+
     error: "Route not found",
-    path: req.path
+
+    path: req.path,
+
   });
+
 });
 
-// Error handling middleware (deve vir DEPOIS de todas as rotas)
+
+
+// ==============================
+
+// 🧯 ERROR HANDLER
+
+// ==============================
+
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+
+  console.error("Error:", err);
+
   res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    status: 'error'
+
+    error: err.message || "Internal server error",
+
+    status: "error",
+
   });
+
 });
 
-// Obter porta do ambiente ou usar padrão
+
+
+// ==============================
+
+// 🚀 SERVER
+
+// ==============================
+
 const PORT = parseInt(process.env.PORT, 10) || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
 
-// Iniciar servidor imediatamente (sem await ou operações assíncronas)
+const HOST = process.env.HOST || "0.0.0.0";
+
+
+
 const server = app.listen(PORT, HOST, () => {
-  console.log(`🚀 EZ Clips AI V2 - Retention Engine running on port ${PORT}`);
-  console.log(`📡 Health check available at http://${HOST}:${PORT}/health`);
-  console.log(`✅ Server started successfully at ${new Date().toISOString()}`);
+
+  console.log(`🚀 EZ Clips AI V2 running on port ${PORT}`);
+
+  console.log(`📡 Health check at http://${HOST}:${PORT}/health`);
+
 });
 
-// Tratamento de erros do servidor
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use`);
-    process.exit(1);
-  } else {
-    console.error('Server error:', error);
-    process.exit(1);
-  }
-});
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
+
+// ==============================
+
+// 🛑 GRACEFUL SHUTDOWN
+
+// ==============================
+
+const shutdown = () => {
+
+  console.log("Shutdown signal received");
+
   server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
-});
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    console.log('Server closed');
+    console.log("Server closed");
+
     process.exit(0);
+
   });
-});
+
+};
+
+
+
+process.on("SIGTERM", shutdown);
+
+process.on("SIGINT", shutdown);
 
