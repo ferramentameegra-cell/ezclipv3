@@ -3,37 +3,38 @@ import { downloadYouTubeVideo } from '../services/youtubeDownloader.js';
 import { videoStore } from '../controllers/videoController.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Diretório TEMPORÁRIO seguro no Railway
+ */
+const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 /**
  * Worker para processar downloads de vídeos do YouTube
- * Executa de forma assíncrona e escalável
  */
 videoDownloadQueue.process('download-youtube-video', async (job) => {
-  const { videoId, youtubeVideoId, videoPath } = job.data;
-  
-  console.log(`[WORKER] Iniciando download: ${youtubeVideoId} -> ${videoPath}`);
-  
+  const { videoId, youtubeVideoId } = job.data;
+
+  // 👉 FORÇAR path seguro
+  const videoPath = path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`);
+
+  console.log(`[WORKER] Download iniciado: ${youtubeVideoId}`);
+  console.log(`[WORKER] Salvando em: ${videoPath}`);
+
   try {
-    // Garantir que o diretório existe
-    const dir = path.dirname(videoPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // Garantir diretório
+    if (!fs.existsSync(TMP_UPLOADS_DIR)) {
+      fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
     }
 
-    // Atualizar progresso
-    await job.progress(10);
+    await job.progress(5);
 
-    // Baixar vídeo
+    // Download
     await downloadYouTubeVideo(youtubeVideoId, videoPath);
-    
-    // Atualizar progresso
-    await job.progress(50);
 
-    // Validar download
+    await job.progress(60);
+
+    // Validação
     if (!fs.existsSync(videoPath)) {
       throw new Error('Arquivo não foi criado após download');
     }
@@ -43,22 +44,22 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
       throw new Error('Arquivo baixado está vazio');
     }
 
-    // Atualizar videoStore com status de download completo
+    // Atualizar videoStore
     const video = videoStore.get(videoId);
     if (video) {
       video.downloaded = true;
       video.path = videoPath;
+      video.fileSize = stats.size;
       video.downloadError = null;
       video.downloadCompletedAt = new Date();
-      video.fileSize = stats.size;
-      video.localVideoUrl = `/api/video/play/${videoId}`;
       videoStore.set(videoId, video);
-      console.log(`[WORKER] VideoStore atualizado: ${videoId} - Download completo`);
     }
 
     await job.progress(100);
 
-    console.log(`[WORKER] Download concluído: ${videoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(
+      `[WORKER] Download concluído: ${(stats.size / 1024 / 1024).toFixed(2)} MB`
+    );
 
     return {
       success: true,
@@ -66,18 +67,15 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
       fileSize: stats.size
     };
   } catch (error) {
-    console.error(`[WORKER] Erro no download:`, error);
-    
-    // Limpar arquivo corrompido se existir
+    console.error('[WORKER] Erro no download:', error);
+
+    // Limpeza
     if (fs.existsSync(videoPath)) {
       try {
         fs.unlinkSync(videoPath);
-      } catch (unlinkError) {
-        console.error('[WORKER] Erro ao remover arquivo corrompido:', unlinkError);
-      }
+      } catch {}
     }
 
-    // Atualizar videoStore com erro
     const video = videoStore.get(videoId);
     if (video) {
       video.downloaded = false;
@@ -90,4 +88,3 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
 });
 
 console.log('[WORKER] Video Download Worker iniciado');
-
