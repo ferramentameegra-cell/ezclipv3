@@ -1,13 +1,13 @@
 {
-  "name": "ezv2",
-  "version": "2.0.0",
+  "name": "ezclipv3",
+  "version": "3.0.0",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "worker": "node worker.js",
-    "build": "echo \"Build complete\""
+    "worker": "node src/workers/videoDownloadWorker.js",
+    "build": "echo 'Build complete'"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -25,8 +25,5 @@
     "ioredis": "^5.8.2",
     "multer": "^1.4.5-lts.1",
     "uuid": "^9.0.1"
-  },
-  "devDependencies": {
-    "@railway/cli": "^4.16.1"
   }
 }
