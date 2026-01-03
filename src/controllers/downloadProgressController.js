@@ -1,209 +1,86 @@
-import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { sanitizeYouTubeUrl, extractVideoId } from '../services/youtubeUrlUtils.js';
-import { downloadYouTubeVideoWithProgress } from '../services/youtubeDownloaderWithProgress.js';
-import { downloadYouTubeVideo as downloadVideoService } from '../services/youtubeDownloader.js';
-import { videoStore } from './downloadController.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { spawn } from 'child_process';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
- * GET /api/download/progress
- * Download de vídeo com progresso em tempo real via Server-Sent Events (SSE)
+ * GET /api/download/progress?url=
+ * Faz download do YouTube com progresso via SSE
+ * Salva SEMPRE em: /tmp/uploads/{videoId}/source.mp4
  */
 export const downloadWithProgress = async (req, res) => {
   const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ 
-      success: false,
-      error: 'URL do YouTube não fornecida' 
-    });
+    return res.status(400).json({ error: 'URL do YouTube é obrigatória' });
   }
 
-  // Configurar SSE headers
+  const videoId = uuidv4();
+  const baseDir = `/tmp/uploads/${videoId}`;
+  const outputPath = `${baseDir}/source.mp4`;
+
+  fs.mkdirSync(baseDir, { recursive: true });
+
+  // Headers SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Desabilitar buffering no nginx
+  res.flushHeaders();
 
-  const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  console.log('[DOWNLOAD] Iniciando:', url);
+  console.log('[DOWNLOAD] Salvando em:', outputPath);
 
-  try {
-    // Sanitizar URL
-    const sanitizedUrl = sanitizeYouTubeUrl(url);
-    const videoId = extractVideoId(sanitizedUrl);
+  const yt = spawn('yt-dlp', [
+    '-f',
+    'mp4/best',
+    '--newline',
+    '-o',
+    outputPath,
+    url
+  ]);
 
-    if (!videoId) {
-      sendEvent({ 
-        success: false,
-        error: 'URL do YouTube inválida',
-        progress: 0
-      });
-      res.end();
-      return;
-    }
+  yt.stdout.on('data', data => {
+    const text = data.toString();
 
-    // Gerar ID único para o vídeo baixado
-    const storedVideoId = uuidv4();
-    const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
-
-    // Garantir diretório existe
-    const uploadDir = path.dirname(videoPath);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    console.log(`[DOWNLOAD-PROGRESS] Iniciando download com progresso: ${sanitizedUrl} -> ${videoPath}`);
-
-    sendEvent({ 
-      success: true,
-      progress: 0,
-      message: 'Iniciando download...',
-      videoId: storedVideoId
-    });
-
-    let downloadSuccess = false;
-    let downloadError = null;
-
-    // Tentar yt-dlp com progresso
-    try {
-      await downloadYouTubeVideoWithProgress(
-        sanitizedUrl,
-        videoPath,
-        (percent, downloaded, total, status) => {
-          const message = status === 'finished' 
-            ? 'Download concluído' 
-            : `Baixando... ${percent.toFixed(1)}%`;
-          
-          sendEvent({ 
-            success: true,
-            progress: percent,
-            downloaded: downloaded,
-            total: total,
-            status: status,
-            message: message,
-            videoId: storedVideoId
-          });
-        }
+    // Exemplo: [download]  42.3% of 12.34MiB at 1.23MiB/s ETA 00:12
+    const match = text.match(/(\d+(\.\d+)?)%/);
+    if (match) {
+      const percent = parseFloat(match[1]);
+      res.write(
+        `data: ${JSON.stringify({
+          progress: percent,
+          message: 'Baixando vídeo...'
+        })}\n\n`
       );
-      downloadSuccess = true;
-      console.log(`[DOWNLOAD-PROGRESS] Download concluído com yt-dlp: ${videoPath}`);
-    } catch (ytdlpError) {
-      console.error(`[DOWNLOAD-PROGRESS] yt-dlp falhou: ${ytdlpError.message}`);
-      downloadError = ytdlpError;
-      
-      // Tentar fallback para ytdl-core (sem progresso granular)
-      try {
-        sendEvent({ 
-          success: true,
-          progress: 50,
-          status: 'downloading',
-          message: 'Tentando método alternativo...',
-          videoId: storedVideoId
-        });
+    }
+  });
 
-        await downloadVideoService(videoId, videoPath);
-        downloadSuccess = true;
-        
-        sendEvent({ 
-          success: true,
-          progress: 100,
-          status: 'finished',
-          message: 'Download concluído',
-          videoId: storedVideoId
-        });
+  yt.stderr.on('data', data => {
+    console.warn('[yt-dlp]', data.toString());
+  });
 
-        console.log(`[DOWNLOAD-PROGRESS] Download concluído com ytdl-core: ${videoPath}`);
-      } catch (fallbackError) {
-        console.error(`[DOWNLOAD-PROGRESS] Erro no download (fallback também falhou): ${fallbackError.message}`);
-        downloadError = fallbackError;
-      }
+  yt.on('close', code => {
+    if (code !== 0 || !fs.existsSync(outputPath)) {
+      console.error('[DOWNLOAD] Falhou');
+      res.write(
+        `data: ${JSON.stringify({
+          error: 'Erro ao baixar vídeo'
+        })}\n\n`
+      );
+      return res.end();
     }
 
-    // Validar download
-    if (!downloadSuccess || !fs.existsSync(videoPath)) {
-      const errorMessage = downloadError?.message || 'Erro desconhecido';
-      sendEvent({ 
-        success: false,
-        error: `Falha ao baixar vídeo: ${errorMessage}`,
-        progress: 0
-      });
-      res.end();
-      return;
-    }
+    console.log('[DOWNLOAD] Concluído com sucesso');
 
-    const stats = fs.statSync(videoPath);
-    if (stats.size === 0) {
-      fs.unlinkSync(videoPath);
-      sendEvent({ 
-        success: false,
-        error: 'Arquivo baixado está vazio',
-        progress: 0
-      });
-      res.end();
-      return;
-    }
-
-    // Obter informações do vídeo (duração)
-    let duration = 0;
-    try {
-      const ffmpeg = (await import('fluent-ffmpeg')).default;
-      await new Promise((resolve) => {
-        ffmpeg.ffprobe(videoPath, (err, metadata) => {
-          if (!err && metadata?.format?.duration) {
-            duration = Math.floor(metadata.format.duration);
-          }
-          resolve();
-        });
-      });
-    } catch (error) {
-      console.warn(`[DOWNLOAD-PROGRESS] Erro ao obter duração: ${error.message}`);
-    }
-
-    // Armazenar informações do vídeo
-    const videoInfo = {
-      id: storedVideoId,
-      youtubeUrl: sanitizedUrl,
-      youtubeVideoId: videoId,
-      path: videoPath,
-      duration: duration,
-      fileSize: stats.size,
-      downloaded: true,
-      downloadedAt: new Date()
-    };
-
-    videoStore.set(storedVideoId, videoInfo);
-
-    console.log(`[DOWNLOAD-PROGRESS] Vídeo pronto: ${storedVideoId} (${(stats.size / 1024 / 1024).toFixed(2)} MB, ${duration}s)`);
-
-    // Enviar conclusão
-    sendEvent({ 
-      success: true,
-      progress: 100,
-      message: 'Download concluído',
-      videoId: storedVideoId,
-      playableUrl: `/api/play/${storedVideoId}`,
-      duration: duration,
-      fileSize: stats.size,
-      completed: true
-    });
+    res.write(
+      `data: ${JSON.stringify({
+        completed: true,
+        videoId,
+        videoPath: outputPath,
+        playableUrl: `/api/videos/${videoId}`
+      })}\n\n`
+    );
 
     res.end();
-
-  } catch (error) {
-    console.error('[DOWNLOAD-PROGRESS] Erro:', error);
-    sendEvent({ 
-      success: false,
-      error: `Erro ao processar download: ${error.message}`,
-      progress: 0
-    });
-    res.end();
-  }
+  });
 };
-
