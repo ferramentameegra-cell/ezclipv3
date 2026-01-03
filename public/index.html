@@ -1,74 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-  <meta http-equiv="Pragma" content="no-cache"/>
-  <meta http-equiv="Expires" content="0"/>
-
-  <title>EZ Clips AI</title>
-
-  <link rel="stylesheet" href="styles.css?v=3.1.0"/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>EZ Clips AI - Transforme Vídeos em Clips Virais</title>
+    <link rel="stylesheet" href="styles.css?v=3.0.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
-
 <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        ...
+    </nav>
 
-<main style="padding:40px; max-width:900px; margin:auto">
+    <!-- Main Content -->
+    <main class="main-wrapper">
+        ...
+    </main>
 
-  <h1>EZ Clips AI</h1>
-
-  <!-- INPUT YOUTUBE -->
-  <input
-    id="youtube-url"
-    placeholder="Cole o link do YouTube"
-    style="width:100%; padding:14px; font-size:16px"
-  />
-
-  <button
-    id="btn-process"
-    onclick="handleYouTubeSubmit()"
-    style="margin-top:10px; padding:12px 20px; font-size:16px"
-  >
-    Processar vídeo
-  </button>
-
-  <div id="youtube-status" style="margin-top:10px;"></div>
-
-  <!-- PREVIEW / PLAYER -->
-  <div id="video-player-container" style="margin-top:20px;"></div>
-
-  <!-- GERAR -->
-  <button
-    style="margin-top:20px; padding:14px 20px; font-size:16px"
-    onclick="generateSeries()"
-  >
-    Gerar cortes
-  </button>
-</main>
-
-<!-- LOADING OVERLAY -->
-<div id="loading-overlay" style="
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.85);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
-">
-  <div style="background:#111; padding:30px; border-radius:12px; width:300px; text-align:center">
-    <h3 style="color:#fff">Gerando série</h3>
-
-    <div style="background:#333; height:6px; border-radius:3px; overflow:hidden; margin-top:20px">
-      <div id="loading-progress" style="height:100%; width:0%; background:#4F46E5"></div>
-    </div>
-
-    <p id="loading-percent" style="color:#fff; margin-top:10px">0%</p>
-  </div>
-</div>
-
-<script src="app.js?v=3.1.0"></script>
+    <script src="app.js?v=3.0.0"></script>
 </body>
 </html>
