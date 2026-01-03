@@ -1,15 +1,12 @@
 FROM node:20-slim
 
-# Dependências do sistema
+# Dependências do sistema (sem pip)
 RUN apt-get update && apt-get install -y \
-  python3 \
-  python3-pip \
+  yt-dlp \
   ffmpeg \
   curl \
+  ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-
-# yt-dlp atualizado (CRÍTICO)
-RUN pip3 install --upgrade yt-dlp
 
 # Diretório da aplicação
 WORKDIR /app
@@ -21,7 +18,7 @@ RUN npm install
 # Código da aplicação
 COPY . .
 
-# Porta da aplicação
+# Porta
 EXPOSE 8080
 
 # Start
