@@ -1,12 +1,11 @@
 import fs from 'fs';
-import path from 'path';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * GET /api/download/progress?url=
- * Faz download do YouTube com progresso via SSE
- * Salva SEMPRE em: /tmp/uploads/{videoId}/source.mp4
+ * Download com progresso via SSE
+ * Salva em: /tmp/uploads/{videoId}/source.mp4
  */
 export const downloadWithProgress = async (req, res) => {
   const { url } = req.query;
@@ -21,7 +20,7 @@ export const downloadWithProgress = async (req, res) => {
 
   fs.mkdirSync(baseDir, { recursive: true });
 
-  // Headers SSE
+  // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -31,55 +30,49 @@ export const downloadWithProgress = async (req, res) => {
   console.log('[DOWNLOAD] Salvando em:', outputPath);
 
   const yt = spawn('yt-dlp', [
-    '-f',
-    'mp4/best',
+    '--js-runtimes', 'node:/usr/bin/node',
+    '--extractor-args', 'youtube:player_client=web',
+    '-f', 'bv*+ba/b',
+    '--merge-output-format', 'mp4',
     '--newline',
     '-o',
     outputPath,
     url
   ]);
 
-  yt.stdout.on('data', data => {
+  yt.stdout.on('data', (data) => {
     const text = data.toString();
-
-    // Exemplo: [download]  42.3% of 12.34MiB at 1.23MiB/s ETA 00:12
     const match = text.match(/(\d+(\.\d+)?)%/);
+
     if (match) {
       const percent = parseFloat(match[1]);
-      res.write(
-        `data: ${JSON.stringify({
-          progress: percent,
-          message: 'Baixando vídeo...'
-        })}\n\n`
-      );
+      res.write(`data: ${JSON.stringify({
+        progress: percent,
+        status: 'downloading'
+      })}\n\n`);
     }
   });
 
-  yt.stderr.on('data', data => {
+  yt.stderr.on('data', (data) => {
     console.warn('[yt-dlp]', data.toString());
   });
 
-  yt.on('close', code => {
+  yt.on('close', (code) => {
     if (code !== 0 || !fs.existsSync(outputPath)) {
-      console.error('[DOWNLOAD] Falhou');
-      res.write(
-        `data: ${JSON.stringify({
-          error: 'Erro ao baixar vídeo'
-        })}\n\n`
-      );
+      res.write(`data: ${JSON.stringify({
+        status: 'error',
+        error: 'Erro ao baixar vídeo'
+      })}\n\n`);
       return res.end();
     }
 
-    console.log('[DOWNLOAD] Concluído com sucesso');
-
-    res.write(
-      `data: ${JSON.stringify({
-        completed: true,
-        videoId,
-        videoPath: outputPath,
-        playableUrl: `/api/videos/${videoId}`
-      })}\n\n`
-    );
+    res.write(`data: ${JSON.stringify({
+      status: 'ready',
+      completed: true,
+      videoId,
+      videoPath: outputPath,
+      playableUrl: `/api/videos/play/${videoId}`
+    })}\n\n`);
 
     res.end();
   });
