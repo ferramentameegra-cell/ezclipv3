@@ -2,18 +2,10 @@ import { videoProcessQueue } from '../queue/queue.js';
 import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
 import { videoStore } from '../controllers/videoController.js';
 
-// Configurar videoStore no processador
 setVideoStore(videoStore);
 
-// 📁 Diretório base seguro para Railway
-const BASE_UPLOAD_DIR = '/tmp/uploads';
-
-/**
- * Worker para processar geração de séries de vídeos
- */
 videoProcessQueue.process('generate-video-series', async (job) => {
   const {
-    jobId,
     videoId,
     nicheId,
     retentionVideoId,
@@ -26,54 +18,49 @@ videoProcessQueue.process('generate-video-series', async (job) => {
     seriesId
   } = job.data;
 
-  console.log(`[WORKER] Iniciando processamento de série: ${seriesId}`);
+  console.log(`[WORKER] Processando série ${seriesId} | job ${job.id}`);
 
   try {
     const jobData = {
-      id: jobId,
+      id: job.id, // ✅ USAR job.id
       seriesId,
       videoId,
       nicheId,
-      retentionVideoId: retentionVideoId || 'random',
+      retentionVideoId,
       numberOfCuts,
-      headlineStyle: headlineStyle || 'bold',
-      font: font || 'Inter',
-      trimStart: trimStart || 0,
-      trimEnd: trimEnd || null,
-      cutDuration: cutDuration || 60,
+      headlineStyle,
+      font,
+      trimStart,
+      trimEnd,
+      cutDuration,
       status: 'processing',
-      createdAt: new Date(),
-      progress: 0,
-
-      // 🔑 MUITO IMPORTANTE
-      baseDir: BASE_UPLOAD_DIR
+      progress: 0
     };
 
     const jobsMap = new Map();
-    jobsMap.set(jobId, jobData);
+    jobsMap.set(job.id, jobData);
 
-    // Atualizar progresso no Bull
+    // 🔥 ponte correta de progresso
     const originalSet = jobsMap.set.bind(jobsMap);
     jobsMap.set = (key, value) => {
       originalSet(key, value);
-      if (key === jobId && value.progress !== undefined) {
-        job.progress(value.progress).catch(console.error);
+      if (key === job.id && typeof value.progress === 'number') {
+        job.progress(value.progress);
       }
     };
 
-    // 🚀 Processa a série
     await generateVideoSeries(jobData, jobsMap);
 
-    console.log(`[WORKER] Série processada com sucesso: ${seriesId}`);
+    await job.progress(100);
 
     return {
       success: true,
       seriesId,
-      clipsCount: jobData.clipsCount || numberOfCuts,
-      status: 'completed'
+      clipsCount: jobData.clipsCount
     };
+
   } catch (error) {
-    console.error(`[WORKER] Erro no processamento:`, error);
+    console.error('[WORKER] Erro:', error);
     throw error;
   }
 });
