@@ -2,25 +2,25 @@ import express from 'express';
 import cors from 'cors';
 
 // ROTAS (todas dentro de src/routes)
-import downloadRoutes from './routes/download.js';
-import generateRoutes from './routes/generate.js';
-import youtubeRoutes from './routes/youtube.js';
-import trimRoutes from './routes/trim.js';
-import nicheRoutes from './routes/niches.js';
-import retentionRoutes from './routes/retention.js';
+import downloadRoutes from './src/routes/download.js';
+import generateRoutes from './src/routes/generate.js';
+import youtubeRoutes from './src/routes/youtube.js';
+import trimRoutes from './src/routes/trim.js';
+import nicheRoutes from './src/routes/niches.js';
+import retentionRoutes from './src/routes/retention.js';
 
-// ⚠️ IMPORTA OS WORKERS (mesmo processo)
-import './workers/videoProcessWorker.js';
-import './workers/videoDownloadWorker.js';
+// WORKERS (precisam ser importados UMA VEZ)
+import './src/workers/videoProcessWorker.js';
+import './src/workers/videoDownloadWorker.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// MIDDLEWARES
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// ROTAS
+// Rotas API
 app.use('/api', downloadRoutes);
 app.use('/api', generateRoutes);
 app.use('/api', youtubeRoutes);
@@ -28,11 +28,12 @@ app.use('/api', trimRoutes);
 app.use('/api', nicheRoutes);
 app.use('/api', retentionRoutes);
 
-// HEALTH CHECK (importante pro Railway)
-app.get('/', (_, res) => {
-  res.send('EZClip API running');
-});
+// Frontend estático
+app.use(express.static('public'));
+
+// Health check (Railway gosta disso)
+app.get('/health', (_, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
-  console.log(`🚀 API rodando na porta ${PORT}`);
+  console.log(`🚀 EZClip rodando na porta ${PORT}`);
 });
