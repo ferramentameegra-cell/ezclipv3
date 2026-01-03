@@ -1,91 +1,50 @@
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs';
 import { videoProcessQueue } from '../queue/queue.js';
 import { splitVideoIntoClips, trimVideo } from '../services/videoTrimmer.js';
 
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
-// garantir diretórios
-if (!fs.existsSync(BASE_TMP_DIR)) {
-  fs.mkdirSync(BASE_TMP_DIR, { recursive: true });
-}
-if (!fs.existsSync(SERIES_DIR)) {
-  fs.mkdirSync(SERIES_DIR, { recursive: true });
-}
-
-/**
- * Worker principal
- */
-videoProcessQueue.process('generate-video-series', async (job) => {
+videoProcessQueue.process('generate-video-series', async job => {
   const {
     seriesId,
     videoPath,
-    numberOfCuts,
-    trimStart = 0,
-    trimEnd = null,
-    cutDuration = 60
+    trimStart,
+    trimEnd,
+    cutDuration
   } = job.data;
 
-  console.log(`[WORKER] Iniciando série ${seriesId}`);
-
-  try {
-    // 🔥 FONTE DA VERDADE = ARQUIVO
-    if (!videoPath || !fs.existsSync(videoPath)) {
-      throw new Error(`Arquivo de vídeo não encontrado: ${videoPath}`);
-    }
-
-    await job.progress(10);
-
-    // preparar pasta da série
-    const seriesPath = path.join(SERIES_DIR, seriesId);
-    if (!fs.existsSync(seriesPath)) {
-      fs.mkdirSync(seriesPath, { recursive: true });
-    }
-
-    let processedVideoPath = videoPath;
-
-    // aplicar trim se necessário
-    if (trimEnd && trimEnd > trimStart) {
-      const trimmedPath = path.join(BASE_TMP_DIR, `${seriesId}_trimmed.mp4`);
-      processedVideoPath = await trimVideo(
-        videoPath,
-        trimmedPath,
-        trimStart,
-        trimEnd
-      );
-    }
-
-    await job.progress(40);
-
-    // gerar clips
-    const clips = await splitVideoIntoClips(
-      processedVideoPath,
-      seriesPath,
-      cutDuration,
-      0,
-      null
-    );
-
-    // progresso incremental
-    for (let i = 0; i < clips.length; i++) {
-      const percent = 40 + Math.round(((i + 1) / clips.length) * 60);
-      await job.progress(percent);
-    }
-
-    await job.progress(100);
-
-    console.log(`[WORKER] Série finalizada (${clips.length} clips)`);
-
-    return {
-      success: true,
-      seriesId,
-      clipsCount: clips.length
-    };
-  } catch (error) {
-    console.error('[WORKER] Erro:', error);
-    throw error;
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`Arquivo não encontrado: ${videoPath}`);
   }
-});
 
-console.log('[WORKER] VideoProcessWorker ativo');
+  const seriesPath = path.join(SERIES_DIR, seriesId);
+  fs.mkdirSync(seriesPath, { recursive: true });
+
+  await job.progress(10);
+
+  let processedPath = videoPath;
+
+  if (trimStart > 0 || trimEnd) {
+    processedPath = path.join(BASE_TMP_DIR, `${seriesId}_trim.mp4`);
+    await trimVideo(videoPath, processedPath, trimStart, trimEnd);
+  }
+
+  await job.progress(40);
+
+  const clips = await splitVideoIntoClips(
+    processedPath,
+    seriesPath,
+    cutDuration
+  );
+
+  for (let i = 0; i < clips.length; i++) {
+    await job.progress(40 + Math.round(((i + 1) / clips.length) * 60));
+  }
+
+  return {
+    status: 'completed',
+    clipsCount: clips.length
+  };
+});
