@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 
+/**
+ * Faz download do vídeo do YouTube usando yt-dlp
+ */
 export function downloadYouTubeVideo(youtubeVideoId, outputPath, onProgress) {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
@@ -26,8 +29,7 @@ export function downloadYouTubeVideo(youtubeVideoId, outputPath, onProgress) {
       // Progresso (%)
       const match = line.match(/(\d{1,3}\.\d)%/);
       if (match && onProgress) {
-        const percent = parseFloat(match[1]);
-        onProgress(percent);
+        onProgress(parseFloat(match[1]));
       }
     });
 
@@ -52,4 +54,18 @@ export function downloadYouTubeVideo(youtubeVideoId, outputPath, onProgress) {
       resolve(outputPath);
     });
   });
+}
+
+/**
+ * ✅ FUNÇÃO QUE ESTAVA FALTANDO
+ * Verifica se o vídeo já foi baixado
+ */
+export function isVideoDownloaded(videoPath) {
+  try {
+    if (!fs.existsSync(videoPath)) return false;
+    const stats = fs.statSync(videoPath);
+    return stats.size > 0;
+  } catch {
+    return false;
+  }
 }
