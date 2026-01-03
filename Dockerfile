@@ -1,23 +1,28 @@
 FROM node:20-slim
 
-# Instalar dependências do sistema
+# Dependências do sistema
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+  python3 \
+  python3-pip \
+  ffmpeg \
+  curl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Baixar yt-dlp binário oficial
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+# yt-dlp atualizado (CRÍTICO)
+RUN pip3 install --upgrade yt-dlp
 
+# Diretório da aplicação
 WORKDIR /app
 
+# Dependências Node
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install
 
+# Código da aplicação
 COPY . .
 
-EXPOSE 3000
-CMD ["node", "index.js"]
+# Porta da aplicação
+EXPOSE 8080
+
+# Start
+CMD ["npm", "start"]
