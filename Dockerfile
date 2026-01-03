@@ -5,11 +5,10 @@ FROM node:20-slim
 # ===============================
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    yt-dlp \
     curl \
     ca-certificates \
     python3 \
-    python3-pip \
-    && pip3 install --no-cache-dir yt-dlp \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,11 +29,11 @@ RUN npm install --omit=dev
 COPY . .
 
 # ===============================
-# Porta usada pelo Railway
+# Porta Railway
 # ===============================
 EXPOSE 8080
 
 # ===============================
-# Start da aplicação
+# Start
 # ===============================
 CMD ["npm", "start"]
