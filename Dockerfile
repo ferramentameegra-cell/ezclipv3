@@ -1,25 +1,47 @@
-FROM node:20-slim
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
-# Dependências do sistema (sem pip)
-RUN apt-get update && apt-get install -y \
-  yt-dlp \
-  ffmpeg \
-  curl \
-  ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+export function downloadYouTubeVideo(youtubeVideoId, outputPath) {
+  return new Promise((resolve, reject) => {
+    const dir = path.dirname(outputPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
-# Diretório da aplicação
-WORKDIR /app
+    const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
 
-# Dependências Node
-COPY package*.json ./
-RUN npm install
+    const args = [
+      '--no-playlist',
+      '--extractor-args',
+      'youtube:player_client=android',
+      '-f',
+      'bv*+ba/b',
+      '--merge-output-format',
+      'mp4',
+      '-o',
+      outputPath,
+      url,
+    ];
 
-# Código da aplicação
-COPY . .
+    console.log('[yt-dlp]', args.join(' '));
 
-# Porta
-EXPOSE 8080
+    const yt = spawn('yt-dlp', args);
 
-# Start
-CMD ["npm", "start"]
+    yt.stderr.on('data', data => {
+      console.log('[yt-dlp]', data.toString());
+    });
+
+    yt.on('close', code => {
+      if (code !== 0) {
+        return reject(new Error(`yt-dlp exited with code ${code}`));
+      }
+
+      if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+        return reject(new Error('Arquivo baixado está vazio'));
+      }
+
+      resolve(outputPath);
+    });
+  });
+}
