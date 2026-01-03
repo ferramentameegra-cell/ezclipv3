@@ -32,7 +32,7 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
-    // 🔥 ENFILEIRAR JOB
+    // 🔥 Enfileirar job no Bull
     const job = await videoProcessQueue.add(
       'generate-video-series',
       {
@@ -53,10 +53,10 @@ export const generateSeries = async (req, res) => {
       }
     );
 
-    // 👉 progresso inicial real
+    // 👉 progresso inicial REAL (não 0)
     await job.progress(1);
 
-    console.log(`[API] Série enfileirada: job=${job.id}, series=${seriesId}`);
+    console.log(`[API] Série enfileirada | job=${job.id} | series=${seriesId}`);
 
     res.json({
       jobId: job.id,
@@ -71,7 +71,8 @@ export const generateSeries = async (req, res) => {
 
 /**
  * GET /api/generate/status/:jobId
- * 🔥 BUSCA PROGRESSO DIRETO DO REDIS
+ * 🔥 CORREÇÃO DO 0%
+ * Retorna exatamente o formato que o frontend espera
  */
 export const getSeriesStatus = async (req, res) => {
   try {
@@ -83,17 +84,24 @@ export const getSeriesStatus = async (req, res) => {
       return res.status(404).json({ error: 'Job não encontrado' });
     }
 
-    const progress = job.progress() || 0;
+    const progress = await job.progress(); // 🔥 FIX REAL
     const state = await job.getState();
 
     res.json({
-      jobId: job.id,
-      state,
-      progress,
-      data: job.data,
-      failedReason: job.failedReason || null
+      job: {
+        id: job.id,
+        status:
+          state === 'completed'
+            ? 'completed'
+            : state === 'failed'
+            ? 'error'
+            : 'processing',
+        progress: typeof progress === 'number' ? progress : 0,
+        error: job.failedReason || null
+      }
     });
   } catch (error) {
+    console.error('[STATUS] Erro:', error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -111,6 +119,7 @@ export const downloadSeries = async (req, res) => {
     }
 
     const files = fs.readdirSync(seriesPath).filter(f => f.endsWith('.mp4'));
+
     if (files.length === 0) {
       return res.status(404).json({ error: 'Nenhum clip encontrado' });
     }
@@ -124,7 +133,7 @@ export const downloadSeries = async (req, res) => {
     const archive = archiver('zip', { zlib: { level: 9 } });
 
     archive.on('error', err => {
-      console.error('Erro ZIP:', err);
+      console.error('[ZIP] Erro:', err);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Erro ao gerar ZIP' });
       }
@@ -136,9 +145,9 @@ export const downloadSeries = async (req, res) => {
       archive.file(path.join(seriesPath, file), { name: file });
     }
 
-    archive.finalize();
+    await archive.finalize();
   } catch (error) {
-    console.error('Erro download série:', error);
+    console.error('[DOWNLOAD] Erro:', error);
     res.status(500).json({ error: error.message });
   }
 };
