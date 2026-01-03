@@ -19,42 +19,71 @@ export function downloadWithProgress(req, res) {
     return;
   }
 
+  // SSE headers
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
 
   const outputPath = `/tmp/${Date.now()}.mp4`;
 
   const ytdlp = spawn("yt-dlp", [
     "-f",
-    "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/mp4",
+    "bv*[ext=mp4]+ba[ext=m4a]/mp4",
     "--merge-output-format",
     "mp4",
     "-o",
     outputPath,
     "--newline",
+    "--no-playlist",
     cleanUrl
   ]);
 
-  ytdlp.stdout.on("data", (data) => {
-    const match = data.toString().match(/(\d{1,3}\.\d)%/);
-    if (match) {
-      res.write(`data: ${JSON.stringify({ progress: Number(match[1]) })}\n\n`);
-    }
-  });
-
+  // 🔥 yt-dlp envia progresso no STDERR
   ytdlp.stderr.on("data", (data) => {
-    console.error("[yt-dlp]", data.toString());
+    const text = data.toString();
+
+    // Exemplo: [download]  12.3% of ...
+    const match = text.match(/(\d{1,3}\.\d+)%/);
+
+    if (match) {
+      res.write(
+        `data: ${JSON.stringify({
+          status: "downloading",
+          progress: Number(match[1])
+        })}\n\n`
+      );
+    }
   });
 
   ytdlp.on("close", (code) => {
     if (code === 0) {
       res.write(
-        `data: ${JSON.stringify({ status: "finished", path: outputPath })}\n\n`
+        `data: ${JSON.stringify({
+          status: "finished",
+          path: outputPath
+        })}\n\n`
       );
     } else {
-      res.write(`data: ${JSON.stringify({ status: "error" })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          status: "error",
+          message: "yt-dlp failed"
+        })}\n\n`
+      );
     }
+
+    res.end();
+  });
+
+  ytdlp.on("error", (err) => {
+    console.error("yt-dlp spawn error:", err);
+    res.write(
+      `data: ${JSON.stringify({
+        status: "error",
+        message: err.message
+      })}\n\n`
+    );
     res.end();
   });
 }
