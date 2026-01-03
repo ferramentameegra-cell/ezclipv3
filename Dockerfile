@@ -1,47 +1,27 @@
-import { spawn } from 'child_process';
-import fs from 'fs';
-import path from 'path';
+FROM node:20-slim
 
-export function downloadYouTubeVideo(youtubeVideoId, outputPath) {
-  return new Promise((resolve, reject) => {
-    const dir = path.dirname(outputPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+  yt-dlp \
+  ffmpeg \
+  curl \
+  ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-    const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
+# Diretório da aplicação
+WORKDIR /app
 
-    const args = [
-      '--no-playlist',
-      '--extractor-args',
-      'youtube:player_client=android',
-      '-f',
-      'bv*+ba/b',
-      '--merge-output-format',
-      'mp4',
-      '-o',
-      outputPath,
-      url,
-    ];
+# Copiar dependências Node
+COPY package*.json ./
 
-    console.log('[yt-dlp]', args.join(' '));
+# Instalar dependências Node
+RUN npm install
 
-    const yt = spawn('yt-dlp', args);
+# Copiar código da aplicação
+COPY . .
 
-    yt.stderr.on('data', data => {
-      console.log('[yt-dlp]', data.toString());
-    });
+# Porta usada pelo Railway
+EXPOSE 8080
 
-    yt.on('close', code => {
-      if (code !== 0) {
-        return reject(new Error(`yt-dlp exited with code ${code}`));
-      }
-
-      if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
-        return reject(new Error('Arquivo baixado está vazio'));
-      }
-
-      resolve(outputPath);
-    });
-  });
-}
+# Comando de start
+CMD ["npm", "start"]
