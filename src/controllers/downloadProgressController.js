@@ -1,5 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
+<<<<<<< HEAD
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sanitizeYouTubeUrl, extractVideoId } from '../services/youtubeUrlUtils.js';
@@ -15,28 +15,42 @@ import { videoStore } from './downloadController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+=======
+import { spawn } from 'child_process';
+import { v4 as uuidv4 } from 'uuid';
+>>>>>>> e9ec834772307373775b366a87f0b8f585455098
 
 const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 /**
+<<<<<<< HEAD
  * GET /api/download/progress
  * Download de vídeo com progresso em tempo real via Server-Sent Events (SSE)
  * REFATORADO: Usa state machine e validação robusta
+=======
+ * GET /api/download/progress?url=
+ * Download com progresso via SSE
+ * Salva em: /tmp/uploads/{videoId}/source.mp4
+>>>>>>> e9ec834772307373775b366a87f0b8f585455098
  */
 export const downloadWithProgress = async (req, res) => {
   const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ 
-      success: false,
-      error: 'URL do YouTube não fornecida' 
-    });
+    return res.status(400).json({ error: 'URL do YouTube é obrigatória' });
   }
 
-  // Configurar SSE headers
+  const videoId = uuidv4();
+  const baseDir = `/tmp/uploads/${videoId}`;
+  const outputPath = `${baseDir}/source.mp4`;
+
+  fs.mkdirSync(baseDir, { recursive: true });
+
+  // SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+<<<<<<< HEAD
   res.setHeader('X-Accel-Buffering', 'no'); // Desabilitar buffering no nginx
   res.setHeader('Access-Control-Allow-Origin', '*'); // Railway CORS
 
@@ -263,5 +277,58 @@ export const downloadWithProgress = async (req, res) => {
     });
     res.end();
   }
-};
+=======
+  res.flushHeaders();
 
+  console.log('[DOWNLOAD] Iniciando:', url);
+  console.log('[DOWNLOAD] Salvando em:', outputPath);
+
+  const yt = spawn('yt-dlp', [
+    '--js-runtimes', 'node:/usr/bin/node',
+    '--extractor-args', 'youtube:player_client=web',
+    '-f', 'bv*+ba/b',
+    '--merge-output-format', 'mp4',
+    '--newline',
+    '-o',
+    outputPath,
+    url
+  ]);
+
+  yt.stdout.on('data', (data) => {
+    const text = data.toString();
+    const match = text.match(/(\d+(\.\d+)?)%/);
+
+    if (match) {
+      const percent = parseFloat(match[1]);
+      res.write(`data: ${JSON.stringify({
+        progress: percent,
+        status: 'downloading'
+      })}\n\n`);
+    }
+  });
+
+  yt.stderr.on('data', (data) => {
+    console.warn('[yt-dlp]', data.toString());
+  });
+
+  yt.on('close', (code) => {
+    if (code !== 0 || !fs.existsSync(outputPath)) {
+      res.write(`data: ${JSON.stringify({
+        status: 'error',
+        error: 'Erro ao baixar vídeo'
+      })}\n\n`);
+      return res.end();
+    }
+
+    res.write(`data: ${JSON.stringify({
+      status: 'ready',
+      completed: true,
+      videoId,
+      videoPath: outputPath,
+      playableUrl: `/api/videos/play/${videoId}`
+    })}\n\n`);
+
+    res.end();
+  });
+>>>>>>> e9ec834772307373775b366a87f0b8f585455098
+};

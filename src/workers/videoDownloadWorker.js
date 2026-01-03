@@ -15,7 +15,6 @@ const TMP_UPLOADS_DIR = '/tmp/uploads';
 videoDownloadQueue.process('download-youtube-video', async (job) => {
   const { videoId, youtubeVideoId } = job.data;
 
-  // 👉 FORÇAR path seguro
   const videoPath = path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`);
 
   console.log(`[WORKER] Download iniciado: ${youtubeVideoId}`);
@@ -29,22 +28,36 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
 
     await job.progress(5);
 
-    // Download
-    await downloadYouTubeVideo(youtubeVideoId, videoPath);
+    /**
+     * DOWNLOAD
+     * Aqui o yt-dlp já será chamado com:
+     * --js-runtimes node
+     * --extractor-args youtube:player_client=web
+     * -f bv*+ba/b
+     */
+    await downloadYouTubeVideo(youtubeVideoId, videoPath, (percent) => {
+      if (percent && percent > 5 && percent < 90) {
+        job.progress(Math.floor(percent));
+      }
+    });
 
-    await job.progress(60);
+    await job.progress(80);
 
-    // Validação
+    /**
+     * VALIDAÇÃO CRÍTICA
+     */
     if (!fs.existsSync(videoPath)) {
       throw new Error('Arquivo não foi criado após download');
     }
 
     const stats = fs.statSync(videoPath);
-    if (stats.size === 0) {
+    if (!stats || stats.size === 0) {
       throw new Error('Arquivo baixado está vazio');
     }
 
-    // Atualizar videoStore
+    /**
+     * Atualizar videoStore
+     */
     const video = videoStore.get(videoId);
     if (video) {
       video.downloaded = true;
@@ -66,10 +79,11 @@ videoDownloadQueue.process('download-youtube-video', async (job) => {
       videoPath,
       fileSize: stats.size
     };
-  } catch (error) {
-    console.error('[WORKER] Erro no download:', error);
 
-    // Limpeza
+  } catch (error) {
+    console.error('[WORKER] Erro no download:', error.message);
+
+    // Limpeza de arquivo corrompido
     if (fs.existsSync(videoPath)) {
       try {
         fs.unlinkSync(videoPath);

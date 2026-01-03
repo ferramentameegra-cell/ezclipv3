@@ -7,9 +7,6 @@ import { videoProcessQueue } from '../queue/queue.js';
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
-/**
- * POST /api/generate/series
- */
 export const generateSeries = async (req, res) => {
   try {
     const {
@@ -30,14 +27,22 @@ export const generateSeries = async (req, res) => {
       });
     }
 
+    const videoPath = path.join(BASE_TMP_DIR, `${videoId}.mp4`);
+
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({
+        error: `Vídeo não encontrado em ${videoPath}`
+      });
+    }
+
     const seriesId = uuidv4();
 
-    // 🔥 ENFILEIRAR JOB
     const job = await videoProcessQueue.add(
       'generate-video-series',
       {
         seriesId,
         videoId,
+        videoPath,
         nicheId,
         retentionVideoId: retentionVideoId || 'random',
         numberOfCuts,
@@ -53,10 +58,7 @@ export const generateSeries = async (req, res) => {
       }
     );
 
-    // 👉 progresso inicial real
     await job.progress(1);
-
-    console.log(`[API] Série enfileirada: job=${job.id}, series=${seriesId}`);
 
     res.json({
       jobId: job.id,
@@ -69,28 +71,18 @@ export const generateSeries = async (req, res) => {
   }
 };
 
-/**
- * GET /api/generate/status/:jobId
- * 🔥 BUSCA PROGRESSO DIRETO DO REDIS
- */
 export const getSeriesStatus = async (req, res) => {
   try {
-    const { jobId } = req.params;
-
-    const job = await videoProcessQueue.getJob(jobId);
+    const job = await videoProcessQueue.getJob(req.params.jobId);
 
     if (!job) {
       return res.status(404).json({ error: 'Job não encontrado' });
     }
 
-    const progress = job.progress() || 0;
-    const state = await job.getState();
-
     res.json({
       jobId: job.id,
-      state,
-      progress,
-      data: job.data,
+      status: await job.getState(),
+      progress: job.progress() || 0,
       failedReason: job.failedReason || null
     });
   } catch (error) {
@@ -98,47 +90,28 @@ export const getSeriesStatus = async (req, res) => {
   }
 };
 
-/**
- * GET /api/generate/download/:seriesId
- */
 export const downloadSeries = async (req, res) => {
-  try {
-    const { seriesId } = req.params;
-    const seriesPath = path.join(SERIES_DIR, seriesId);
+  const seriesPath = path.join(SERIES_DIR, req.params.seriesId);
 
-    if (!fs.existsSync(seriesPath)) {
-      return res.status(404).json({ error: 'Série não encontrada' });
-    }
+  if (!fs.existsSync(seriesPath)) {
+    return res.status(404).json({ error: 'Série não encontrada' });
+  }
 
-    const files = fs.readdirSync(seriesPath).filter(f => f.endsWith('.mp4'));
-    if (files.length === 0) {
-      return res.status(404).json({ error: 'Nenhum clip encontrado' });
-    }
+  const archive = archiver('zip', { zlib: { level: 9 } });
 
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="ez-clips-series-${seriesId}.zip"`
-    );
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="ezclips-${req.params.seriesId}.zip"`
+  );
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.pipe(res);
 
-    archive.on('error', err => {
-      console.error('Erro ZIP:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Erro ao gerar ZIP' });
-      }
+  fs.readdirSync(seriesPath)
+    .filter(f => f.endsWith('.mp4'))
+    .forEach(file => {
+      archive.file(path.join(seriesPath, file), { name: file });
     });
 
-    archive.pipe(res);
-
-    for (const file of files) {
-      archive.file(path.join(seriesPath, file), { name: file });
-    }
-
-    archive.finalize();
-  } catch (error) {
-    console.error('Erro download série:', error);
-    res.status(500).json({ error: error.message });
-  }
+  archive.finalize();
 };

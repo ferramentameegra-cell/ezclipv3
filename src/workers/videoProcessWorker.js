@@ -1,68 +1,50 @@
+import path from 'path';
+import fs from 'fs';
 import { videoProcessQueue } from '../queue/queue.js';
-import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
-import { videoStore } from '../controllers/videoController.js';
+import { splitVideoIntoClips, trimVideo } from '../services/videoTrimmer.js';
 
-setVideoStore(videoStore);
+const BASE_TMP_DIR = '/tmp/uploads';
+const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
-videoProcessQueue.process('generate-video-series', async (job) => {
+videoProcessQueue.process('generate-video-series', async job => {
   const {
-    videoId,
-    nicheId,
-    retentionVideoId,
-    numberOfCuts,
-    headlineStyle,
-    font,
+    seriesId,
+    videoPath,
     trimStart,
     trimEnd,
-    cutDuration,
-    seriesId
+    cutDuration
   } = job.data;
 
-  console.log(`[WORKER] Processando série ${seriesId} | job ${job.id}`);
-
-  try {
-    const jobData = {
-      id: job.id, // ✅ USAR job.id
-      seriesId,
-      videoId,
-      nicheId,
-      retentionVideoId,
-      numberOfCuts,
-      headlineStyle,
-      font,
-      trimStart,
-      trimEnd,
-      cutDuration,
-      status: 'processing',
-      progress: 0
-    };
-
-    const jobsMap = new Map();
-    jobsMap.set(job.id, jobData);
-
-    // 🔥 ponte correta de progresso
-    const originalSet = jobsMap.set.bind(jobsMap);
-    jobsMap.set = (key, value) => {
-      originalSet(key, value);
-      if (key === job.id && typeof value.progress === 'number') {
-        job.progress(value.progress);
-      }
-    };
-
-    await generateVideoSeries(jobData, jobsMap);
-
-    await job.progress(100);
-
-    return {
-      success: true,
-      seriesId,
-      clipsCount: jobData.clipsCount
-    };
-
-  } catch (error) {
-    console.error('[WORKER] Erro:', error);
-    throw error;
+  if (!fs.existsSync(videoPath)) {
+    throw new Error(`Arquivo não encontrado: ${videoPath}`);
   }
-});
 
-console.log('[WORKER] Video Process Worker iniciado');
+  const seriesPath = path.join(SERIES_DIR, seriesId);
+  fs.mkdirSync(seriesPath, { recursive: true });
+
+  await job.progress(10);
+
+  let processedPath = videoPath;
+
+  if (trimStart > 0 || trimEnd) {
+    processedPath = path.join(BASE_TMP_DIR, `${seriesId}_trim.mp4`);
+    await trimVideo(videoPath, processedPath, trimStart, trimEnd);
+  }
+
+  await job.progress(40);
+
+  const clips = await splitVideoIntoClips(
+    processedPath,
+    seriesPath,
+    cutDuration
+  );
+
+  for (let i = 0; i < clips.length; i++) {
+    await job.progress(40 + Math.round(((i + 1) / clips.length) * 60));
+  }
+
+  return {
+    status: 'completed',
+    clipsCount: clips.length
+  };
+});
