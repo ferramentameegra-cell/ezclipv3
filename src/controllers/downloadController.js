@@ -8,7 +8,12 @@ const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 // Garante diretório no Railway
 if (!fs.existsSync(TMP_UPLOADS_DIR)) {
-  fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
+  try {
+    fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
+    console.log('[DOWNLOAD-CONTROLLER] Diretório criado:', TMP_UPLOADS_DIR);
+  } catch (error) {
+    console.error('[DOWNLOAD-CONTROLLER] Erro ao criar diretório:', error);
+  }
 }
 
 // Store simples em memória

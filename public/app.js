@@ -557,24 +557,26 @@ async function downloadWithProgress(url) {
                     updateDownloadProgress(data.progress, data.message || 'Baixando...');
                 }
                 
-                if (data.completed && data.videoId) {
+                if (data.completed && data.videoId && data.ready && data.state === 'ready') {
                     eventSource.close();
                     
-                    // Vídeo baixado e pronto
+                    // Vídeo baixado e VALIDADO - pronto para uso
                     appState.videoId = data.videoId;
                     appState.videoInfo = {
                         id: data.videoId,
                         playableUrl: data.playableUrl,
                         duration: data.duration,
-                        downloaded: true
+                        downloaded: true,
+                        validated: true,
+                        state: 'ready'
                     };
                     
-                    showStatus('Vídeo baixado com sucesso!', 'success');
+                    showStatus('Vídeo baixado e validado com sucesso!', 'success');
                     
                     // Renderizar player IMEDIATAMENTE com arquivo baixado
                     renderVideoPlayer(data.playableUrl);
                     
-                    // Exibir trim tool AUTOMATICAMENTE
+                    // Exibir trim tool APENAS quando estado === ready
                     showTrimSection();
                     setupTrimControlsForVideo({
                         duration: data.duration,
@@ -583,6 +585,12 @@ async function downloadWithProgress(url) {
                     
                     clearDownloadProgress();
                     resolve(data);
+                } else if (data.error || data.state === 'error') {
+                    // Erro explícito
+                    eventSource.close();
+                    showStatus(data.error || 'Erro ao baixar vídeo', 'error');
+                    clearDownloadProgress();
+                    reject(new Error(data.error || 'Erro desconhecido'));
                 }
             } catch (error) {
                 console.error('[SSE] Erro ao processar evento:', error);
@@ -710,15 +718,46 @@ function showStatus(message, type) {
     statusMsg.classList.remove('hidden');
 }
 
-function showTrimSection() {
-    const trimCard = document.getElementById('trim-card');
-    if (trimCard) {
-        trimCard.classList.remove('hidden');
-        updateProgressSteps('trim');
-        setTimeout(() => {
-            trimCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 300);
+/**
+ * Verificar estado do vídeo no backend antes de mostrar trim
+ */
+async function verifyVideoReady(videoId) {
+    try {
+        const response = await fetch(`${API_BASE}/api/download/state/${videoId}`);
+        const data = await response.json();
+        
+        if (data.success && data.ready && data.state === 'ready') {
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('[VERIFY] Erro ao verificar estado:', error);
+        return false;
     }
+}
+
+async function showTrimSection() {
+    const trimCard = document.getElementById('trim-card');
+    if (!trimCard) return;
+    
+    // Verificar se vídeo está pronto
+    if (!appState.videoId) {
+        showStatus('Vídeo não encontrado', 'error');
+        return;
+    }
+    
+    // Verificar estado no backend
+    const isReady = await verifyVideoReady(appState.videoId);
+    if (!isReady) {
+        showStatus('Vídeo ainda não está pronto. Aguarde a validação completar.', 'error');
+        return;
+    }
+    
+    trimCard.classList.remove('hidden');
+    updateProgressSteps('trim');
+    setTimeout(() => {
+        trimCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
 }
 
 // Função removida - substituída por renderVideoPlayer
@@ -1177,6 +1216,13 @@ function updatePreviewStyle() {
 async function generateSeries() {
     if (!appState.videoId || !appState.nicheId || !appState.numberOfCuts) {
         alert('Por favor, complete todas as etapas');
+        return;
+    }
+    
+    // Verificar se vídeo está pronto antes de gerar
+    const isReady = await verifyVideoReady(appState.videoId);
+    if (!isReady) {
+        alert('Vídeo ainda não está pronto. Por favor, aguarde a validação completar.');
         return;
     }
     

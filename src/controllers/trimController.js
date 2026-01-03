@@ -3,9 +3,12 @@ import { videoStore } from './downloadController.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getVideoState, VIDEO_STATES } from '../services/videoStateManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 /**
  * POST /api/trim
@@ -65,8 +68,17 @@ export const applyTrim = async (req, res) => {
       });
     }
 
+    // Verificar estado do vídeo
+    const videoState = getVideoState(videoId);
+    if (!videoState || videoState.state !== VIDEO_STATES.READY) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Vídeo não está pronto para trim. Estado atual: ' + (videoState?.state || 'unknown')
+      });
+    }
+
     // Aplicar trim
-    const trimmedPath = path.join(__dirname, '../../uploads', `${videoId}_trimmed.mp4`);
+    const trimmedPath = path.join(TMP_UPLOADS_DIR, `${videoId}_trimmed.mp4`);
     
     console.log(`[TRIM] Aplicando trim: ${start}s - ${end}s em ${video.path}`);
     

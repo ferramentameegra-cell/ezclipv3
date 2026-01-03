@@ -3,6 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { splitVideoIntoClips, trimVideo } from './videoTrimmer.js';
 import { downloadYouTubeVideo, isVideoDownloaded } from './youtubeDownloader.js';
+import { getVideoState, VIDEO_STATES } from './videoStateManager.js';
+import { validateVideoWithFfprobe } from './videoValidator.js';
 
 // ===============================
 // CONFIGURAÇÃO RAILWAY (OBRIGATÓRIA)
@@ -49,6 +51,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
     const video = videoStore.get(videoId);
     if (!video) {
       throw new Error(`Vídeo ${videoId} não encontrado`);
+    }
+
+    // Verificar estado do vídeo
+    const videoState = getVideoState(videoId);
+    if (!videoState || videoState.state !== VIDEO_STATES.READY) {
+      throw new Error(`Vídeo não está pronto para processamento. Estado: ${videoState?.state || 'unknown'}`);
     }
 
     // ===============================
@@ -123,6 +131,13 @@ export const generateVideoSeries = async (job, jobsMap) => {
     const sourceStats = fs.statSync(sourceVideoPath);
     if (sourceStats.size === 0) {
       throw new Error('Arquivo de vídeo está vazio');
+    }
+
+    // Validar vídeo com ffprobe (garantir que é válido)
+    try {
+      await validateVideoWithFfprobe(sourceVideoPath);
+    } catch (validationError) {
+      throw new Error(`Vídeo inválido: ${validationError.message}`);
     }
 
     console.log(`[PROCESSING] Vídeo validado: ${sourceVideoPath}`);

@@ -5,12 +5,15 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     ca-certificates \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Baixar yt-dlp binário oficial
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+# Instalar yt-dlp via pip (mais confiável que binário standalone)
+RUN pip3 install --no-cache-dir yt-dlp
+
+# Verificar instalação
+RUN yt-dlp --version && ffmpeg -version
 
 WORKDIR /app
 
@@ -19,5 +22,9 @@ RUN npm ci --only=production
 
 COPY . .
 
+# Garantir que /tmp/uploads existe
+RUN mkdir -p /tmp/uploads
+
 EXPOSE 3000
 CMD ["node", "index.js"]
+

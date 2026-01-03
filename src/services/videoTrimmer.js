@@ -21,19 +21,25 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
       return reject(new Error('Duração inválida para trim'));
     }
 
+    // Frame-accurate cutting para clips sequenciais
+    // Usar -ss antes de -i para seeking preciso (mais rápido)
+    // Usar -t para duração exata
     ffmpeg(inputPath)
-      .setStartTime(startTime)
-      .setDuration(duration)
+      .seekInput(startTime) // Seeking antes do input é mais preciso
       .output(outputPath)
       .outputOptions([
-        '-preset veryfast',
-        '-movflags +faststart',
-        '-pix_fmt yuv420p'
+        '-t', duration.toString(), // Duração exata
+        '-c:v', 'libx264', // Forçar h264
+        '-c:a', 'aac', // Forçar aac
+        '-preset', 'veryfast', // Velocidade
+        '-crf', '23', // Qualidade balanceada
+        '-movflags', '+faststart', // Streaming otimizado
+        '-pix_fmt', 'yuv420p', // Compatibilidade
+        '-avoid_negative_ts', 'make_zero', // Evitar timestamps negativos
+        '-fflags', '+genpts' // Regenerar timestamps precisos
       ])
-      .videoCodec('libx264')
-      .audioCodec('aac')
       .on('start', cmd => {
-        console.log('[FFMPEG] Trim iniciado');
+        console.log('[FFMPEG] Trim iniciado:', cmd);
       })
       .on('end', () => {
         if (!fs.existsSync(outputPath)) {
@@ -45,11 +51,18 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
           return reject(new Error('Arquivo de saída vazio'));
         }
 
+        console.log(`[FFMPEG] Trim concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
         resolve(outputPath);
       })
       .on('error', err => {
         console.error('[FFMPEG] Erro no trim:', err.message);
         reject(err);
+      })
+      .on('progress', (progress) => {
+        // Log progresso para debugging
+        if (progress.percent) {
+          console.log(`[FFMPEG] Progresso trim: ${progress.percent.toFixed(1)}%`);
+        }
       })
       .run();
   });
@@ -86,19 +99,24 @@ export async function splitVideoIntoClips(
 
   const clips = [];
 
+  // Sequencial frame-accurate: cada clip começa exatamente onde o anterior termina
+  // Garante que não há gaps ou overlaps
   for (let i = 0; i < numberOfClips; i++) {
-    const clipStart = startTime + i * clipDuration;
-    const clipEnd = clipStart + clipDuration;
+    const clipStart = startTime + (i * clipDuration);
+    // Não usar clipEnd - usar apenas clipStart + clipDuration para garantir precisão
+    const clipDurationExact = clipDuration;
 
     const clipPath = path.join(
       outputDir,
       `clip_${String(i + 1).padStart(3, '0')}.mp4`
     );
 
-    await trimVideo(inputPath, clipPath, clipStart, clipEnd);
+    console.log(`[CLIP] Gerando clip ${i + 1}/${numberOfClips}: ${clipStart}s - ${clipStart + clipDurationExact}s`);
+
+    await trimVideo(inputPath, clipPath, clipStart, clipStart + clipDurationExact);
     clips.push(clipPath);
 
-    console.log(`[CLIP] ${i + 1}/${numberOfClips} gerado`);
+    console.log(`[CLIP] Clip ${i + 1}/${numberOfClips} concluído`);
   }
 
   return clips;

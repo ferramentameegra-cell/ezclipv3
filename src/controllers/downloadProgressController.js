@@ -3,16 +3,25 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sanitizeYouTubeUrl, extractVideoId } from '../services/youtubeUrlUtils.js';
-import { downloadYouTubeVideoWithProgress } from '../services/youtubeDownloaderWithProgress.js';
-import { downloadYouTubeVideo as downloadVideoService } from '../services/youtubeDownloader.js';
+import { downloadWithYtDlpFixed, isYtDlpAvailable } from '../services/ytdlpDownloaderFixed.js';
+import { validateVideoWithFfprobe } from '../services/videoValidator.js';
+import { 
+  initVideoState, 
+  updateVideoState, 
+  getVideoState,
+  VIDEO_STATES 
+} from '../services/videoStateManager.js';
 import { videoStore } from './downloadController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const TMP_UPLOADS_DIR = '/tmp/uploads';
+
 /**
  * GET /api/download/progress
  * Download de vídeo com progresso em tempo real via Server-Sent Events (SSE)
+ * REFATORADO: Usa state machine e validação robusta
  */
 export const downloadWithProgress = async (req, res) => {
   const { url } = req.query;
@@ -29,10 +38,17 @@ export const downloadWithProgress = async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Desabilitar buffering no nginx
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Railway CORS
 
   const sendEvent = (data) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    try {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch (error) {
+      console.error('[SSE] Erro ao enviar evento:', error);
+    }
   };
+
+  let storedVideoId = null;
 
   try {
     // Sanitizar URL
@@ -43,127 +59,149 @@ export const downloadWithProgress = async (req, res) => {
       sendEvent({ 
         success: false,
         error: 'URL do YouTube inválida',
-        progress: 0
+        progress: 0,
+        state: VIDEO_STATES.ERROR
       });
       res.end();
       return;
     }
 
     // Gerar ID único para o vídeo baixado
-    const storedVideoId = uuidv4();
-    const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
+    storedVideoId = uuidv4();
+    const videoPath = path.join(TMP_UPLOADS_DIR, `${storedVideoId}.mp4`);
 
     // Garantir diretório existe
-    const uploadDir = path.dirname(videoPath);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(TMP_UPLOADS_DIR)) {
+      fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
     }
 
-    console.log(`[DOWNLOAD-PROGRESS] Iniciando download com progresso: ${sanitizedUrl} -> ${videoPath}`);
+    // Inicializar estado
+    initVideoState(storedVideoId);
+    updateVideoState(storedVideoId, {
+      state: VIDEO_STATES.DOWNLOADING,
+      progress: 0
+    });
+
+    console.log(`[DOWNLOAD-PROGRESS] Iniciando download: ${sanitizedUrl} -> ${videoPath}`);
 
     sendEvent({ 
       success: true,
       progress: 0,
-      message: 'Iniciando download...',
-      videoId: storedVideoId
+      message: 'Verificando yt-dlp...',
+      videoId: storedVideoId,
+      state: VIDEO_STATES.DOWNLOADING
     });
 
-    let downloadSuccess = false;
-    let downloadError = null;
+    // Verificar se yt-dlp está disponível
+    const ytdlpAvailable = await isYtDlpAvailable();
+    if (!ytdlpAvailable) {
+      throw new Error('yt-dlp não está disponível no sistema. Verifique a instalação.');
+    }
 
-    // Tentar yt-dlp com progresso
+    sendEvent({ 
+      success: true,
+      progress: 5,
+      message: 'Iniciando download...',
+      videoId: storedVideoId,
+      state: VIDEO_STATES.DOWNLOADING
+    });
+
+    // Download com yt-dlp corrigido
     try {
-      await downloadYouTubeVideoWithProgress(
+      await downloadWithYtDlpFixed(
         sanitizedUrl,
         videoPath,
         (percent, downloaded, total, status) => {
+          const progress = Math.min(95, Math.max(5, percent)); // Máximo 95% antes da validação
+          updateVideoState(storedVideoId, {
+            progress: progress,
+            state: VIDEO_STATES.DOWNLOADING
+          });
+
           const message = status === 'finished' 
-            ? 'Download concluído' 
+            ? 'Download concluído, validando vídeo...' 
             : `Baixando... ${percent.toFixed(1)}%`;
           
           sendEvent({ 
             success: true,
-            progress: percent,
+            progress: progress,
             downloaded: downloaded,
             total: total,
             status: status,
             message: message,
-            videoId: storedVideoId
+            videoId: storedVideoId,
+            state: VIDEO_STATES.DOWNLOADING
           });
         }
       );
-      downloadSuccess = true;
-      console.log(`[DOWNLOAD-PROGRESS] Download concluído com yt-dlp: ${videoPath}`);
-    } catch (ytdlpError) {
-      console.error(`[DOWNLOAD-PROGRESS] yt-dlp falhou: ${ytdlpError.message}`);
-      downloadError = ytdlpError;
+
+      console.log(`[DOWNLOAD-PROGRESS] Download concluído: ${videoPath}`);
+    } catch (downloadError) {
+      console.error(`[DOWNLOAD-PROGRESS] Erro no download: ${downloadError.message}`);
+      updateVideoState(storedVideoId, {
+        state: VIDEO_STATES.ERROR,
+        error: downloadError.message
+      });
       
-      // Tentar fallback para ytdl-core (sem progresso granular)
-      try {
-        sendEvent({ 
-          success: true,
-          progress: 50,
-          status: 'downloading',
-          message: 'Tentando método alternativo...',
-          videoId: storedVideoId
-        });
-
-        await downloadVideoService(videoId, videoPath);
-        downloadSuccess = true;
-        
-        sendEvent({ 
-          success: true,
-          progress: 100,
-          status: 'finished',
-          message: 'Download concluído',
-          videoId: storedVideoId
-        });
-
-        console.log(`[DOWNLOAD-PROGRESS] Download concluído com ytdl-core: ${videoPath}`);
-      } catch (fallbackError) {
-        console.error(`[DOWNLOAD-PROGRESS] Erro no download (fallback também falhou): ${fallbackError.message}`);
-        downloadError = fallbackError;
-      }
-    }
-
-    // Validar download
-    if (!downloadSuccess || !fs.existsSync(videoPath)) {
-      const errorMessage = downloadError?.message || 'Erro desconhecido';
       sendEvent({ 
         success: false,
-        error: `Falha ao baixar vídeo: ${errorMessage}`,
-        progress: 0
+        error: `Falha ao baixar vídeo: ${downloadError.message}`,
+        progress: 0,
+        state: VIDEO_STATES.ERROR
       });
       res.end();
       return;
+    }
+
+    // Validar que arquivo existe
+    if (!fs.existsSync(videoPath)) {
+      throw new Error('Arquivo não foi criado após download');
     }
 
     const stats = fs.statSync(videoPath);
     if (stats.size === 0) {
       fs.unlinkSync(videoPath);
+      throw new Error('Arquivo baixado está vazio');
+    }
+
+    // VALIDAÇÃO CRÍTICA: Usar ffprobe para validar vídeo
+    sendEvent({ 
+      success: true,
+      progress: 96,
+      message: 'Validando vídeo...',
+      videoId: storedVideoId,
+      state: VIDEO_STATES.PROCESSING
+    });
+
+    updateVideoState(storedVideoId, {
+      state: VIDEO_STATES.PROCESSING,
+      progress: 96
+    });
+
+    let videoMetadata;
+    try {
+      videoMetadata = await validateVideoWithFfprobe(videoPath);
+      console.log(`[DOWNLOAD-PROGRESS] Vídeo validado: ${videoMetadata.duration}s, ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+    } catch (validationError) {
+      console.error(`[DOWNLOAD-PROGRESS] Erro na validação: ${validationError.message}`);
+      // Limpar arquivo inválido
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+      }
+      
+      updateVideoState(storedVideoId, {
+        state: VIDEO_STATES.ERROR,
+        error: `Vídeo inválido: ${validationError.message}`
+      });
+
       sendEvent({ 
         success: false,
-        error: 'Arquivo baixado está vazio',
-        progress: 0
+        error: `Vídeo baixado é inválido: ${validationError.message}`,
+        progress: 0,
+        state: VIDEO_STATES.ERROR
       });
       res.end();
       return;
-    }
-
-    // Obter informações do vídeo (duração)
-    let duration = 0;
-    try {
-      const ffmpeg = (await import('fluent-ffmpeg')).default;
-      await new Promise((resolve) => {
-        ffmpeg.ffprobe(videoPath, (err, metadata) => {
-          if (!err && metadata?.format?.duration) {
-            duration = Math.floor(metadata.format.duration);
-          }
-          resolve();
-        });
-      });
-    } catch (error) {
-      console.warn(`[DOWNLOAD-PROGRESS] Erro ao obter duração: ${error.message}`);
     }
 
     // Armazenar informações do vídeo
@@ -172,36 +210,56 @@ export const downloadWithProgress = async (req, res) => {
       youtubeUrl: sanitizedUrl,
       youtubeVideoId: videoId,
       path: videoPath,
-      duration: duration,
+      duration: videoMetadata.duration,
       fileSize: stats.size,
       downloaded: true,
-      downloadedAt: new Date()
+      downloadedAt: new Date(),
+      validated: true,
+      metadata: videoMetadata
     };
 
     videoStore.set(storedVideoId, videoInfo);
 
-    console.log(`[DOWNLOAD-PROGRESS] Vídeo pronto: ${storedVideoId} (${(stats.size / 1024 / 1024).toFixed(2)} MB, ${duration}s)`);
+    // Estado READY
+    updateVideoState(storedVideoId, {
+      state: VIDEO_STATES.READY,
+      progress: 100,
+      metadata: videoMetadata
+    });
+
+    console.log(`[DOWNLOAD-PROGRESS] Vídeo pronto: ${storedVideoId} (${(stats.size / 1024 / 1024).toFixed(2)} MB, ${videoMetadata.duration}s)`);
 
     // Enviar conclusão
     sendEvent({ 
       success: true,
       progress: 100,
-      message: 'Download concluído',
+      message: 'Vídeo pronto!',
       videoId: storedVideoId,
       playableUrl: `/api/play/${storedVideoId}`,
-      duration: duration,
+      duration: videoMetadata.duration,
       fileSize: stats.size,
-      completed: true
+      completed: true,
+      state: VIDEO_STATES.READY,
+      ready: true // Flag explícita para frontend
     });
 
     res.end();
 
   } catch (error) {
-    console.error('[DOWNLOAD-PROGRESS] Erro:', error);
+    console.error('[DOWNLOAD-PROGRESS] Erro geral:', error);
+    
+    if (storedVideoId) {
+      updateVideoState(storedVideoId, {
+        state: VIDEO_STATES.ERROR,
+        error: error.message
+      });
+    }
+    
     sendEvent({ 
       success: false,
       error: `Erro ao processar download: ${error.message}`,
-      progress: 0
+      progress: 0,
+      state: VIDEO_STATES.ERROR
     });
     res.end();
   }
