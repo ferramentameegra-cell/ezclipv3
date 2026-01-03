@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 
-export function downloadProgressController(req, res) {
+export function downloadWithProgress(req, res) {
   const { url } = req.query;
 
   if (!url) {
@@ -23,10 +23,12 @@ export function downloadProgressController(req, res) {
 
   ytdlp.stdout.on("data", (data) => {
     const text = data.toString();
-
     const match = text.match(/(\d{1,3}\.\d)%/);
+
     if (match) {
-      res.write(`data: ${JSON.stringify({ progress: match[1] })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({ progress: Number(match[1]) })}\n\n`
+      );
     }
   });
 
