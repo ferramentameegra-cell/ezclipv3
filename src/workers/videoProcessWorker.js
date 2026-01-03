@@ -1,68 +1,91 @@
+import fs from 'fs';
+import path from 'path';
 import { videoProcessQueue } from '../queue/queue.js';
-import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
-import { videoStore } from '../controllers/videoController.js';
+import { splitVideoIntoClips, trimVideo } from '../services/videoTrimmer.js';
 
-setVideoStore(videoStore);
+const BASE_TMP_DIR = '/tmp/uploads';
+const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
+// garantir diretórios
+if (!fs.existsSync(BASE_TMP_DIR)) {
+  fs.mkdirSync(BASE_TMP_DIR, { recursive: true });
+}
+if (!fs.existsSync(SERIES_DIR)) {
+  fs.mkdirSync(SERIES_DIR, { recursive: true });
+}
+
+/**
+ * Worker principal
+ */
 videoProcessQueue.process('generate-video-series', async (job) => {
   const {
-    videoId,
-    nicheId,
-    retentionVideoId,
+    seriesId,
+    videoPath,
     numberOfCuts,
-    headlineStyle,
-    font,
-    trimStart,
-    trimEnd,
-    cutDuration,
-    seriesId
+    trimStart = 0,
+    trimEnd = null,
+    cutDuration = 60
   } = job.data;
 
-  console.log(`[WORKER] Processando série ${seriesId} | job ${job.id}`);
+  console.log(`[WORKER] Iniciando série ${seriesId}`);
 
   try {
-    const jobData = {
-      id: job.id, // ✅ USAR job.id
-      seriesId,
-      videoId,
-      nicheId,
-      retentionVideoId,
-      numberOfCuts,
-      headlineStyle,
-      font,
-      trimStart,
-      trimEnd,
+    // 🔥 FONTE DA VERDADE = ARQUIVO
+    if (!videoPath || !fs.existsSync(videoPath)) {
+      throw new Error(`Arquivo de vídeo não encontrado: ${videoPath}`);
+    }
+
+    await job.progress(10);
+
+    // preparar pasta da série
+    const seriesPath = path.join(SERIES_DIR, seriesId);
+    if (!fs.existsSync(seriesPath)) {
+      fs.mkdirSync(seriesPath, { recursive: true });
+    }
+
+    let processedVideoPath = videoPath;
+
+    // aplicar trim se necessário
+    if (trimEnd && trimEnd > trimStart) {
+      const trimmedPath = path.join(BASE_TMP_DIR, `${seriesId}_trimmed.mp4`);
+      processedVideoPath = await trimVideo(
+        videoPath,
+        trimmedPath,
+        trimStart,
+        trimEnd
+      );
+    }
+
+    await job.progress(40);
+
+    // gerar clips
+    const clips = await splitVideoIntoClips(
+      processedVideoPath,
+      seriesPath,
       cutDuration,
-      status: 'processing',
-      progress: 0
-    };
+      0,
+      null
+    );
 
-    const jobsMap = new Map();
-    jobsMap.set(job.id, jobData);
-
-    // 🔥 ponte correta de progresso
-    const originalSet = jobsMap.set.bind(jobsMap);
-    jobsMap.set = (key, value) => {
-      originalSet(key, value);
-      if (key === job.id && typeof value.progress === 'number') {
-        job.progress(value.progress);
-      }
-    };
-
-    await generateVideoSeries(jobData, jobsMap);
+    // progresso incremental
+    for (let i = 0; i < clips.length; i++) {
+      const percent = 40 + Math.round(((i + 1) / clips.length) * 60);
+      await job.progress(percent);
+    }
 
     await job.progress(100);
+
+    console.log(`[WORKER] Série finalizada (${clips.length} clips)`);
 
     return {
       success: true,
       seriesId,
-      clipsCount: jobData.clipsCount
+      clipsCount: clips.length
     };
-
   } catch (error) {
     console.error('[WORKER] Erro:', error);
     throw error;
   }
 });
 
-console.log('[WORKER] Video Process Worker iniciado');
+console.log('[WORKER] VideoProcessWorker ativo');
