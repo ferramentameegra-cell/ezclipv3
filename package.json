@@ -1,6 +1,7 @@
 {
   "name": "ezclip-backend",
   "version": "1.0.0",
+  "description": "EZ Clips AI Backend",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -8,11 +9,13 @@
     "dev": "node --watch src/index.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^9.0.1"
   }
 }
