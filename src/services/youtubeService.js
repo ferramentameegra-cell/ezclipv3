@@ -1,13 +1,18 @@
 /**
- * SERVICE YOUTUBE - USANDO yt-dlp CLI (ESTÁVEL)
- * NÃO usa bibliotecas npm, apenas yt-dlp binário do sistema
+ * SERVICE YOUTUBE - LEGADO (NÃO USADO)
+ * 
+ * ⚠️  ESTE ARQUIVO NÃO É MAIS USADO
+ * 
+ * Foi substituído por youtubeServiceStable.js que usa yt-dlp CLI
+ * Este arquivo é mantido apenas para referência e NÃO deve ser importado
+ * 
+ * Se você está vendo este comentário, significa que algum código ainda
+ * está tentando importar este arquivo. Por favor, atualize para usar
+ * youtubeServiceStable.js ao invés.
  */
 
-// IMPORTANTE: Este arquivo foi substituído por youtubeServiceStable.js
-// Mantido para compatibilidade temporária
-// TODO: Migrar completamente para youtubeServiceStable.js
-
-import ytdl from '@distube/ytdl-core';
+// DESABILITADO: Este arquivo não deve ser importado
+// import ytdl from '@distube/ytdl-core';
 
 /**
  * Valida URL do YouTube

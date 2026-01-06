@@ -1,9 +1,10 @@
 /**
  * NOVO CONTROLLER YOUTUBE - LIMPO
  * Apenas valida URL e retorna metadata
+ * Usa youtubeServiceStable.js (yt-dlp CLI) ao invés de youtubeService.js (ytdl-core)
  */
 
-import { getYouTubeVideoInfo } from '../services/youtubeService.js';
+import { getYouTubeVideoInfo } from '../services/youtubeServiceStable.js';
 
 /**
  * GET /api/youtube/info?url=YOUTUBE_URL
