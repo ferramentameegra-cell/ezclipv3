@@ -10,6 +10,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import youtubeRoutes from './routes/youtube.js';
+import downloadRoutes from './routes/download.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,7 @@ app.use(express.json());
 // ROTAS API
 // ============================================
 app.use('/api/youtube', youtubeRoutes);
+app.use('/api', downloadRoutes);
 
 // ============================================
 // FRONTEND ESTÁTICO
@@ -67,12 +69,59 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
+// VERIFICAR BINÁRIOS DO SISTEMA (STEP 1)
+// ============================================
+import { spawn } from 'child_process';
+
+async function checkSystemBinaries() {
+  console.log('[STARTUP] Verificando binários do sistema...');
+  
+  // Verificar yt-dlp
+  const ytdlpAvailable = await new Promise((resolve) => {
+    const proc = spawn('yt-dlp', ['--version'], { stdio: 'pipe' });
+    proc.on('close', (code) => resolve(code === 0));
+    proc.on('error', () => resolve(false));
+    setTimeout(() => {
+      proc.kill();
+      resolve(false);
+    }, 3000);
+  });
+  
+  if (!ytdlpAvailable) {
+    console.error('[STARTUP] ⚠️  AVISO: yt-dlp não está disponível. Downloads falharão.');
+  } else {
+    console.log('[STARTUP] ✅ yt-dlp disponível');
+  }
+  
+  // Verificar ffprobe
+  const ffprobeAvailable = await new Promise((resolve) => {
+    const proc = spawn('ffprobe', ['-version'], { stdio: 'pipe' });
+    proc.on('close', (code) => resolve(code === 0));
+    proc.on('error', () => resolve(false));
+    setTimeout(() => {
+      proc.kill();
+      resolve(false);
+    }, 3000);
+  });
+  
+  if (!ffprobeAvailable) {
+    console.error('[STARTUP] ⚠️  AVISO: ffprobe não está disponível. Duração não será calculada.');
+  } else {
+    console.log('[STARTUP] ✅ ffprobe disponível');
+  }
+  
+  return { ytdlpAvailable, ffprobeAvailable };
+}
+
+// ============================================
 // SERVER START
 // ============================================
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server started on port ${PORT}`);
-  console.log(`📡 Health: http://0.0.0.0:${PORT}/health`);
-  console.log(`📁 Static files: ${publicPath}`);
+checkSystemBinaries().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server started on port ${PORT}`);
+    console.log(`📡 Health: http://0.0.0.0:${PORT}/health`);
+    console.log(`📁 Static files: ${publicPath}`);
+  });
 });
 
 // Error handling global
