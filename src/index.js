@@ -17,6 +17,7 @@ import nichesRoutes from './routes/niches.js';
 import retentionRoutes from './routes/retention.js';
 import trimRoutes from './routes/trim.js';
 import generateRoutes from './routes/generate.js';
+import transcriptionRoutes from './routes/transcription.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,9 @@ app.use('/api/trim', trimRoutes);
 
 // Geração de Séries (Legado)
 app.use('/api/generate', generateRoutes);
+
+// Transcrição (AssemblyAI)
+app.use('/api/transcription', transcriptionRoutes);
 
 // ============================================
 // FRONTEND ESTÁTICO
@@ -106,6 +110,8 @@ app.get('/', (req, res) => {
       // Trim
       trim: 'POST /api/trim',
       trimCountClips: 'POST /api/trim/count-clips',
+      // Transcrição
+      transcription: 'POST /api/transcription/:videoId',
       // Geração (Legado)
       generateSeries: 'POST /api/generate/series',
       generateStatus: 'GET /api/generate/status/:jobId'
