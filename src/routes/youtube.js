@@ -1,7 +1,7 @@
 import express from 'express';
 import { getYouTubeInfo } from '../controllers/youtubeController.js';
 import { downloadWithProgress, getVideoState } from '../controllers/downloadProgressController.js';
-import { playVideo } from '../controllers/downloadController.js';
+import { playVideo } from '../controllers/youtubeStableController.js';
 
 const router = express.Router();
 
