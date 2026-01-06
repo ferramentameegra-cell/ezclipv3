@@ -266,7 +266,7 @@ export function downloadWithProgress(req, res) {
         
         cleanupOnError();
         
-        res.write(`event: error\ndata: ${JSON.stringify({
+        res.write(`data: ${JSON.stringify({
           success: false,
           error: errorMessage,
           state: "error"
