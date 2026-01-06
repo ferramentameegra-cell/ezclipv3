@@ -12,6 +12,11 @@ import { fileURLToPath } from 'url';
 import youtubeRoutes from './routes/youtube.js';
 import downloadRoutes from './routes/download.js';
 import aiRoutes from './routes/ai.js';
+import authRoutes from './routes/auth.js';
+import nichesRoutes from './routes/niches.js';
+import retentionRoutes from './routes/retention.js';
+import trimRoutes from './routes/trim.js';
+import generateRoutes from './routes/generate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,9 +39,27 @@ app.use(express.json());
 // ============================================
 // ROTAS API
 // ============================================
+// YouTube e Download
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api', downloadRoutes);
+
+// IA (Transcrição e Geração de Clips)
 app.use('/api/ai', aiRoutes);
+
+// Autenticação
+app.use('/api/auth', authRoutes);
+
+// Nichos
+app.use('/api/niches', nichesRoutes);
+
+// Vídeos de Retenção
+app.use('/api/retention', retentionRoutes);
+
+// Trim
+app.use('/api/trim', trimRoutes);
+
+// Geração de Séries (Legado)
+app.use('/api/generate', generateRoutes);
 
 // ============================================
 // FRONTEND ESTÁTICO
@@ -61,11 +84,31 @@ app.get('/', (req, res) => {
     version: '2.0.0-stable',
     endpoints: {
       health: 'GET /health',
+      // YouTube e Download
       youtubeInfo: 'GET /api/youtube/info?url=YOUTUBE_URL',
-      acknowledge: 'POST /api/youtube/acknowledge',
-      download: 'POST /api/youtube/download',
-      play: 'GET /api/youtube/play/:videoId',
-      duration: 'GET /api/youtube/duration/:videoId'
+      youtubeDownload: 'GET /api/youtube/download/progress?url=YOUTUBE_URL',
+      youtubeState: 'GET /api/youtube/download/state/:videoId',
+      youtubePlay: 'GET /api/youtube/play/:videoId',
+      // IA
+      aiTranscribe: 'POST /api/ai/transcribe',
+      aiGenerateClips: 'POST /api/ai/generate-clips',
+      aiClip: 'GET /api/ai/clip/:seriesId/:index',
+      // Autenticação
+      authRegister: 'POST /api/auth/register',
+      authLogin: 'POST /api/auth/login',
+      authMe: 'GET /api/auth/me',
+      // Nichos
+      niches: 'GET /api/niches',
+      nicheDetails: 'GET /api/niches/:nicheId',
+      // Retenção
+      retention: 'GET /api/retention',
+      retentionByNiche: 'GET /api/retention/niche/:nicheId',
+      // Trim
+      trim: 'POST /api/trim',
+      trimCountClips: 'POST /api/trim/count-clips',
+      // Geração (Legado)
+      generateSeries: 'POST /api/generate/series',
+      generateStatus: 'GET /api/generate/status/:jobId'
     }
   });
 });
