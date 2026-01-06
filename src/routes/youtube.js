@@ -1,24 +1,20 @@
-/**
- * ROTAS YOUTUBE ESTÁVEIS
- * Usa yt-dlp CLI e fluxo síncrono
- */
-
 import express from 'express';
-import {
-  getYouTubeInfo,
-  acknowledgeConsent,
-  downloadVideo,
-  playVideo,
-  getVideoDuration
-} from '../controllers/youtubeStableController.js';
+import { getYouTubeInfo } from '../controllers/youtubeController.js';
+import { downloadWithProgress, getVideoState } from '../controllers/downloadProgressController.js';
+import { playVideo } from '../controllers/downloadController.js';
 
 const router = express.Router();
 
-// Rotas específicas (ordem importa - específicas primeiro)
+// METADATA
 router.get('/info', getYouTubeInfo);
-router.post('/acknowledge', acknowledgeConsent);
-router.post('/download', downloadVideo);
+
+// DOWNLOAD COM PROGRESSO (USADO PELO FRONTEND)
+router.get('/download/progress', downloadWithProgress);
+
+// ESTADO DO VÍDEO (DURAÇÃO PARA O TRIM)
+router.get('/download/state/:videoId', getVideoState);
+
+// STREAM DO VÍDEO
 router.get('/play/:videoId', playVideo);
-router.get('/duration/:videoId', getVideoDuration);
 
 export default router;
