@@ -2,10 +2,11 @@
   "name": "ezv2",
   "version": "2.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js",
+    "start": "node src/index.js",
+    "start:legacy": "node index.js",
+    "dev": "node --watch src/index.js",
     "worker": "node worker.js",
     "build": "echo 'Build complete'"
   },

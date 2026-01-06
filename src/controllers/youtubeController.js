@@ -1,257 +1,48 @@
-import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { downloadWithYtDlp, isYtDlpAvailable } from '../services/ytdlpDownloader.js';
-import { downloadYouTubeVideo } from '../services/youtubeDownloader.js';
+/**
+ * NOVO CONTROLLER YOUTUBE - LIMPO
+ * Apenas valida URL e retorna metadata
+ */
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Store para vídeos baixados
-const youtubeVideoStore = new Map();
+import { getYouTubeVideoInfo } from '../services/youtubeService.js';
 
 /**
- * Download de vídeo do YouTube
- * Retorna URL jogável imediatamente após download completo
+ * GET /api/youtube/info?url=YOUTUBE_URL
+ * Valida URL do YouTube e retorna metadata do vídeo
  */
-export const downloadYouTubeVideoEndpoint = async (req, res) => {
+export const getYouTubeInfo = async (req, res) => {
   try {
-    const { youtubeUrl } = req.body;
+    const { url } = req.query;
 
-    if (!youtubeUrl) {
-      return res.status(400).json({ 
-        error: 'URL do YouTube não fornecida' 
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL do YouTube não fornecida. Use: /api/youtube/info?url=YOUTUBE_URL'
       });
     }
 
-    // Extrair video ID
-    let videoId = null;
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/.*[?&]v=([^&\n?#]+)/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = youtubeUrl.trim().match(pattern);
-      if (match) {
-        videoId = match[1];
-        break;
-      }
-    }
+    // Validar e obter metadata
+    const metadata = await getYouTubeVideoInfo(url);
 
-    if (!videoId) {
-      return res.status(400).json({ 
-        error: 'URL do YouTube inválida' 
-      });
-    }
-
-    // Gerar ID único para o vídeo baixado
-    const storedVideoId = uuidv4();
-    const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
-
-    // Garantir diretório existe
-    const uploadDir = path.dirname(videoPath);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    console.log(`[YOUTUBE] Iniciando download: ${youtubeUrl} -> ${videoPath}`);
-
-    // Tentar yt-dlp-wrap primeiro (compatível com containers)
-    let downloadSuccess = false;
-    let downloadError = null;
-    let finalVideoPath = videoPath;
-
-    try {
-      const ytdlpAvailable = await isYtDlpAvailable();
-      if (ytdlpAvailable) {
-        console.log(`[YOUTUBE] Tentando download com yt-dlp-wrap...`);
-        finalVideoPath = await downloadWithYtDlp(youtubeUrl.trim(), videoPath);
-        downloadSuccess = true;
-        console.log(`[YOUTUBE] Download concluído com yt-dlp-wrap: ${finalVideoPath}`);
-      } else {
-        throw new Error('yt-dlp-wrap não disponível');
-      }
-    } catch (error) {
-      console.warn(`[YOUTUBE] yt-dlp-wrap falhou, tentando ytdl-core: ${error.message}`);
-      downloadError = error;
-      
-      // Fallback para ytdl-core
-      try {
-        console.log(`[YOUTUBE] Tentando download com ytdl-core...`);
-        await downloadYouTubeVideo(videoId, videoPath);
-        finalVideoPath = videoPath;
-        downloadSuccess = true;
-        console.log(`[YOUTUBE] Download concluído com ytdl-core: ${finalVideoPath}`);
-      } catch (fallbackError) {
-        console.error(`[YOUTUBE] Erro no download (ytdl-core também falhou): ${fallbackError.message}`);
-        downloadError = fallbackError;
-      }
-    }
-
-    // Validar download
-    if (!downloadSuccess || !fs.existsSync(finalVideoPath)) {
-      const errorMessage = downloadError?.message || 'Erro desconhecido';
-      console.error(`[YOUTUBE] Falha no download: ${errorMessage}`);
-      return res.status(500).json({ 
-        error: `Falha ao baixar vídeo: ${errorMessage}`,
-        details: process.env.NODE_ENV === 'development' ? downloadError?.stack : undefined
-      });
-    }
-
-    const stats = fs.statSync(finalVideoPath);
-    if (stats.size === 0) {
-      fs.unlinkSync(finalVideoPath);
-      return res.status(500).json({ 
-        error: 'Arquivo baixado está vazio' 
-      });
-    }
-
-    // Atualizar caminho se yt-dlp-wrap retornou caminho diferente
-    if (finalVideoPath !== videoPath) {
-      // Mover arquivo para o caminho esperado se necessário
-      try {
-        if (fs.existsSync(videoPath)) {
-          fs.unlinkSync(videoPath);
-        }
-        fs.renameSync(finalVideoPath, videoPath);
-        finalVideoPath = videoPath;
-        console.log(`[YOUTUBE] Arquivo movido para caminho esperado: ${videoPath}`);
-      } catch (moveError) {
-        console.warn(`[YOUTUBE] Não foi possível mover arquivo, usando caminho original: ${moveError.message}`);
-      }
-    }
-
-    // Obter informações do vídeo (duração)
-    let duration = 0;
-    try {
-      const ffmpeg = (await import('fluent-ffmpeg')).default;
-      await new Promise((resolve, reject) => {
-        ffmpeg.ffprobe(finalVideoPath, (err, metadata) => {
-          if (err) {
-            console.warn(`[YOUTUBE] Erro ao obter metadados: ${err.message}`);
-            resolve();
-          } else {
-            duration = Math.floor(metadata.format.duration || 0);
-            console.log(`[YOUTUBE] Duração do vídeo: ${duration}s`);
-            resolve();
-          }
-        });
-      });
-    } catch (error) {
-      console.warn(`[YOUTUBE] Erro ao obter duração: ${error.message}`);
-    }
-
-    // Armazenar informações do vídeo
-    const videoInfo = {
-      id: storedVideoId,
-      youtubeUrl: youtubeUrl.trim(),
-      youtubeVideoId: videoId,
-      path: finalVideoPath,
-      duration: duration,
-      fileSize: stats.size,
-      downloaded: true,
-      downloadedAt: new Date(),
-      localVideoUrl: `/api/youtube/play/${storedVideoId}`,
-      playableUrl: `/api/youtube/play/${storedVideoId}`
-    };
-
-    youtubeVideoStore.set(storedVideoId, videoInfo);
-
-    console.log(`[YOUTUBE] Vídeo pronto: ${storedVideoId} (${(stats.size / 1024 / 1024).toFixed(2)} MB, ${duration}s)`);
-
-    // Retornar URL jogável imediatamente
-    res.json({
+    return res.json({
       success: true,
-      videoId: storedVideoId,
-      playableUrl: videoInfo.playableUrl,
-      localVideoUrl: videoInfo.localVideoUrl,
-      duration: duration,
-      fileSize: stats.size,
-      message: 'Vídeo baixado e pronto para uso'
+      ...metadata
     });
 
   } catch (error) {
-    console.error('[YOUTUBE] Erro:', error);
-    res.status(500).json({ 
-      error: `Erro ao processar vídeo: ${error.message}` 
+    console.error('[YOUTUBE-CONTROLLER] Erro:', error);
+
+    // Erros de validação = 400
+    if (error.message.includes('inválida') || error.message.includes('invalid')) {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Outros erros = 500
+    return res.status(500).json({
+      success: false,
+      error: `Erro ao obter informações do vídeo: ${error.message}`
     });
   }
 };
-
-/**
- * Obter informações do vídeo baixado
- */
-export const getVideoInfo = (req, res) => {
-  try {
-    const { videoId } = req.params;
-    const video = youtubeVideoStore.get(videoId);
-
-    if (!video) {
-      return res.status(404).json({ error: 'Vídeo não encontrado' });
-    }
-
-    res.json({
-      videoId: video.id,
-      playableUrl: video.playableUrl,
-      duration: video.duration,
-      fileSize: video.fileSize,
-      downloaded: video.downloaded
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-/**
- * Servir vídeo baixado para player HTML5
- */
-export const playVideo = (req, res) => {
-  try {
-    const { videoId } = req.params;
-    const video = youtubeVideoStore.get(videoId);
-
-    if (!video || !video.path) {
-      return res.status(404).json({ error: 'Vídeo não encontrado' });
-    }
-
-    if (!fs.existsSync(video.path)) {
-      return res.status(404).json({ error: 'Arquivo de vídeo não encontrado' });
-    }
-
-    const stat = fs.statSync(video.path);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = (end - start) + 1;
-      const file = fs.createReadStream(video.path, { start, end });
-      const head = {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize,
-        'Content-Type': 'video/mp4',
-      };
-      res.writeHead(206, head);
-      file.pipe(res);
-    } else {
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': 'video/mp4',
-      };
-      res.writeHead(200, head);
-      fs.createReadStream(video.path).pipe(res);
-    }
-  } catch (error) {
-    console.error('[YOUTUBE] Erro ao servir vídeo:', error);
-    res.status(500).json({ error: error.message });
-  }
-};
-
-// Exportar store para uso em outros módulos
-export { youtubeVideoStore };
-

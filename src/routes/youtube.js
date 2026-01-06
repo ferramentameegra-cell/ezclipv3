@@ -1,16 +1,15 @@
+/**
+ * NOVA ROTA YOUTUBE - LIMPA
+ * Não importa código legado
+ */
+
 import express from 'express';
-import {
-  downloadYouTubeVideo,
-  playVideo
-} from '../controllers/downloadController.js';
+import { getYouTubeInfo } from '../controllers/youtubeController.js';
 
 const router = express.Router();
 
-// POST /api/youtube/download
-router.post('/download', downloadYouTubeVideo);
+// GET /api/youtube/info?url=YOUTUBE_URL
+// Retorna metadata do vídeo (título, duração, thumbnail)
+router.get('/info', getYouTubeInfo);
 
-// GET /api/youtube/play/:videoId
-router.get('/play/:videoId', playVideo);
-
-// ⚠️ OBRIGATÓRIO
 export default router;
