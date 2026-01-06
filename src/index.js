@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import youtubeRoutes from './routes/youtube.js';
 import downloadRoutes from './routes/download.js';
+import aiRoutes from './routes/ai.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +36,7 @@ app.use(express.json());
 // ============================================
 app.use('/api/youtube', youtubeRoutes);
 app.use('/api', downloadRoutes);
+app.use('/api/ai', aiRoutes);
 
 // ============================================
 // FRONTEND ESTÁTICO
