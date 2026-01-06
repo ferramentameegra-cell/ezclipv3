@@ -1,15 +1,24 @@
 /**
- * NOVA ROTA YOUTUBE - LIMPA
- * Não importa código legado
+ * ROTAS YOUTUBE ESTÁVEIS
+ * Usa yt-dlp CLI e fluxo síncrono
  */
 
 import express from 'express';
-import { getYouTubeInfo } from '../controllers/youtubeController.js';
+import {
+  getYouTubeInfo,
+  acknowledgeConsent,
+  downloadVideo,
+  playVideo,
+  getVideoDuration
+} from '../controllers/youtubeStableController.js';
 
 const router = express.Router();
 
-// GET /api/youtube/info?url=YOUTUBE_URL
-// Retorna metadata do vídeo (título, duração, thumbnail)
+// Rotas específicas (ordem importa - específicas primeiro)
 router.get('/info', getYouTubeInfo);
+router.post('/acknowledge', acknowledgeConsent);
+router.post('/download', downloadVideo);
+router.get('/play/:videoId', playVideo);
+router.get('/duration/:videoId', getVideoDuration);
 
 export default router;

@@ -15,7 +15,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Railway: PORT é obrigatório, não usar fallback
+if (!process.env.PORT) {
+  console.error('ERROR: PORT environment variable is required');
+  process.exit(1);
+}
+const PORT = parseInt(process.env.PORT, 10);
 
 // ============================================
 // MIDDLEWARES
@@ -47,11 +53,15 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'EZ Clips AI - Clean Backend',
-    version: '2.0.0-clean',
+    status: 'EZ Clips AI - Stable Backend',
+    version: '2.0.0-stable',
     endpoints: {
-      health: '/health',
-      youtubeInfo: 'GET /api/youtube/info?url=YOUTUBE_URL'
+      health: 'GET /health',
+      youtubeInfo: 'GET /api/youtube/info?url=YOUTUBE_URL',
+      acknowledge: 'POST /api/youtube/acknowledge',
+      download: 'POST /api/youtube/download',
+      play: 'GET /api/youtube/play/:videoId',
+      duration: 'GET /api/youtube/duration/:videoId'
     }
   });
 });
@@ -60,7 +70,17 @@ app.get('/', (req, res) => {
 // SERVER START
 // ============================================
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Clean Backend rodando na porta ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`📁 Public files: ${publicPath}`);
+  console.log(`✅ Server started on port ${PORT}`);
+  console.log(`📡 Health: http://0.0.0.0:${PORT}/health`);
+  console.log(`📁 Static files: ${publicPath}`);
+});
+
+// Error handling global
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
 });
