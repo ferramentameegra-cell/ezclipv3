@@ -215,7 +215,8 @@ export function downloadWithProgress(req, res) {
       
       cleanupOnError();
       
-      res.write(`event: error\ndata: ${JSON.stringify({
+      // Enviar erro como mensagem padrão para garantir que frontend receba
+      res.write(`data: ${JSON.stringify({
         success: false,
         error: errorMessage,
         state: "error"
@@ -229,7 +230,7 @@ export function downloadWithProgress(req, res) {
       const errorMessage = "Arquivo não foi criado após download. Tente novamente.";
       console.error(`[DOWNLOAD] ${errorMessage}`);
       
-      res.write(`event: error\ndata: ${JSON.stringify({
+      res.write(`data: ${JSON.stringify({
         success: false,
         error: errorMessage,
         state: "error"
@@ -264,7 +265,7 @@ export function downloadWithProgress(req, res) {
       const errorMessage = `Erro ao verificar arquivo: ${statError.message}`;
       console.error(`[DOWNLOAD] ${errorMessage}`);
       
-      res.write(`event: error\ndata: ${JSON.stringify({
+      res.write(`data: ${JSON.stringify({
         success: false,
         error: errorMessage,
         state: "error"
@@ -289,8 +290,8 @@ export function downloadWithProgress(req, res) {
 
     console.log(`[DOWNLOAD] Download concluído: ${videoId} (${duration}s, ${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
 
-    // Evento de conclusão
-    res.write(`event: completed\ndata: ${JSON.stringify({
+    // Evento de conclusão (enviar como mensagem padrão)
+    res.write(`data: ${JSON.stringify({
       success: true,
       completed: true,
       ready: true,
@@ -316,7 +317,7 @@ export function downloadWithProgress(req, res) {
       errorMessage = `Erro ao executar yt-dlp: ${error.message}`;
     }
     
-    res.write(`event: error\ndata: ${JSON.stringify({
+    res.write(`data: ${JSON.stringify({
       success: false,
       error: errorMessage,
       state: "error"

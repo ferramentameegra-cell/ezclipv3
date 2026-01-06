@@ -539,70 +539,99 @@ async function downloadWithProgress(url) {
     return new Promise((resolve, reject) => {
         const eventSource = new EventSource(`${API_BASE}/api/download/progress?url=${encodeURIComponent(url)}`);
         let lastProgress = 0;
+        let hasResolved = false;
         
+        // Handler para mensagens padrão
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('[SSE] Evento recebido:', data);
                 
-                if (data.error) {
-                    eventSource.close();
-                    showStatus(data.error, 'error');
-                    clearDownloadProgress();
-                    reject(new Error(data.error));
+                // Verificar erro primeiro
+                if (data.error || data.state === 'error') {
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        eventSource.close();
+                        showStatus(data.error || 'Erro ao baixar vídeo', 'error');
+                        clearDownloadProgress();
+                        reject(new Error(data.error || 'Erro desconhecido'));
+                    }
                     return;
                 }
                 
-                if (data.progress !== undefined) {
+                // Progresso
+                if (data.progress !== undefined && data.state === 'downloading') {
                     lastProgress = data.progress;
                     updateDownloadProgress(data.progress, data.message || 'Baixando...');
+                    return;
                 }
                 
+                // Conclusão
                 if (data.completed && data.videoId && data.ready && data.state === 'ready') {
-                    eventSource.close();
-                    
-                    // Vídeo baixado e VALIDADO - pronto para uso
-                    appState.videoId = data.videoId;
-                    appState.videoInfo = {
-                        id: data.videoId,
-                        playableUrl: data.playableUrl,
-                        duration: data.duration,
-                        downloaded: true,
-                        validated: true,
-                        state: 'ready'
-                    };
-                    
-                    showStatus('Vídeo baixado e validado com sucesso!', 'success');
-                    
-                    // Renderizar player IMEDIATAMENTE com arquivo baixado
-                    renderVideoPlayer(data.playableUrl);
-                    
-                    // Exibir trim tool APENAS quando estado === ready
-                    showTrimSection();
-                    setupTrimControlsForVideo({
-                        duration: data.duration,
-                        playableUrl: data.playableUrl
-                    });
-                    
-                    clearDownloadProgress();
-                    resolve(data);
-                } else if (data.error || data.state === 'error') {
-                    // Erro explícito
-                    eventSource.close();
-                    showStatus(data.error || 'Erro ao baixar vídeo', 'error');
-                    clearDownloadProgress();
-                    reject(new Error(data.error || 'Erro desconhecido'));
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        eventSource.close();
+                        
+                        // Vídeo baixado e VALIDADO - pronto para uso
+                        appState.videoId = data.videoId;
+                        appState.videoInfo = {
+                            id: data.videoId,
+                            playableUrl: data.playableUrl,
+                            duration: data.duration || data.videoDuration,
+                            downloaded: true,
+                            validated: true,
+                            state: 'ready'
+                        };
+                        
+                        console.log('[SSE] Vídeo pronto:', {
+                            videoId: data.videoId,
+                            duration: data.duration,
+                            playableUrl: data.playableUrl
+                        });
+                        
+                        showStatus('Vídeo baixado e validado com sucesso!', 'success');
+                        
+                        // Renderizar player IMEDIATAMENTE com arquivo baixado
+                        renderVideoPlayer(data.playableUrl);
+                        
+                        // Exibir trim tool APENAS quando estado === ready
+                        showTrimSection();
+                        
+                        // Aguardar um pouco para garantir que elementos estão prontos
+                        setTimeout(() => {
+                            setupTrimControlsForVideo({
+                                duration: data.duration || data.videoDuration,
+                                playableUrl: data.playableUrl
+                            });
+                        }, 100);
+                        
+                        clearDownloadProgress();
+                        resolve(data);
+                    }
+                    return;
                 }
             } catch (error) {
-                console.error('[SSE] Erro ao processar evento:', error);
+                console.error('[SSE] Erro ao processar evento:', error, event.data);
+                if (!hasResolved) {
+                    hasResolved = true;
+                    eventSource.close();
+                    showStatus('Erro ao processar resposta do servidor', 'error');
+                    clearDownloadProgress();
+                    reject(error);
+                }
             }
         };
         
+        // Handler para erros de conexão
         eventSource.onerror = (error) => {
-            console.error('[SSE] Erro na conexão:', error);
-            eventSource.close();
-            clearDownloadProgress();
-            showStatus('Erro na conexão de download', 'error');
-            reject(error);
+            console.error('[SSE] Erro na conexão SSE:', error);
+            if (!hasResolved) {
+                hasResolved = true;
+                eventSource.close();
+                clearDownloadProgress();
+                showStatus('Erro na conexão de download. Tente novamente.', 'error');
+                reject(new Error('Erro na conexão SSE'));
+            }
         };
     });
 }
@@ -787,23 +816,35 @@ function setupTrimControls() {
 function setupTrimControlsForVideo(video) {
     const duration = video.duration || appState.videoInfo?.duration || 0;
     
-    if (duration === 0) {
-        console.warn('[TRIM] Duração do vídeo não disponível');
+    if (duration === 0 || !duration) {
+        console.warn('[TRIM] Duração do vídeo não disponível:', duration);
+        showStatus('Duração do vídeo não disponível. Aguarde o processamento.', 'error');
         return;
     }
     
+    console.log('[TRIM] Configurando trim para vídeo de', duration, 'segundos');
+    
     // Inicializar estado
     appState.trimStart = 0;
-    appState.trimEnd = duration;
-    appState.videoDuration = duration;
+    appState.trimEnd = Math.floor(duration);
+    appState.videoDuration = Math.floor(duration);
+    
+    // Atualizar timecodes imediatamente
+    const startTimecode = document.getElementById('start-timecode');
+    const endTimecode = document.getElementById('end-timecode');
+    const trimDurationEl = document.getElementById('trim-duration');
+    
+    if (startTimecode) startTimecode.textContent = formatTime(0);
+    if (endTimecode) endTimecode.textContent = formatTime(Math.floor(duration));
+    if (trimDurationEl) trimDurationEl.textContent = formatTime(Math.floor(duration));
     
     // Inicializar timeline drag-based
-    initializeTimeline(duration);
+    initializeTimeline(Math.floor(duration));
     
     // Calcular clips inicial
     calculateClips();
     
-    console.log('[TRIM] Timeline drag-based configurada para vídeo de', duration, 'segundos');
+    console.log('[TRIM] Timeline configurada - Início:', appState.trimStart, 'Fim:', appState.trimEnd);
 }
 
 /**
@@ -831,7 +872,7 @@ function initializeTimeline(duration) {
     function updateTimeline() {
         const startPx = (startPercent / 100) * trackWidth;
         const endPx = (endPercent / 100) * trackWidth;
-        const selectedWidth = endPx - startPx;
+        const selectedWidth = Math.max(0, endPx - startPx);
         
         selected.style.left = startPx + 'px';
         selected.style.width = selectedWidth + 'px';
@@ -840,24 +881,35 @@ function initializeTimeline(duration) {
         handleEnd.style.left = endPx + 'px';
         
         // Calcular tempos em segundos
-        const startTime = (startPercent / 100) * duration;
-        const endTime = (endPercent / 100) * duration;
-        const trimDuration = endTime - startTime;
+        const startTime = Math.max(0, (startPercent / 100) * duration);
+        const endTime = Math.min(duration, (endPercent / 100) * duration);
+        const trimDuration = Math.max(0, endTime - startTime);
         
         // Atualizar estado
         appState.trimStart = Math.floor(startTime);
         appState.trimEnd = Math.floor(endTime);
         
-        // Atualizar timecodes
-        document.getElementById('start-timecode').textContent = formatTime(appState.trimStart);
-        document.getElementById('end-timecode').textContent = formatTime(appState.trimEnd);
-        document.getElementById('trim-duration').textContent = formatTime(Math.floor(trimDuration));
-        document.getElementById('handle-start-timecode').textContent = formatTime(appState.trimStart);
-        document.getElementById('handle-end-timecode').textContent = formatTime(appState.trimEnd);
+        // Atualizar timecodes (verificar se elementos existem)
+        const startTimecodeEl = document.getElementById('start-timecode');
+        const endTimecodeEl = document.getElementById('end-timecode');
+        const trimDurationEl = document.getElementById('trim-duration');
+        const handleStartTimecodeEl = document.getElementById('handle-start-timecode');
+        const handleEndTimecodeEl = document.getElementById('handle-end-timecode');
+        
+        if (startTimecodeEl) startTimecodeEl.textContent = formatTime(appState.trimStart);
+        if (endTimecodeEl) endTimecodeEl.textContent = formatTime(appState.trimEnd);
+        if (trimDurationEl) trimDurationEl.textContent = formatTime(Math.floor(trimDuration));
+        if (handleStartTimecodeEl) handleStartTimecodeEl.textContent = formatTime(appState.trimStart);
+        if (handleEndTimecodeEl) handleEndTimecodeEl.textContent = formatTime(appState.trimEnd);
         
         // Calcular clips em tempo real
         calculateClips();
+        
+        console.log('[TRIM] Atualizado - Início:', appState.trimStart, 'Fim:', appState.trimEnd, 'Duração:', trimDuration);
     }
+    
+    // Atualizar timeline inicialmente
+    updateTimeline();
     
     // Converter posição do mouse para percentual
     function getPercentFromEvent(e) {
