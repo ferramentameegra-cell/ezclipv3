@@ -347,8 +347,9 @@ export function downloadWithProgress(req, res) {
 
   // Timeout de segurança - fechar conexão se demorar muito
   const timeout = setTimeout(() => {
-    if (!res.headersSent || res.writableEnded === false) {
-      try {
+    try {
+      // Verificar se conexão ainda está aberta
+      if (res.headersSent && !res.closed) {
         console.error(`[DOWNLOAD] Timeout após 30 segundos`);
         res.write(`data: ${JSON.stringify({
           success: false,
@@ -356,9 +357,10 @@ export function downloadWithProgress(req, res) {
           state: "error"
         })}\n\n`);
         res.end();
-      } catch (e) {
-        // Ignorar se já fechou
       }
+    } catch (e) {
+      // Ignorar se já fechou
+      console.warn(`[DOWNLOAD] Erro ao enviar timeout: ${e.message}`);
     }
   }, 30000); // 30 segundos
 

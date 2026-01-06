@@ -12,6 +12,7 @@ import fs from 'fs';
 const userConsent = new Map();
 
 // Store de vídeos em memória
+// NOTA: videoStore é compartilhado com downloadProgressController
 const videoStore = new Map();
 
 /**
