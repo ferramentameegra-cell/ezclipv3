@@ -1,8 +1,5 @@
 /**
  * NOVO BACKEND LIMPO - ENTRYPOINT PRINCIPAL
- *
- * Este é o único arquivo executado quando a aplicação inicia.
- * NÃO importa código legado (workers/, queue/, controllers antigos).
  */
 
 import express from 'express';
@@ -15,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // ============================================
 // MIDDLEWARES
@@ -24,11 +21,10 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================
-// ROTAS API (ESPECÍFICAS PRIMEIRO)
+// ROTAS API
 // ============================================
 app.use('/api/youtube', youtubeRoutes);
 
-// Rota base da API (informativa)
 app.get('/api', (req, res) => {
   res.json({
     status: 'ok',
@@ -52,12 +48,12 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// FRONTEND ESTÁTICO (SEMPRE POR ÚLTIMO)
+// FRONTEND ESTÁTICO
 // ============================================
 const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 
-// fallback para SPA (se usar JS frontend)
+// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -67,6 +63,4 @@ app.get('*', (req, res) => {
 // ============================================
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Clean Backend rodando na porta ${PORT}`);
-  console.log(`📡 Health check: /health`);
-  console.log(`📁 Public files: ${publicPath}`);
 });
