@@ -624,13 +624,33 @@ async function downloadWithProgress(url) {
         
         // Handler para erros de conexão
         eventSource.onerror = (error) => {
-            console.error('[SSE] Erro na conexão SSE:', error);
-            if (!hasResolved) {
-                hasResolved = true;
-                eventSource.close();
-                clearDownloadProgress();
-                showStatus('Erro na conexão de download. Tente novamente.', 'error');
-                reject(new Error('Erro na conexão SSE'));
+            console.error('[SSE] Erro na conexão SSE:', error, eventSource.readyState);
+            
+            // EventSource.readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
+            if (eventSource.readyState === EventSource.CLOSED) {
+                if (!hasResolved) {
+                    hasResolved = true;
+                    eventSource.close();
+                    clearDownloadProgress();
+                    
+                    // Tentar obter mais informações do erro
+                    let errorMsg = 'Erro na conexão com o servidor. ';
+                    
+                    // Verificar se é problema de CORS ou conexão
+                    if (!eventSource.url.includes(window.location.hostname) && window.location.protocol === 'https:' && eventSource.url.includes('http:')) {
+                        errorMsg += 'Erro de protocolo (HTTPS/HTTP).';
+                    } else {
+                        errorMsg += 'Verifique sua conexão e tente novamente.';
+                    }
+                    
+                    showStatus(errorMsg, 'error');
+                    reject(new Error('Erro na conexão SSE'));
+                }
+            }
+            // Se ainda está CONNECTING, aguardar um pouco antes de dar erro
+            else if (eventSource.readyState === EventSource.CONNECTING) {
+                console.warn('[SSE] Reconectando...');
+                // Não fazer nada ainda, deixar EventSource tentar reconectar
             }
         };
     });

@@ -121,23 +121,38 @@ function parseYtDlpError(stderr, exitCode) {
 }
 
 export function downloadWithProgress(req, res) {
-  const cleanUrl = sanitizeYouTubeUrl(req.query.url);
+  try {
+    console.log(`[DOWNLOAD] Requisição recebida: ${req.query.url}`);
+    
+    // Configurar SSE headers ANTES de qualquer operação
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Access-Control-Allow-Origin", "*"); // CORS para SSE
+    res.flushHeaders();
 
-  if (!cleanUrl) {
-    res.write(`event: error\ndata: ${JSON.stringify({
-      success: false,
-      error: "URL do YouTube inválida. Use formato: https://youtube.com/watch?v=VIDEO_ID ou https://youtu.be/VIDEO_ID"
+    const cleanUrl = sanitizeYouTubeUrl(req.query.url);
+
+    if (!cleanUrl) {
+      console.error(`[DOWNLOAD] URL inválida: ${req.query.url}`);
+      res.write(`data: ${JSON.stringify({
+        success: false,
+        error: "URL do YouTube inválida. Use formato: https://youtube.com/watch?v=VIDEO_ID ou https://youtu.be/VIDEO_ID",
+        state: "error"
+      })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Enviar mensagem inicial para garantir conexão SSE está ativa
+    console.log(`[DOWNLOAD] Enviando mensagem inicial SSE`);
+    res.write(`data: ${JSON.stringify({
+      status: "starting",
+      state: "starting",
+      message: "Iniciando download...",
+      progress: 0
     })}\n\n`);
-    res.end();
-    return;
-  }
-
-  // SSE headers
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
 
   // Criar diretório
   const uploadsDir = "/tmp/uploads";
@@ -317,13 +332,65 @@ export function downloadWithProgress(req, res) {
       errorMessage = `Erro ao executar yt-dlp: ${error.message}`;
     }
     
-    res.write(`data: ${JSON.stringify({
-      success: false,
-      error: errorMessage,
-      state: "error"
-    })}\n\n`);
-    res.end();
+    try {
+      res.write(`data: ${JSON.stringify({
+        success: false,
+        error: errorMessage,
+        state: "error"
+      })}\n\n`);
+      res.end();
+    } catch (writeError) {
+      console.error(`[DOWNLOAD] Erro ao escrever resposta SSE: ${writeError.message}`);
+      // Se já fechou a conexão, não podemos fazer nada
+    }
   });
+
+  // Timeout de segurança - fechar conexão se demorar muito
+  const timeout = setTimeout(() => {
+    if (!res.headersSent || res.writableEnded === false) {
+      try {
+        console.error(`[DOWNLOAD] Timeout após 30 segundos`);
+        res.write(`data: ${JSON.stringify({
+          success: false,
+          error: "Timeout: Download demorou muito para iniciar. Tente novamente.",
+          state: "error"
+        })}\n\n`);
+        res.end();
+      } catch (e) {
+        // Ignorar se já fechou
+      }
+    }
+  }, 30000); // 30 segundos
+
+  // Limpar timeout quando conexão fechar
+  res.on('close', () => {
+    console.log(`[DOWNLOAD] Conexão SSE fechada pelo cliente`);
+    clearTimeout(timeout);
+    if (!ytdlp.killed) {
+      ytdlp.kill();
+    }
+  });
+  
+  } catch (error) {
+    console.error(`[DOWNLOAD] Erro fatal: ${error.message}`, error);
+    try {
+      if (!res.headersSent) {
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive"
+        });
+      }
+      res.write(`data: ${JSON.stringify({
+        success: false,
+        error: `Erro ao iniciar download: ${error.message}`,
+        state: "error"
+      })}\n\n`);
+      res.end();
+    } catch (e) {
+      // Se já fechou, não há o que fazer
+    }
+  }
 }
 
 export function getVideoState(req, res) {
