@@ -1,5 +1,5 @@
 /**
- * NOVO BACKEND LIMPO - ENTRYPOINT PRINCIPAL
+ * ENTRYPOINT PRINCIPAL - ESTÁVEL PARA PRODUÇÃO RAILWAY
  * 
  * Este é o único arquivo executado quando a aplicação inicia.
  * NÃO importa código legado (workers/, queue/, controllers legados).
@@ -47,7 +47,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '2.0.0-clean'
+    version: '2.0.0-stable'
   });
 });
 

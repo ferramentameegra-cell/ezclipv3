@@ -1,7 +1,11 @@
 /**
- * NOVO SERVICE YOUTUBE - LIMPO
- * Valida URLs e obtém metadata usando @distube/ytdl-core
+ * SERVICE YOUTUBE - USANDO yt-dlp CLI (ESTÁVEL)
+ * NÃO usa bibliotecas npm, apenas yt-dlp binário do sistema
  */
+
+// IMPORTANTE: Este arquivo foi substituído por youtubeServiceStable.js
+// Mantido para compatibilidade temporária
+// TODO: Migrar completamente para youtubeServiceStable.js
 
 import ytdl from '@distube/ytdl-core';
 
