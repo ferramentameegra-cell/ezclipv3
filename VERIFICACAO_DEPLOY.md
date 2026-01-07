@@ -123,3 +123,4 @@ Todas as verificações passaram. O bug foi corrigido:
 - ✅ Trim funciona no arquivo local
 - ✅ Nenhum embed do YouTube no fluxo principal
 
+

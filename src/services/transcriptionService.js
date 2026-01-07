@@ -170,3 +170,4 @@ export async function transcribeVideo(videoPath, language = 'pt') {
   }
 }
 
+

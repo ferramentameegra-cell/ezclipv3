@@ -10,6 +10,85 @@ import { v4 as uuidv4 } from "uuid";
 
 export const videoStore = new Map();
 
+// Cache do comando yt-dlp detectado
+let ytDlpCommandCache = null;
+
+/**
+ * Detecta o comando yt-dlp disponível no sistema
+ */
+async function detectYtDlpCommand() {
+  // Se já foi detectado, usar cache
+  if (ytDlpCommandCache) {
+    return ytDlpCommandCache;
+  }
+
+  const possibleCommands = [
+    { cmd: 'yt-dlp', args: ['--version'] },
+    { cmd: '/usr/local/bin/yt-dlp', args: ['--version'] },
+    { cmd: '/usr/bin/yt-dlp', args: ['--version'] },
+    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'] },
+    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'] }
+  ];
+
+  for (const { cmd, args } of possibleCommands) {
+    const available = await new Promise((resolve) => {
+      try {
+        const proc = spawn(cmd, args, { stdio: 'pipe' });
+        let output = '';
+        
+        proc.stdout.on('data', (data) => { output += data.toString(); });
+        proc.stderr.on('data', (data) => { output += data.toString(); });
+        
+        proc.on('close', (code) => {
+          resolve(code === 0 || output.includes('yt-dlp'));
+        });
+        
+        proc.on('error', () => resolve(false));
+        
+        setTimeout(() => {
+          if (!proc.killed) proc.kill();
+          resolve(false);
+        }, 2000);
+      } catch {
+        resolve(false);
+      }
+    });
+
+    if (available) {
+      if (args.includes('-m')) {
+        ytDlpCommandCache = { executable: cmd, useModule: true };
+      } else {
+        ytDlpCommandCache = { executable: cmd, useModule: false };
+      }
+      console.log(`[DOWNLOAD] ✅ yt-dlp detectado: ${ytDlpCommandCache.executable}${ytDlpCommandCache.useModule ? ' -m yt_dlp' : ''}`);
+      return ytDlpCommandCache;
+    }
+  }
+
+  console.error('[DOWNLOAD] ❌ yt-dlp não encontrado');
+  ytDlpCommandCache = { executable: 'yt-dlp', useModule: false };
+  return ytDlpCommandCache;
+}
+
+/**
+ * Cria argumentos para spawn do yt-dlp baseado no comando detectado
+ */
+function buildYtDlpArgs(downloadArgs) {
+  const cmd = ytDlpCommandCache || { executable: 'yt-dlp', useModule: false };
+  
+  if (cmd.useModule) {
+    return {
+      executable: cmd.executable,
+      args: ['-m', 'yt_dlp', ...downloadArgs]
+    };
+  } else {
+    return {
+      executable: cmd.executable,
+      args: downloadArgs
+    };
+  }
+}
+
 function sanitizeYouTubeUrl(url) {
   try {
     const u = new URL(url);
@@ -120,7 +199,7 @@ function parseYtDlpError(stderr, exitCode) {
   return `Erro ao baixar vídeo (código ${exitCode}). Verifique a URL e tente novamente.`;
 }
 
-export function downloadWithProgress(req, res) {
+export async function downloadWithProgress(req, res) {
   try {
     console.log(`[DOWNLOAD] Requisição recebida: ${req.query.url}`);
     
@@ -165,8 +244,47 @@ export function downloadWithProgress(req, res) {
 
   console.log(`[DOWNLOAD] Iniciando: ${cleanUrl} -> ${outputPath}`);
 
-  // Comando yt-dlp com formato seguro
-  const ytdlp = spawn("yt-dlp", [
+  // Detectar comando yt-dlp disponível ANTES de iniciar o processo
+  await detectYtDlpCommand();
+  
+  // Verificar se yt-dlp foi encontrado (se não, o cache ainda terá executable: 'yt-dlp')
+  if (!ytDlpCommandCache || (ytDlpCommandCache.executable === 'yt-dlp' && !ytDlpCommandCache.useModule)) {
+    // Testar se 'yt-dlp' direto funciona (pode ser que esteja no PATH)
+    const testAvailable = await new Promise((resolve) => {
+      const testProc = spawn('yt-dlp', ['--version'], { stdio: 'pipe' });
+      testProc.on('close', (code) => resolve(code === 0));
+      testProc.on('error', () => {
+        // Se falhar, tentar python3 -m yt_dlp
+        const testProc2 = spawn('python3', ['-m', 'yt_dlp', '--version'], { stdio: 'pipe' });
+        testProc2.on('close', (code) => resolve(code === 0));
+        testProc2.on('error', () => resolve(false));
+        setTimeout(() => {
+          if (!testProc2.killed) testProc2.kill();
+          resolve(false);
+        }, 2000);
+      });
+      setTimeout(() => {
+        if (!testProc.killed) testProc.kill();
+        resolve(false);
+      }, 2000);
+    });
+    
+    if (!testAvailable) {
+      res.write(`data: ${JSON.stringify({
+        success: false,
+        error: "yt-dlp não está disponível no servidor. Contate o suporte.",
+        state: "error"
+      })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Se funcionou, atualizar cache
+    ytDlpCommandCache = { executable: 'yt-dlp', useModule: false };
+  }
+  
+  // Preparar argumentos do yt-dlp
+  const downloadArgs = [
     "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
     "--merge-output-format", "mp4",
     "--no-playlist",
@@ -174,7 +292,13 @@ export function downloadWithProgress(req, res) {
     "--newline",
     "-o", outputPath,
     cleanUrl
-  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  ];
+  
+  const { executable, args } = buildYtDlpArgs(downloadArgs);
+  console.log(`[DOWNLOAD] Executando: ${executable} ${args.join(' ')}`);
+  
+  // Comando yt-dlp com formato seguro
+  const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let lastProgress = 0;
   let stderr = "";

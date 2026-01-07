@@ -217,3 +217,4 @@ Retorne APENAS o JSON, sem explicações adicionais.`;
   }
 }
 
+

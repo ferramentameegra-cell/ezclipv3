@@ -48,3 +48,4 @@ videoProcessQueue.process('generate-video-series', async job => {
     clipsCount: clips.length
   };
 });
+

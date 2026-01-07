@@ -60,3 +60,4 @@ Acesse para verificar se está funcionando:
 - Para armazenamento persistente, configure o Cloudflare R2
 
 
+

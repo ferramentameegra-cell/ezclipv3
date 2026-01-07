@@ -83,3 +83,4 @@ git log --oneline -3
 3. Force um novo deploy no Railway (se aplicável)
 
 
+

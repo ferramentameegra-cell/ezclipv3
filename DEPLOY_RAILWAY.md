@@ -110,3 +110,4 @@ No Railway Dashboard → Settings → Variables, você pode adicionar:
 
 **Nota:** O método mais simples é conectar o GitHub diretamente no Railway. O deploy será automático a cada push!
 
+

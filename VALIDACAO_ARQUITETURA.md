@@ -179,3 +179,4 @@ Todas as validações passaram:
 - ✅ Compatível com Railway
 - ✅ Nenhuma modificação na UI
 
+

@@ -110,3 +110,4 @@
 - Otimizar qualidade/compressão baseado no tamanho final
 - Adicionar cache de vídeos baixados
 
+

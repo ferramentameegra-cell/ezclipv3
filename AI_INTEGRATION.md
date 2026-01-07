@@ -210,3 +210,4 @@ Todos os serviços logam:
 3. Adicionar cache de transcrições (evitar re-transcrever mesmo vídeo)
 4. Adicionar progresso via SSE para geração de clips (opcional)
 
+

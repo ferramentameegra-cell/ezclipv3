@@ -228,3 +228,4 @@ O sistema está pronto para produção no Railway com:
 - ✅ UI reativa a estados reais
 - ✅ Erros não falham silenciosamente
 
+

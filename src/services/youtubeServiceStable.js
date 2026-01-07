@@ -33,41 +33,113 @@ function validateYouTubeUrl(url) {
 
 /**
  * Verifica se yt-dlp está disponível
+ * Tenta diferentes caminhos possíveis
  */
 async function checkYtDlpAvailable() {
-  return new Promise((resolve) => {
-    const process = spawn('yt-dlp', ['--version'], { stdio: 'pipe' });
-    process.on('close', (code) => resolve(code === 0));
-    process.on('error', () => resolve(false));
-    setTimeout(() => {
-      process.kill();
-      resolve(false);
-    }, 3000);
-  });
+  const possibleCommands = [
+    { cmd: 'yt-dlp', args: ['--version'] },
+    { cmd: '/usr/local/bin/yt-dlp', args: ['--version'] },
+    { cmd: '/usr/bin/yt-dlp', args: ['--version'] },
+    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'] },
+    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'] }
+  ];
+
+  for (const { cmd, args } of possibleCommands) {
+    const available = await new Promise((resolve) => {
+      try {
+        const proc = spawn(cmd, args, { stdio: 'pipe' });
+        let output = '';
+        
+        proc.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+        
+        proc.stderr.on('data', (data) => {
+          output += data.toString();
+        });
+        
+        proc.on('close', (code) => {
+          if (code === 0 || output.includes('yt-dlp')) {
+            const fullCmd = args.includes('-m') ? `${cmd} -m yt_dlp` : cmd;
+            console.log(`[YT-DLP] ✅ Encontrado: ${fullCmd}`);
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        });
+        
+        proc.on('error', (error) => {
+          resolve(false);
+        });
+        
+        setTimeout(() => {
+          if (!proc.killed) {
+            proc.kill();
+            resolve(false);
+          }
+        }, 3000);
+      } catch (error) {
+        resolve(false);
+      }
+    });
+
+    if (available) {
+      // Retornar comando completo para uso posterior
+      if (args.includes('-m')) {
+        return { available: true, command: `${cmd} -m yt_dlp` };
+      } else {
+        return { available: true, command: cmd };
+      }
+    }
+  }
+
+  console.error('[YT-DLP] ❌ Não encontrado em nenhum dos caminhos testados');
+  return { available: false, command: 'yt-dlp' };
 }
 
 /**
  * Obtém metadata do vídeo usando yt-dlp CLI com JSON output
  */
+// Variável global para cache do comando yt-dlp
+let ytDlpCommand = 'yt-dlp';
+
 export async function getYouTubeVideoInfo(url) {
   const videoId = validateYouTubeUrl(url);
   console.log(`[YT-DLP] Obtendo info para: ${videoId}`);
 
-  // Verificar disponibilidade
-  const available = await checkYtDlpAvailable();
-  if (!available) {
+  // Verificar disponibilidade e cachear comando
+  const checkResult = await checkYtDlpAvailable();
+  if (!checkResult.available) {
     throw new Error('yt-dlp não está disponível no sistema. Verifique a instalação.');
   }
+  ytDlpCommand = checkResult.command;
 
   return new Promise((resolve, reject) => {
-    const args = [
-      '--dump-json',
-      '--no-warnings',
-      '--no-playlist',
-      url
-    ];
+    // Preparar comando e argumentos baseado no tipo de comando
+    let executable, args;
+    if (ytDlpCommand.includes('python') && ytDlpCommand.includes('-m')) {
+      // Formato: "python3 -m yt_dlp"
+      const parts = ytDlpCommand.split(' ');
+      executable = parts[0]; // python3
+      args = parts.slice(1).concat([  // ['-m', 'yt_dlp'] + outros args
+        '--dump-json',
+        '--no-warnings',
+        '--no-playlist',
+        url
+      ]);
+    } else {
+      // Formato: "yt-dlp" (binário direto)
+      executable = ytDlpCommand;
+      args = [
+        '--dump-json',
+        '--no-warnings',
+        '--no-playlist',
+        url
+      ];
+    }
 
-    const process = spawn('yt-dlp', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    console.log(`[YT-DLP] Executando: ${executable} ${args.join(' ')}`);
+    const process = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     
     let stdout = '';
     let stderr = '';
@@ -129,6 +201,15 @@ export async function downloadYouTubeVideo(url, outputPath) {
   const videoId = validateYouTubeUrl(url);
   console.log(`[YT-DLP] Download: ${videoId} -> ${outputPath}`);
 
+  // Verificar disponibilidade e cachear comando se necessário
+  const checkResult = await checkYtDlpAvailable();
+  if (!checkResult.available) {
+    throw new Error('yt-dlp não está disponível no sistema. Verifique a instalação.');
+  }
+  if (checkResult.command) {
+    ytDlpCommand = checkResult.command;
+  }
+
   // Garantir diretório existe
   const dir = path.dirname(outputPath);
   if (!fs.existsSync(dir)) {
@@ -141,7 +222,9 @@ export async function downloadYouTubeVideo(url, outputPath) {
   }
 
   return new Promise((resolve, reject) => {
-    const args = [
+    // Preparar comando e argumentos baseado no tipo de comando
+    let executable, args;
+    const baseArgs = [
       '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
@@ -150,7 +233,19 @@ export async function downloadYouTubeVideo(url, outputPath) {
       url
     ];
 
-    const process = spawn('yt-dlp', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    if (ytDlpCommand.includes('python') && ytDlpCommand.includes('-m')) {
+      // Formato: "python3 -m yt_dlp"
+      const parts = ytDlpCommand.split(' ');
+      executable = parts[0]; // python3
+      args = parts.slice(1).concat(baseArgs); // ['-m', 'yt_dlp'] + baseArgs
+    } else {
+      // Formato: "yt-dlp" (binário direto)
+      executable = ytDlpCommand;
+      args = baseArgs;
+    }
+
+    console.log(`[YT-DLP] Executando download: ${executable} ${args.join(' ')}`);
+    const process = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';

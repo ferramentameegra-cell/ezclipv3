@@ -191,3 +191,4 @@ Todas as validações passaram. A lógica está correta e funcionando:
 - ✅ Nenhum embed do YouTube
 - ✅ Compatível com Railway
 
+

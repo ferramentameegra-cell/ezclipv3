@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import youtubeRoutes from "./routes/youtube.js";
+import authRoutes from "./routes/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,7 @@ app.use(express.json());
 // API
 // =====================
 app.use("/api/youtube", youtubeRoutes);
+app.use("/api/auth", authRoutes);
 
 // =====================
 // FRONTEND ESTÁTICO
