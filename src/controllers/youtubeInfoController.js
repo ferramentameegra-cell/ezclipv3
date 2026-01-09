@@ -12,7 +12,6 @@ export const getYouTubeInfo = (req, res) => {
 
     exec(cmd, { maxBuffer: 1024 * 1024 * 20 }, (err, stdout) => {
       if (err) {
-        console.error('[INFO ERROR]', err);
         return res.status(500).json({ error: 'Falha ao obter info do vídeo' });
       }
 
@@ -26,13 +25,11 @@ export const getYouTubeInfo = (req, res) => {
           thumbnail: info.thumbnail,
           author: info.uploader
         });
-      } catch (parseErr) {
-        console.error('[INFO PARSE ERROR]', parseErr);
+      } catch {
         return res.status(500).json({ error: 'Erro ao processar metadata' });
       }
     });
-  } catch (error) {
-    console.error('[INFO FATAL]', error);
+  } catch {
     return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
