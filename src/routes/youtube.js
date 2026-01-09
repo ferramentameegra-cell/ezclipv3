@@ -1,5 +1,5 @@
 import express from 'express';
-import { getYouTubeInfo } from '../controllers/YouTubeInfoController.js';
+import { getYouTubeInfo } from '../controllers/youtubeController.js';
 import { downloadYouTubeVideo, playVideo } from '../controllers/DownloadController.js';
 
 const router = express.Router();
