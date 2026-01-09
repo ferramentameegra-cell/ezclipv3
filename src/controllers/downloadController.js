@@ -6,7 +6,6 @@ import { sanitizeYouTubeUrl, extractVideoId } from '../services/youtubeUrlUtils.
 
 const TMP_UPLOADS_DIR = '/tmp/uploads';
 
-// Garante diretório no Railway
 if (!fs.existsSync(TMP_UPLOADS_DIR)) {
   try {
     fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
@@ -16,12 +15,8 @@ if (!fs.existsSync(TMP_UPLOADS_DIR)) {
   }
 }
 
-// Store simples em memória
 const videoStore = new Map();
 
-/**
- * POST /api/youtube/download
- */
 export const downloadYouTubeVideo = async (req, res) => {
   try {
     const { url } = req.body;
@@ -72,13 +67,14 @@ export const downloadYouTubeVideo = async (req, res) => {
 
   } catch (err) {
     console.error('[DOWNLOAD ERROR]', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({
+      success: false,
+      error: 'Falha ao baixar vídeo do YouTube',
+      details: err.message
+    });
   }
 };
 
-/**
- * GET /api/youtube/play/:videoId
- */
 export const playVideo = (req, res) => {
   const { videoId } = req.params;
   const video = videoStore.get(videoId);
