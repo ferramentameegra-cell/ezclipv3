@@ -4,10 +4,10 @@ import { downloadYouTubeVideo, playVideo } from '../controllers/DownloadControll
 
 const router = express.Router();
 
-// INFO DO VÍDEO (POST)
+// INFO DO VÍDEO
 router.post('/info', getYouTubeInfo);
 
-// DOWNLOAD SIMPLES (POST)
+// DOWNLOAD DO VÍDEO
 router.post('/download', downloadYouTubeVideo);
 
 // STREAM DO VÍDEO
