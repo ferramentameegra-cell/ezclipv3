@@ -1,18 +1,14 @@
 import express from 'express';
-import { getYouTubeInfo } from '../controllers/youtubeController.js';
-import { downloadWithProgress, getVideoState } from '../controllers/downloadProgressController.js';
-import { playVideo } from '../controllers/youtubeStableController.js';
+import { getYouTubeInfo } from '../controllers/YouTubeInfoController.js';
+import { downloadYouTubeVideo, playVideo } from '../controllers/DownloadController.js';
 
 const router = express.Router();
 
-// METADATA
-router.get('/info', getYouTubeInfo);
+// INFO DO VÍDEO (POST)
+router.post('/info', getYouTubeInfo);
 
-// DOWNLOAD COM PROGRESSO (USADO PELO FRONTEND)
-router.get('/download/progress', downloadWithProgress);
-
-// ESTADO DO VÍDEO (DURAÇÃO PARA O TRIM)
-router.get('/download/state/:videoId', getVideoState);
+// DOWNLOAD SIMPLES (POST)
+router.post('/download', downloadYouTubeVideo);
 
 // STREAM DO VÍDEO
 router.get('/play/:videoId', playVideo);
