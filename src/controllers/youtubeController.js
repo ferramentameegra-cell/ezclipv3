@@ -1,49 +1,38 @@
-/**
- * NOVO CONTROLLER YOUTUBE - LIMPO
- * Apenas valida URL e retorna metadata
- * Usa youtubeServiceStable.js (yt-dlp CLI) ao invés de youtubeService.js (ytdl-core)
- */
+import { exec } from 'child_process';
 
-import { getYouTubeVideoInfo } from '../services/youtubeServiceStable.js';
-
-/**
- * GET /api/youtube/info?url=YOUTUBE_URL
- * Valida URL do YouTube e retorna metadata do vídeo
- */
-export const getYouTubeInfo = async (req, res) => {
+export const getYouTubeInfo = (req, res) => {
   try {
-    const { url } = req.query;
+    const { url } = req.body;
 
     if (!url) {
-      return res.status(400).json({
-        success: false,
-        error: 'URL do YouTube não fornecida. Use: /api/youtube/info?url=YOUTUBE_URL'
-      });
+      return res.status(400).json({ error: 'URL não informada' });
     }
 
-    // Validar e obter metadata
-    const metadata = await getYouTubeVideoInfo(url);
+    const cmd = `yt-dlp --dump-json --no-warnings --no-playlist "${url}"`;
 
-    return res.json({
-      success: true,
-      ...metadata
+    exec(cmd, { maxBuffer: 1024 * 1024 * 20 }, (err, stdout) => {
+      if (err) {
+        console.error('[INFO ERROR]', err);
+        return res.status(500).json({ error: 'Falha ao obter info do vídeo' });
+      }
+
+      try {
+        const info = JSON.parse(stdout);
+
+        return res.json({
+          success: true,
+          title: info.title,
+          duration: info.duration,
+          thumbnail: info.thumbnail,
+          author: info.uploader
+        });
+      } catch (parseErr) {
+        console.error('[INFO PARSE ERROR]', parseErr);
+        return res.status(500).json({ error: 'Erro ao processar metadata' });
+      }
     });
-
   } catch (error) {
-    console.error('[YOUTUBE-CONTROLLER] Erro:', error);
-
-    // Erros de validação = 400
-    if (error.message.includes('inválida') || error.message.includes('invalid')) {
-      return res.status(400).json({
-        success: false,
-        error: error.message
-      });
-    }
-
-    // Outros erros = 500
-    return res.status(500).json({
-      success: false,
-      error: `Erro ao obter informações do vídeo: ${error.message}`
-    });
+    console.error('[INFO FATAL]', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
   }
 };
