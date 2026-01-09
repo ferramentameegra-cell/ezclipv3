@@ -1,71 +1,33 @@
-import { spawn } from 'child_process';
-import fs from 'fs';
+import { exec } from 'child_process';
 
 /**
- * Faz download do vídeo do YouTube usando yt-dlp
+ * Baixa vídeo do YouTube usando yt-dlp (MP4 garantido)
+ * @param {string} videoId
+ * @param {string} outputPath
  */
-export function downloadYouTubeVideo(youtubeVideoId, outputPath, onProgress) {
+export function downloadYouTubeVideo(videoId, outputPath) {
   return new Promise((resolve, reject) => {
-    const url = `https://www.youtube.com/watch?v=${youtubeVideoId}`;
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const args = [
-      '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=web',
-      '-f', 'bv*+ba/b',
-      '--merge-output-format', 'mp4',
-      '--newline',
-      url,
-      '-o', outputPath
-    ];
+    const cmd = [
+      'yt-dlp',
+      '-f "bv*[ext=mp4]+ba[ext=m4a]/mp4"',
+      '--merge-output-format mp4',
+      `-o "${outputPath}"`,
+      `"${url}"`
+    ].join(' ');
 
-    console.log('[yt-dlp] Executando:', args.join(' '));
+    console.log('[YT-DLP] Download:', cmd);
 
-    const ytdlp = spawn('yt-dlp', args);
-
-    ytdlp.stdout.on('data', (data) => {
-      const line = data.toString();
-      process.stdout.write(line);
-
-      // Progresso (%)
-      const match = line.match(/(\d{1,3}\.\d)%/);
-      if (match && onProgress) {
-        onProgress(parseFloat(match[1]));
-      }
-    });
-
-    ytdlp.stderr.on('data', (data) => {
-      process.stderr.write(data.toString());
-    });
-
-    ytdlp.on('close', (code) => {
-      if (code !== 0) {
-        return reject(new Error('yt-dlp finalizou com erro'));
+    exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('[YT-DLP] ERRO FATAL:', error);
+        return reject(error);
       }
 
-      if (!fs.existsSync(outputPath)) {
-        return reject(new Error('Arquivo final não existe'));
-      }
-
-      const stats = fs.statSync(outputPath);
-      if (!stats || stats.size === 0) {
-        return reject(new Error('Arquivo final está vazio'));
-      }
-
-      resolve(outputPath);
+      // stderr NÃO indica erro no yt-dlp
+      console.log('[YT-DLP] Download concluído');
+      resolve(true);
     });
   });
-}
-
-/**
- * ✅ FUNÇÃO QUE ESTAVA FALTANDO
- * Verifica se o vídeo já foi baixado
- */
-export function isVideoDownloaded(videoPath) {
-  try {
-    if (!fs.existsSync(videoPath)) return false;
-    const stats = fs.statSync(videoPath);
-    return stats.size > 0;
-  } catch {
-    return false;
-  }
 }
