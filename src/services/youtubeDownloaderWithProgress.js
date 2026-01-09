@@ -29,8 +29,6 @@ export async function downloadYouTubeVideoWithProgress(
       videoUrl
     ];
 
-    console.log(`[DOWNLOAD-PROGRESS] yt-dlp ${args.join(' ')}`);
-
     const proc = spawn('yt-dlp', args, {
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -45,15 +43,13 @@ export async function downloadYouTubeVideoWithProgress(
           const percent = Math.min(100, parseFloat(match[1]));
           if (percent > lastPercent) {
             lastPercent = percent;
-            onProgress?.(percent, null, null, 'downloading');
+            if (onProgress) onProgress(percent, null, null, 'downloading');
           }
         }
       }
     });
 
-    proc.stderr.on('data', () => {
-      // yt-dlp envia progresso aqui também (ignorar erro falso)
-    });
+    proc.stderr.on('data', () => {});
 
     proc.on('close', (code) => {
       if (code !== 0) {
@@ -73,8 +69,7 @@ export async function downloadYouTubeVideoWithProgress(
         return;
       }
 
-      onProgress?.(100, stats.size, stats.size, 'finished');
-      console.log(`[DOWNLOAD-PROGRESS] Finalizado: ${outputPath}`);
+      if (onProgress) onProgress(100, stats.size, stats.size, 'finished');
       resolve(outputPath);
     });
 
