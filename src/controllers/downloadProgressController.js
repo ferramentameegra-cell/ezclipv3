@@ -186,7 +186,11 @@ function parseYtDlpError(stderr, exitCode) {
   }
   
   if (errorLower.includes('403') || errorLower.includes('forbidden') || errorLower.includes('http error 403')) {
-    return 'YouTube bloqueou o acesso (403). O vídeo pode ter restrições. Tente atualizar o yt-dlp: python3 -m pip install --upgrade yt-dlp';
+    return 'YouTube bloqueou o acesso (403). Isso pode ser temporário. Tente novamente em alguns minutos ou verifique se o vídeo está disponível. Se persistir, atualize: python3 -m pip install --upgrade yt-dlp';
+  }
+  
+  if (errorLower.includes('sign in to download') || errorLower.includes('private video') || errorLower.includes('members-only')) {
+    return 'Este vídeo requer login ou é privado. Use um vídeo público.';
   }
   
   if (errorLower.includes('copyright') || errorLower.includes('content id')) {
@@ -286,23 +290,33 @@ export async function downloadWithProgress(req, res) {
     ytDlpCommandCache = { executable: 'yt-dlp', useModule: false };
   }
   
-  // Preparar argumentos do yt-dlp com opções para evitar erro 403
+  // Preparar argumentos do yt-dlp com opções agressivas para evitar erro 403
+  // Usar múltiplas estratégias: iOS > Android > Web (mais chances de funcionar)
   const downloadArgs = [
     "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
     "--merge-output-format", "mp4",
     "--no-playlist",
     "--no-warnings",
     "--newline",
-    // Opções para evitar erro 403 do YouTube
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    // Opções agressivas para evitar erro 403 do YouTube
+    "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
     "--referer", "https://www.youtube.com/",
     "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "--add-header", "Accept-Language:en-US,en;q=0.9",
     "--add-header", "Accept-Encoding:gzip, deflate, br",
-    "--extractor-args", "youtube:player_client=android,web;player_skip=webpage",
+    "--add-header", "Origin:https://www.youtube.com",
+    "--add-header", "Sec-Fetch-Dest:document",
+    "--add-header", "Sec-Fetch-Mode:navigate",
+    "--add-header", "Sec-Fetch-Site:none",
+    "--add-header", "Sec-Fetch-User:?1",
+    // Usar cliente iOS primeiro (menos bloqueado), depois Android, depois Web
+    "--extractor-args", "youtube:player_client=ios,android,web",
     "--no-check-certificate",
-    "--retries", "3",
-    "--fragment-retries", "3",
+    "--retries", "5",
+    "--fragment-retries", "5",
+    "--file-access-retries", "5",
+    "--rm-cache-dir", // Limpar cache para evitar dados desatualizados
+    "-4", // Forçar IPv4
     "-o", outputPath,
     cleanUrl
   ];
