@@ -35,7 +35,7 @@ if (process.env.REDIS_URL) {
   
   const createMockQueue = (name) => {
     const queue = {
-    async add(jobName, data, options) {
+      async add(jobName, data, options) {
       const jobId = `mock-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const job = {
         id: jobId,
@@ -97,9 +97,11 @@ if (process.env.REDIS_URL) {
       }
       processors.set(key, handler);
       console.log(`[QUEUE-MOCK:${name}] ✅ Handler registrado para ${jobName} (concurrency: ${concurrency})`);
-      return videoProcessQueue; // Retornar a fila para permitir chaining
+      return queue; // Retornar a própria fila
     }
-  });
+    };
+    return queue;
+  };
 
   videoProcessQueue = createMockQueue('video-process');
   videoDownloadQueue = createMockQueue('video-download');
