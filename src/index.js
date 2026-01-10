@@ -11,6 +11,9 @@ import generateRoutes from "./routes/generate.js";
 import nichesRoutes from "./routes/niches.js";
 import retentionRoutes from "./routes/retention.js";
 
+// Configurar ffmpeg antes de importar workers
+import { configureFfmpeg } from "./utils/ffmpegDetector.js";
+
 // Importar workers para processar jobs (funciona mesmo sem Redis)
 import "./workers/videoProcessWorker.js";
 
@@ -56,8 +59,24 @@ app.get("/health", (req, res) => {
 });
 
 // =====================
-// START
+// INICIALIZAÇÃO
 // =====================
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 EZ Clips rodando na porta ${PORT}`);
-});
+async function initializeServer() {
+  try {
+    // Configurar ffmpeg antes de iniciar o servidor
+    console.log('[INIT] Verificando ffmpeg...');
+    await configureFfmpeg();
+    console.log('[INIT] ✅ ffmpeg configurado com sucesso');
+  } catch (error) {
+    console.error('[INIT] ⚠️ Aviso: ffmpeg não está configurado corretamente:', error.message);
+    console.error('[INIT] Algumas funcionalidades podem não funcionar. Por favor, instale o ffmpeg.');
+  }
+  
+  // Iniciar servidor mesmo se ffmpeg não estiver configurado
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 EZ Clips rodando na porta ${PORT}`);
+  });
+}
+
+// Inicializar servidor
+initializeServer();

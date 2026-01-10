@@ -115,6 +115,21 @@ export async function addRetentionOverlay(clipPath, retentionVideoPath, outputPa
       })
       .on('error', (err) => {
         console.error(`[OVERLAY] Erro: ${err.message}`);
+        
+        // Verificar se é erro de ffmpeg não encontrado
+        if (err.message.includes('Cannot find ffmpeg') || 
+            err.message.includes('ffmpeg not found') ||
+            err.message.includes('ENOENT') ||
+            err.message.includes('spawn ffmpeg')) {
+          const errorMsg = 'ffmpeg não encontrado. Verifique se o ffmpeg está instalado corretamente e no PATH do sistema.\n' +
+                          'Para instalar:\n' +
+                          '  - macOS: brew install ffmpeg\n' +
+                          '  - Linux: apt-get install ffmpeg (ou yum install ffmpeg)\n' +
+                          '  - Windows: baixe de https://ffmpeg.org/download.html';
+          console.error(`[OVERLAY] ${errorMsg}`);
+          return reject(new Error(errorMsg));
+        }
+        
         reject(err);
       })
       .on('progress', (progress) => {
@@ -177,6 +192,21 @@ export async function addRetentionOverlaySimple(clipPath, retentionVideoPath, ou
       })
       .on('error', (err) => {
         console.error(`[OVERLAY-SIMPLE] Erro: ${err.message}`);
+        
+        // Verificar se é erro de ffmpeg não encontrado
+        if (err.message.includes('Cannot find ffmpeg') || 
+            err.message.includes('ffmpeg not found') ||
+            err.message.includes('ENOENT') ||
+            err.message.includes('spawn ffmpeg')) {
+          const errorMsg = 'ffmpeg não encontrado. Verifique se o ffmpeg está instalado corretamente e no PATH do sistema.\n' +
+                          'Para instalar:\n' +
+                          '  - macOS: brew install ffmpeg\n' +
+                          '  - Linux: apt-get install ffmpeg (ou yum install ffmpeg)\n' +
+                          '  - Windows: baixe de https://ffmpeg.org/download.html';
+          console.error(`[OVERLAY-SIMPLE] ${errorMsg}`);
+          return reject(new Error(errorMsg));
+        }
+        
         reject(err);
       })
       .run();

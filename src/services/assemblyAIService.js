@@ -62,6 +62,19 @@ async function extractAudio(videoPath, audioOutputPath) {
     });
 
     ffmpeg.on('error', (error) => {
+      // Verificar se é erro de ffmpeg não encontrado
+      if (error.code === 'ENOENT' || 
+          error.message.includes('ENOENT') ||
+          error.message.includes('spawn ffmpeg') ||
+          error.message.includes('ffmpeg: command not found')) {
+        const errorMsg = 'ffmpeg não encontrado. Verifique se o ffmpeg está instalado corretamente e no PATH do sistema.\n' +
+                        'Para instalar:\n' +
+                        '  - macOS: brew install ffmpeg\n' +
+                        '  - Linux: apt-get install ffmpeg (ou yum install ffmpeg)\n' +
+                        '  - Windows: baixe de https://ffmpeg.org/download.html';
+        console.error(`[ASSEMBLYAI] ${errorMsg}`);
+        return reject(new Error(errorMsg));
+      }
       reject(new Error(`Erro ao executar ffmpeg: ${error.message}`));
     });
   });

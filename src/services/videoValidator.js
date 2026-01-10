@@ -25,6 +25,19 @@ export async function validateVideoWithFfprobe(videoPath) {
     // Validar com ffprobe
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
       if (err) {
+        // Verificar se é erro de ffprobe não encontrado
+        if (err.message.includes('Cannot find ffprobe') || 
+            err.message.includes('ffprobe not found') ||
+            err.message.includes('ENOENT') ||
+            err.message.includes('spawn ffprobe')) {
+          const errorMsg = 'ffprobe não encontrado. Verifique se o ffmpeg está instalado corretamente e no PATH do sistema.\n' +
+                          'Para instalar:\n' +
+                          '  - macOS: brew install ffmpeg\n' +
+                          '  - Linux: apt-get install ffmpeg (ou yum install ffmpeg)\n' +
+                          '  - Windows: baixe de https://ffmpeg.org/download.html';
+          console.error(`[VALIDATOR] ${errorMsg}`);
+          return reject(new Error(errorMsg));
+        }
         return reject(new Error(`Erro ao validar vídeo com ffprobe: ${err.message}`));
       }
 
