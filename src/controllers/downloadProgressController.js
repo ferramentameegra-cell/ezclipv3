@@ -185,6 +185,10 @@ function parseYtDlpError(stderr, exitCode) {
     return 'Este vídeo não está disponível na sua região.';
   }
   
+  if (errorLower.includes('403') || errorLower.includes('forbidden') || errorLower.includes('http error 403')) {
+    return 'YouTube bloqueou o acesso (403). O vídeo pode ter restrições. Tente atualizar o yt-dlp: python3 -m pip install --upgrade yt-dlp';
+  }
+  
   if (errorLower.includes('copyright') || errorLower.includes('content id')) {
     return 'Vídeo protegido por direitos autorais. Não é possível baixar.';
   }
@@ -282,13 +286,23 @@ export async function downloadWithProgress(req, res) {
     ytDlpCommandCache = { executable: 'yt-dlp', useModule: false };
   }
   
-  // Preparar argumentos do yt-dlp
+  // Preparar argumentos do yt-dlp com opções para evitar erro 403
   const downloadArgs = [
     "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
     "--merge-output-format", "mp4",
     "--no-playlist",
     "--no-warnings",
     "--newline",
+    // Opções para evitar erro 403 do YouTube
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "--referer", "https://www.youtube.com/",
+    "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "--add-header", "Accept-Language:en-US,en;q=0.9",
+    "--add-header", "Accept-Encoding:gzip, deflate, br",
+    "--extractor-args", "youtube:player_client=android,web;player_skip=webpage",
+    "--no-check-certificate",
+    "--retries", "3",
+    "--fragment-retries", "3",
     "-o", outputPath,
     cleanUrl
   ];
