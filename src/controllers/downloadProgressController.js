@@ -251,7 +251,9 @@ export async function downloadWithProgress(req, res) {
   }
 
   const videoId = uuidv4();
-  const outputPath = path.join(uploadsDir, `${videoId}.mp4`);
+  // Usar placeholder genérico - yt-dlp adicionará extensão correta
+  const outputTemplate = path.join(uploadsDir, `${videoId}.%(ext)s`);
+  const outputPath = path.join(uploadsDir, `${videoId}.mp4`); // Fallback para compatibilidade
 
   console.log(`[DOWNLOAD] Iniciando: ${cleanUrl} -> ${outputPath}`);
 
@@ -387,7 +389,7 @@ export async function downloadWithProgress(req, res) {
         "--file-access-retries", "3",
         "--sleep-requests", "1",
         "-4", // Forçar IPv4
-        "-o", outputPath,
+        "-o", outputTemplate, // yt-dlp adicionará extensão correta automaticamente
         cleanUrl
       ];
       
@@ -521,9 +523,12 @@ export async function downloadWithProgress(req, res) {
   
   // Download foi bem-sucedido, processar resultado
   console.log(`[DOWNLOAD] Vídeo baixado com sucesso usando estratégia: ${downloadResult.strategy}`);
+  
+  // Usar arquivo baixado encontrado pelo worker, ou fallback para outputPath
+  const finalOutputPath = downloadResult.filePath || outputPath;
 
   // Verificar se arquivo foi criado com sucesso
-  if (!fs.existsSync(outputPath)) {
+  if (!fs.existsSync(finalOutputPath)) {
     const errorMessage = "Arquivo não foi criado após download. Tente novamente.";
     console.error(`[DOWNLOAD] ${errorMessage}`);
     
@@ -539,16 +544,16 @@ export async function downloadWithProgress(req, res) {
   // Verificar tamanho do arquivo
   let fileSize = 0;
   try {
-    const stats = fs.statSync(outputPath);
+    const stats = fs.statSync(finalOutputPath);
     fileSize = stats.size;
     
     if (fileSize === 0) {
       const errorMessage = "Arquivo baixado está vazio. O vídeo pode estar corrompido.";
       console.error(`[DOWNLOAD] ${errorMessage}`);
       
-      if (fs.existsSync(outputPath)) {
+      if (fs.existsSync(finalOutputPath)) {
         try {
-          fs.unlinkSync(outputPath);
+          fs.unlinkSync(finalOutputPath);
         } catch (unlinkError) {
           console.error(`[DOWNLOAD] Erro ao remover arquivo vazio: ${unlinkError.message}`);
         }
@@ -563,7 +568,7 @@ export async function downloadWithProgress(req, res) {
       return;
     }
     
-    console.log(`[DOWNLOAD] Arquivo criado: ${outputPath} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+    console.log(`[DOWNLOAD] Arquivo criado: ${finalOutputPath} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
   } catch (statError) {
     const errorMessage = `Erro ao verificar arquivo: ${statError.message}`;
     console.error(`[DOWNLOAD] ${errorMessage}`);
@@ -579,12 +584,12 @@ export async function downloadWithProgress(req, res) {
 
   // Obter duração
   console.log(`[DOWNLOAD] Obtendo duração...`);
-  const duration = await getVideoDuration(outputPath);
+  const duration = await getVideoDuration(finalOutputPath);
 
   // Salvar no store
   const videoData = {
     id: videoId,
-    path: outputPath,
+    path: finalOutputPath,
     duration: duration,
     fileSize: fileSize,
     youtubeUrl: cleanUrl,
