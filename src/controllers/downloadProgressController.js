@@ -440,13 +440,35 @@ export async function downloadWithProgress(req, res) {
           console.error(`[DOWNLOAD] Erro ${strategy.name} - stdout:`, stdout.slice(-500));
         }
         
-        // Se sucesso, resolver
-        if (code === 0 && fs.existsSync(outputPath)) {
-          const stats = fs.statSync(outputPath);
-          if (stats.size > 0) {
+        // Se sucesso, encontrar arquivo baixado (pode ser .mp4, .webm, .mkv, etc)
+        if (code === 0) {
+          // Procurar arquivo baixado com qualquer extensão
+          const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
+          let downloadedFile = null;
+          
+          for (const ext of possibleExtensions) {
+            const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
+            if (fs.existsSync(testPath)) {
+              const stats = fs.statSync(testPath);
+              if (stats.size > 0) {
+                downloadedFile = testPath;
+                break;
+              }
+            }
+          }
+          
+          // Se não encontrou, tentar outputPath original
+          if (!downloadedFile && fs.existsSync(outputPath)) {
+            const stats = fs.statSync(outputPath);
+            if (stats.size > 0) {
+              downloadedFile = outputPath;
+            }
+          }
+          
+          if (downloadedFile) {
             hasResolved = true;
-            console.log(`[DOWNLOAD] ✅ Sucesso com estratégia: ${strategy.name}`);
-            resolve({ success: true, strategy: strategy.name, stderr, stdout });
+            console.log(`[DOWNLOAD] ✅ Sucesso com estratégia: ${strategy.name} - Arquivo: ${downloadedFile}`);
+            resolve({ success: true, strategy: strategy.name, filePath: downloadedFile, stderr, stdout });
             return;
           }
         }
