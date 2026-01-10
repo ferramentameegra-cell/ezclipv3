@@ -5,6 +5,11 @@ import { fileURLToPath } from "url";
 
 import youtubeRoutes from "./routes/youtube.js";
 import authRoutes from "./routes/auth.js";
+import downloadRoutes from "./routes/download.js";
+import trimRoutes from "./routes/trim.js";
+import generateRoutes from "./routes/generate.js";
+import nichesRoutes from "./routes/niches.js";
+import retentionRoutes from "./routes/retention.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +28,11 @@ app.use(express.json());
 // =====================
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/download", downloadRoutes);
+app.use("/api/trim", trimRoutes);
+app.use("/api/generate", generateRoutes);
+app.use("/api/niches", nichesRoutes);
+app.use("/api/retention", retentionRoutes);
 
 // =====================
 // FRONTEND ESTÁTICO

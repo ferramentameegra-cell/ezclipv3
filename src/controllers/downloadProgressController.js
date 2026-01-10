@@ -7,6 +7,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { initVideoState, updateVideoState, VIDEO_STATES } from '../services/videoStateManager.js';
 
 export const videoStore = new Map();
 
@@ -418,13 +419,22 @@ export async function downloadWithProgress(req, res) {
     const duration = await getVideoDuration(outputPath);
 
     // Salvar no store
-    videoStore.set(videoId, {
+    const videoData = {
       id: videoId,
       path: outputPath,
       duration: duration,
       fileSize: fileSize,
       youtubeUrl: cleanUrl,
       downloadedAt: new Date()
+    };
+    videoStore.set(videoId, videoData);
+
+    // Inicializar estado do vídeo (para o trim controller)
+    initVideoState(videoId);
+    updateVideoState(videoId, {
+      state: VIDEO_STATES.READY,
+      progress: 100,
+      metadata: videoData
     });
 
     console.log(`[DOWNLOAD] Download concluído: ${videoId} (${duration}s, ${(fileSize / 1024 / 1024).toFixed(2)} MB)`);

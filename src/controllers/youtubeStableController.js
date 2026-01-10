@@ -7,13 +7,10 @@ import { getYouTubeVideoInfo, downloadYouTubeVideo } from '../services/youtubeSe
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
+import { videoStore } from './downloadProgressController.js';
 
 // Store de consent em memória (temporário)
 const userConsent = new Map();
-
-// Store de vídeos em memória
-// NOTA: videoStore é compartilhado com downloadProgressController
-const videoStore = new Map();
 
 /**
  * GET /api/youtube/info
