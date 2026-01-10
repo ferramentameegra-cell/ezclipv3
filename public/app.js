@@ -746,7 +746,13 @@ function renderVideoPlayer(playableUrl) {
             appState.videoInfo.duration = Math.floor(videoElement.duration);
             if (!appState.trimEnd && appState.videoInfo.duration) {
                 appState.trimEnd = appState.videoInfo.duration;
-                updateTrimControls();
+                // Atualizar trim controls se já foram inicializados
+                if (appState.videoInfo.duration > 0) {
+                    const trimDurationEl = document.getElementById('trim-duration');
+                    const endTimecode = document.getElementById('end-timecode');
+                    if (trimDurationEl) trimDurationEl.textContent = formatTime(Math.floor(appState.videoInfo.duration));
+                    if (endTimecode) endTimecode.textContent = formatTime(Math.floor(appState.videoInfo.duration));
+                }
             }
         }
     });
@@ -1344,20 +1350,21 @@ async function monitorProgress(jobId) {
             const response = await fetch(`${API_BASE}/api/generate/status/${jobId}`);
             const data = await response.json();
             
-            if (data.job) {
-                const progress = data.job.progress || 0;
-                if (progressFill) progressFill.style.width = `${progress}%`;
-                if (progressText) progressText.textContent = `${progress}%`;
-                
-                if (data.job.status === 'completed') {
-                    clearInterval(interval);
-                    showSuccessModal(data.job);
-                } else if (data.job.status === 'error') {
-                    clearInterval(interval);
-                    alert('Erro ao gerar série: ' + data.job.error);
-                    const loadingOverlay = document.getElementById('loading-overlay');
-                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
-                }
+            // Backend retorna { jobId, status, progress, failedReason }
+            const progress = data.progress || 0;
+            const status = data.status || 'processing';
+            
+            if (progressFill) progressFill.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}%`;
+            
+            if (status === 'completed' || status === 'finished') {
+                clearInterval(interval);
+                showSuccessModal(data);
+            } else if (status === 'failed' || status === 'error') {
+                clearInterval(interval);
+                alert('Erro ao gerar série: ' + (data.failedReason || data.error || 'Erro desconhecido'));
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) loadingOverlay.classList.add('hidden');
             }
         } catch (error) {
             console.error('Erro ao verificar progresso:', error);
