@@ -95,8 +95,8 @@ if (process.env.REDIS_URL) {
         concurrency = 1;
       }
       processors.set(key, handler);
-      console.log(`[QUEUE-MOCK:${name}] Handler registrado para ${jobName} (concurrency: ${concurrency})`);
-      return this;
+      console.log(`[QUEUE-MOCK:${name}] ✅ Handler registrado para ${jobName} (concurrency: ${concurrency})`);
+      return videoProcessQueue; // Retornar a fila para permitir chaining
     }
   });
 
