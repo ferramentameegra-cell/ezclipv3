@@ -290,111 +290,233 @@ export async function downloadWithProgress(req, res) {
     ytDlpCommandCache = { executable: 'yt-dlp', useModule: false };
   }
   
-  // Preparar argumentos do yt-dlp com opções agressivas para evitar erro 403
-  // Usar múltiplas estratégias: iOS > Android > Web (mais chances de funcionar)
-  const downloadArgs = [
-    "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
-    "--merge-output-format", "mp4",
-    "--no-playlist",
-    "--no-warnings",
-    "--newline",
-    // Opções agressivas para evitar erro 403 do YouTube
-    "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-    "--referer", "https://www.youtube.com/",
-    "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "--add-header", "Accept-Language:en-US,en;q=0.9",
-    "--add-header", "Accept-Encoding:gzip, deflate, br",
-    "--add-header", "Origin:https://www.youtube.com",
-    "--add-header", "Sec-Fetch-Dest:document",
-    "--add-header", "Sec-Fetch-Mode:navigate",
-    "--add-header", "Sec-Fetch-Site:none",
-    "--add-header", "Sec-Fetch-User:?1",
-    // Usar cliente iOS primeiro (menos bloqueado), depois Android, depois Web
-    "--extractor-args", "youtube:player_client=ios,android,web",
-    "--no-check-certificate",
-    "--retries", "5",
-    "--fragment-retries", "5",
-    "--file-access-retries", "5",
-    "--rm-cache-dir", // Limpar cache para evitar dados desatualizados
-    "-4", // Forçar IPv4
-    "-o", outputPath,
-    cleanUrl
+  // Limpar cache do yt-dlp periodicamente para evitar dados desatualizados
+  // (isso é feito antes de cada download importante)
+  try {
+    const cmd = ytDlpCommandCache || { executable: 'python3', useModule: true };
+    const clearCacheProc = spawn(
+      cmd.useModule ? cmd.executable : 'python3',
+      cmd.useModule ? ['-m', 'yt_dlp', '--rm-cache-dir'] : ['--rm-cache-dir'],
+      { stdio: 'ignore' }
+    );
+    clearCacheProc.on('close', () => {
+      console.log('[DOWNLOAD] Cache do yt-dlp limpo');
+    });
+    clearCacheProc.on('error', () => {
+      // Ignorar erro de limpeza de cache
+    });
+    setTimeout(() => {
+      if (!clearCacheProc.killed) clearCacheProc.kill();
+    }, 2000);
+  } catch (cacheError) {
+    // Ignorar erros ao limpar cache
+    console.warn('[DOWNLOAD] Erro ao limpar cache:', cacheError.message);
+  }
+  
+  // ESTRATÉGIAS MÚLTIPLAS PARA CONTORNAR ERRO 403
+  // Tentar com diferentes clientes do YouTube em ordem de prioridade
+  const strategies = [
+    {
+      name: 'iOS Client',
+      extractorArgs: 'youtube:player_client=ios',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    },
+    {
+      name: 'Android Client',
+      extractorArgs: 'youtube:player_client=android',
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+    },
+    {
+      name: 'Android Embedded',
+      extractorArgs: 'youtube:player_client=android_embedded',
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+    },
+    {
+      name: 'Web Client (TV)',
+      extractorArgs: 'youtube:player_client=tv_embedded',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    },
+    {
+      name: 'Web Client (Default)',
+      extractorArgs: 'youtube:player_client=web',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    }
   ];
   
-  const { executable, args } = buildYtDlpArgs(downloadArgs);
-  console.log(`[DOWNLOAD] Executando: ${executable} ${args.join(' ')}`);
+  // Tentar cada estratégia sequencialmente
+  let strategyIndex = 0;
+  let lastError = null;
   
-  // Comando yt-dlp com formato seguro
-  const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-  let lastProgress = 0;
-  let stderr = "";
-  let stdout = "";
-
-  // Capturar stderr (yt-dlp envia progresso aqui)
-  ytdlp.stderr.on("data", (data) => {
-    const text = data.toString();
-    stderr += text;
-
-    // Procurar progresso
-    const progressMatch = text.match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
-    if (progressMatch) {
-      const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
-      if (percent > lastProgress) {
-        lastProgress = percent;
-        res.write(`data: ${JSON.stringify({
-          progress: percent,
-          status: "downloading",
-          state: "downloading",
-          message: `Baixando... ${percent.toFixed(1)}%`
-        })}\n\n`);
+  const tryDownloadWithStrategy = async (strategy) => {
+    return new Promise((resolve, reject) => {
+      console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
+      
+      // Preparar argumentos do yt-dlp com a estratégia atual
+      const downloadArgs = [
+        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
+        "--merge-output-format", "mp4",
+        "--no-playlist",
+        "--no-warnings",
+        "--newline",
+        // Headers HTTP completos
+        "--user-agent", strategy.userAgent,
+        "--referer", "https://www.youtube.com/",
+        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "--add-header", "Accept-Language:en-US,en;q=0.9",
+        "--add-header", "Accept-Encoding:gzip, deflate, br",
+        "--add-header", "Origin:https://www.youtube.com",
+        "--add-header", "Sec-Fetch-Dest:document",
+        "--add-header", "Sec-Fetch-Mode:navigate",
+        "--add-header", "Sec-Fetch-Site:none",
+        "--add-header", "Sec-Fetch-User:?1",
+        // Usar cliente específico da estratégia
+        "--extractor-args", strategy.extractorArgs,
+        "--no-check-certificate",
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--file-access-retries", "3",
+        "-4", // Forçar IPv4
+        "-o", outputPath,
+        cleanUrl
+      ];
+      
+      const { executable, args } = buildYtDlpArgs(downloadArgs);
+      
+      const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let lastProgress = 0;
+      let stderr = "";
+      let stdout = "";
+      let hasResolved = false;
+      
+      // Capturar stderr (yt-dlp envia progresso aqui)
+      ytdlp.stderr.on("data", (data) => {
+        const text = data.toString();
+        stderr += text;
+        
+        // Procurar progresso
+        const progressMatch = text.match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
+        if (progressMatch) {
+          const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
+          if (percent > lastProgress) {
+            lastProgress = percent;
+            res.write(`data: ${JSON.stringify({
+              progress: percent,
+              status: "downloading",
+              state: "downloading",
+              message: `Baixando (${strategy.name})... ${percent.toFixed(1)}%`
+            })}\n\n`);
+          }
+        }
+      });
+      
+      // Capturar stdout também (alguns logs vão aqui)
+      ytdlp.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      
+      // Processo finalizado
+      ytdlp.on("close", async (code) => {
+        if (hasResolved) return;
+        
+        console.log(`[DOWNLOAD] ${strategy.name} finalizou com código: ${code}`);
+        
+        // Se sucesso, resolver
+        if (code === 0 && fs.existsSync(outputPath)) {
+          const stats = fs.statSync(outputPath);
+          if (stats.size > 0) {
+            hasResolved = true;
+            console.log(`[DOWNLOAD] ✅ Sucesso com estratégia: ${strategy.name}`);
+            resolve({ success: true, strategy: strategy.name, stderr, stdout });
+            return;
+          }
+        }
+        
+        // Se erro, rejeitar para tentar próxima estratégia
+        hasResolved = true;
+        lastError = { code, stderr, stdout, strategy: strategy.name };
+        reject(lastError);
+      });
+      
+      // Erro ao executar
+      ytdlp.on("error", (error) => {
+        if (hasResolved) return;
+        hasResolved = true;
+        lastError = { error: error.message, strategy: strategy.name };
+        reject(lastError);
+      });
+    });
+  };
+  
+  // Tentar cada estratégia sequencialmente até uma funcionar
+  let downloadResult = null;
+  for (const strategy of strategies) {
+    try {
+      downloadResult = await tryDownloadWithStrategy(strategy);
+      console.log(`[DOWNLOAD] ✅ Download bem-sucedido com estratégia: ${strategy.name}`);
+      break; // Sucesso, parar tentativas
+    } catch (error) {
+      console.warn(`[DOWNLOAD] ❌ Estratégia ${strategy.name} falhou:`, error.code || error.error);
+      lastError = error;
+      
+      // Se ainda há estratégias para tentar, continuar
+      if (strategies.indexOf(strategy) < strategies.length - 1) {
+        console.log(`[DOWNLOAD] Tentando próxima estratégia...`);
+        // Pequeno delay entre tentativas
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
       }
     }
-  });
+  }
+  
+  // Se nenhuma estratégia funcionou
+  if (!downloadResult) {
+    const errorMessage = parseYtDlpError(lastError?.stderr || '', lastError?.code || 1);
+    console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam. Último erro: ${errorMessage}`);
+    
+    res.write(`data: ${JSON.stringify({
+      success: false,
+      error: errorMessage,
+      state: "error"
+    })}\n\n`);
+    res.end();
+    return;
+  }
+  
+  // Download foi bem-sucedido, processar resultado
+  console.log(`[DOWNLOAD] Vídeo baixado com sucesso usando estratégia: ${downloadResult.strategy}`);
 
-  // Capturar stdout também (alguns logs vão aqui)
-  ytdlp.stdout.on("data", (data) => {
-    stdout += data.toString();
-  });
+  // Verificar se arquivo foi criado com sucesso
+  if (!fs.existsSync(outputPath)) {
+    const errorMessage = "Arquivo não foi criado após download. Tente novamente.";
+    console.error(`[DOWNLOAD] ${errorMessage}`);
+    
+    res.write(`data: ${JSON.stringify({
+      success: false,
+      error: errorMessage,
+      state: "error"
+    })}\n\n`);
+    res.end();
+    return;
+  }
 
-  // Processo finalizado
-  ytdlp.on("close", async (code) => {
-    console.log(`[DOWNLOAD] yt-dlp finalizou com código: ${code}`);
-
-    // Limpar arquivo parcial em caso de erro
-    const cleanupOnError = () => {
+  // Verificar tamanho do arquivo
+  let fileSize = 0;
+  try {
+    const stats = fs.statSync(outputPath);
+    fileSize = stats.size;
+    
+    if (fileSize === 0) {
+      const errorMessage = "Arquivo baixado está vazio. O vídeo pode estar corrompido.";
+      console.error(`[DOWNLOAD] ${errorMessage}`);
+      
       if (fs.existsSync(outputPath)) {
         try {
           fs.unlinkSync(outputPath);
-          console.log(`[DOWNLOAD] Arquivo parcial removido: ${outputPath}`);
         } catch (unlinkError) {
-          console.error(`[DOWNLOAD] Erro ao remover arquivo parcial: ${unlinkError.message}`);
+          console.error(`[DOWNLOAD] Erro ao remover arquivo vazio: ${unlinkError.message}`);
         }
       }
-    };
-
-    // Verificar código de saída
-    if (code !== 0) {
-      const errorMessage = parseYtDlpError(stderr, code);
-      console.error(`[DOWNLOAD] Erro (code ${code}): ${errorMessage}`);
-      console.error(`[DOWNLOAD] stderr: ${stderr.slice(-500)}`);
-      
-      cleanupOnError();
-      
-      // Enviar erro como mensagem padrão para garantir que frontend receba
-      res.write(`data: ${JSON.stringify({
-        success: false,
-        error: errorMessage,
-        state: "error"
-      })}\n\n`);
-      res.end();
-      return;
-    }
-
-    // Verificar se arquivo foi criado
-    if (!fs.existsSync(outputPath)) {
-      const errorMessage = "Arquivo não foi criado após download. Tente novamente.";
-      console.error(`[DOWNLOAD] ${errorMessage}`);
       
       res.write(`data: ${JSON.stringify({
         success: false,
@@ -404,134 +526,60 @@ export async function downloadWithProgress(req, res) {
       res.end();
       return;
     }
-
-    // Verificar tamanho do arquivo
-    let fileSize = 0;
-    try {
-      const stats = fs.statSync(outputPath);
-      fileSize = stats.size;
-      
-      if (fileSize === 0) {
-        const errorMessage = "Arquivo baixado está vazio. O vídeo pode estar corrompido.";
-        console.error(`[DOWNLOAD] ${errorMessage}`);
-        
-        cleanupOnError();
-        
-        res.write(`data: ${JSON.stringify({
-          success: false,
-          error: errorMessage,
-          state: "error"
-        })}\n\n`);
-        res.end();
-        return;
-      }
-      
-      console.log(`[DOWNLOAD] Arquivo criado: ${outputPath} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-    } catch (statError) {
-      const errorMessage = `Erro ao verificar arquivo: ${statError.message}`;
-      console.error(`[DOWNLOAD] ${errorMessage}`);
-      
-      res.write(`data: ${JSON.stringify({
-        success: false,
-        error: errorMessage,
-        state: "error"
-      })}\n\n`);
-      res.end();
-      return;
-    }
-
-    // Obter duração
-    console.log(`[DOWNLOAD] Obtendo duração...`);
-    const duration = await getVideoDuration(outputPath);
-
-    // Salvar no store
-    const videoData = {
-      id: videoId,
-      path: outputPath,
-      duration: duration,
-      fileSize: fileSize,
-      youtubeUrl: cleanUrl,
-      downloadedAt: new Date()
-    };
-    videoStore.set(videoId, videoData);
-
-    // Inicializar estado do vídeo (para o trim controller)
-    initVideoState(videoId);
-    updateVideoState(videoId, {
-      state: VIDEO_STATES.READY,
-      progress: 100,
-      metadata: videoData
-    });
-
-    console.log(`[DOWNLOAD] Download concluído: ${videoId} (${duration}s, ${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
-
-    // Evento de conclusão (enviar como mensagem padrão)
+    
+    console.log(`[DOWNLOAD] Arquivo criado: ${outputPath} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
+  } catch (statError) {
+    const errorMessage = `Erro ao verificar arquivo: ${statError.message}`;
+    console.error(`[DOWNLOAD] ${errorMessage}`);
+    
     res.write(`data: ${JSON.stringify({
-      success: true,
-      completed: true,
-      ready: true,
-      state: "ready",
-      videoId: videoId,
-      duration: duration,
-      videoDuration: duration,
-      playableUrl: `/api/youtube/play/${videoId}`,
-      progress: 100
+      success: false,
+      error: errorMessage,
+      state: "error"
     })}\n\n`);
-
     res.end();
+    return;
+  }
+
+  // Obter duração
+  console.log(`[DOWNLOAD] Obtendo duração...`);
+  const duration = await getVideoDuration(outputPath);
+
+  // Salvar no store
+  const videoData = {
+    id: videoId,
+    path: outputPath,
+    duration: duration,
+    fileSize: fileSize,
+    youtubeUrl: cleanUrl,
+    downloadedAt: new Date()
+  };
+  videoStore.set(videoId, videoData);
+
+  // Inicializar estado do vídeo (para o trim controller)
+  initVideoState(videoId);
+  updateVideoState(videoId, {
+    state: VIDEO_STATES.READY,
+    progress: 100,
+    metadata: videoData
   });
 
-  // Erro ao executar yt-dlp
-  ytdlp.on("error", (error) => {
-    console.error(`[DOWNLOAD] Erro ao executar yt-dlp: ${error.message}`);
-    
-    let errorMessage = "yt-dlp não está disponível no sistema.";
-    if (error.code === 'ENOENT') {
-      errorMessage = "yt-dlp não foi encontrado. Verifique a instalação.";
-    } else {
-      errorMessage = `Erro ao executar yt-dlp: ${error.message}`;
-    }
-    
-    try {
-      res.write(`data: ${JSON.stringify({
-        success: false,
-        error: errorMessage,
-        state: "error"
-      })}\n\n`);
-      res.end();
-    } catch (writeError) {
-      console.error(`[DOWNLOAD] Erro ao escrever resposta SSE: ${writeError.message}`);
-      // Se já fechou a conexão, não podemos fazer nada
-    }
-  });
+  console.log(`[DOWNLOAD] Download concluído: ${videoId} (${duration}s, ${(fileSize / 1024 / 1024).toFixed(2)} MB) usando estratégia: ${downloadResult.strategy}`);
 
-  // Timeout de segurança - fechar conexão se demorar muito
-  const timeout = setTimeout(() => {
-    try {
-      // Verificar se conexão ainda está aberta
-      if (res.headersSent && !res.closed) {
-        console.error(`[DOWNLOAD] Timeout após 30 segundos`);
-        res.write(`data: ${JSON.stringify({
-          success: false,
-          error: "Timeout: Download demorou muito para iniciar. Tente novamente.",
-          state: "error"
-        })}\n\n`);
-        res.end();
-      }
-    } catch (e) {
-      // Ignorar se já fechou
-      console.warn(`[DOWNLOAD] Erro ao enviar timeout: ${e.message}`);
-    }
-  }, 30000); // 30 segundos
+  // Evento de conclusão (enviar como mensagem padrão)
+  res.write(`data: ${JSON.stringify({
+    success: true,
+    completed: true,
+    ready: true,
+    state: "ready",
+    videoId: videoId,
+    duration: duration,
+    videoDuration: duration,
+    playableUrl: `/api/youtube/play/${videoId}`,
+    progress: 100
+  })}\n\n`);
 
-  // Limpar timeout quando conexão fechar
-  res.on('close', () => {
-    console.log(`[DOWNLOAD] Conexão SSE fechada pelo cliente`);
-    clearTimeout(timeout);
-    if (!ytdlp.killed) {
-      ytdlp.kill();
-    }
-  });
+  res.end();
   
   } catch (error) {
     console.error(`[DOWNLOAD] Erro fatal: ${error.message}`, error);
