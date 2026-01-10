@@ -368,10 +368,11 @@ export async function downloadWithProgress(req, res) {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
       // Preparar argumentos do yt-dlp com a estratégia atual
-      // Formato MÁXIMA flexibilidade: aceita QUALQUER formato disponível (m3u8, webm, mp4, etc)
+      // Formato MÁXIMA flexibilidade: usar formato selector que aceita QUALQUER formato
+      // Permitir vídeo+áudio mesclados (m3u8) ou separados (webm, mp4)
       const downloadArgs = [
-        "-f", "best",
-        "--merge-output-format", "mp4",
+        "-f", "bestvideo+bestaudio/best", // Tentar melhor vídeo+áudio, senão melhor formato geral
+        "--merge-output-format", "mp4", // Se precisar mergear, usar mp4
         "--no-playlist",
         "--no-warnings",
         "--newline",
