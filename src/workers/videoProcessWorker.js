@@ -1,51 +1,47 @@
-import path from 'path';
-import fs from 'fs';
 import { videoProcessQueue } from '../queue/queue.js';
-import { splitVideoIntoClips, trimVideo } from '../services/videoTrimmer.js';
+import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
 
-const BASE_TMP_DIR = '/tmp/uploads';
-const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
+// VideoStore será injetado quando o servidor iniciar
+let videoStoreInstance = null;
 
-videoProcessQueue.process('generate-video-series', async job => {
-  const {
-    seriesId,
-    videoPath,
-    trimStart,
-    trimEnd,
-    cutDuration
-  } = job.data;
+// Exportar função para configurar o videoStore
+export function configureWorker(videoStore) {
+  videoStoreInstance = videoStore;
+  setVideoStore(videoStore);
+  console.log('[WORKER] VideoStore configurado no worker');
+}
 
-  if (!fs.existsSync(videoPath)) {
-    throw new Error(`Arquivo não encontrado: ${videoPath}`);
+// Criar um jobsMap para armazenar progresso dos jobs
+const jobsMap = new Map();
+
+videoProcessQueue.process('generate-video-series', async (job) => {
+  try {
+    console.log(`[WORKER] Processando job ${job.id}: generate-video-series`);
+    
+    // Verificar se videoStore foi configurado
+    if (!videoStoreInstance) {
+      throw new Error('VideoStore não foi configurado no worker. Certifique-se de que o servidor inicializou corretamente.');
+    }
+    
+    // Atualizar job no jobsMap para acompanhamento de progresso
+    jobsMap.set(job.id, job);
+    
+    // Usar o videoProcessor que tem toda a lógica correta
+    const result = await generateVideoSeries(job.data, jobsMap);
+    
+    console.log(`[WORKER] Job ${job.id} concluído com sucesso: ${result.clipsCount} clips gerados`);
+    
+    return {
+      status: 'completed',
+      clipsCount: result.clipsCount || result.clips?.length || 0,
+      seriesId: result.seriesId
+    };
+  } catch (error) {
+    console.error(`[WORKER] Erro ao processar job ${job.id}:`, error);
+    job.failedReason = error.message;
+    throw error;
+  } finally {
+    jobsMap.delete(job.id);
   }
-
-  const seriesPath = path.join(SERIES_DIR, seriesId);
-  fs.mkdirSync(seriesPath, { recursive: true });
-
-  await job.progress(10);
-
-  let processedPath = videoPath;
-
-  if (trimStart > 0 || trimEnd) {
-    processedPath = path.join(BASE_TMP_DIR, `${seriesId}_trim.mp4`);
-    await trimVideo(videoPath, processedPath, trimStart, trimEnd);
-  }
-
-  await job.progress(40);
-
-  const clips = await splitVideoIntoClips(
-    processedPath,
-    seriesPath,
-    cutDuration
-  );
-
-  for (let i = 0; i < clips.length; i++) {
-    await job.progress(40 + Math.round(((i + 1) / clips.length) * 60));
-  }
-
-  return {
-    status: 'completed',
-    clipsCount: clips.length
-  };
 });
 

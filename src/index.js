@@ -14,8 +14,21 @@ import retentionRoutes from "./routes/retention.js";
 // Configurar ffmpeg antes de importar workers
 import { configureFfmpeg } from "./utils/ffmpegDetector.js";
 
-// Importar workers para processar jobs (funciona mesmo sem Redis)
+// Importar videoStore e configurar no videoProcessor
+import { videoStore } from "./controllers/downloadProgressController.js";
+import { setVideoStore } from "./services/videoProcessor.js";
+
+// Configurar videoStore no videoProcessor ANTES de importar o worker
+setVideoStore(videoStore);
+console.log('[INIT] ✅ VideoStore configurado no videoProcessor');
+
+// Importar e configurar worker para processar jobs (funciona mesmo sem Redis)
 import "./workers/videoProcessWorker.js";
+import { configureWorker } from "./workers/videoProcessWorker.js";
+
+// Configurar worker com videoStore
+configureWorker(videoStore);
+console.log('[INIT] ✅ Worker configurado com videoStore');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

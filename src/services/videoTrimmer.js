@@ -102,9 +102,19 @@ export async function splitVideoIntoClips(
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
+  // Validar parâmetros
+  if (endTime === null || endTime === undefined) {
+    throw new Error(`endTime não pode ser null ou undefined. Recebido: ${endTime}`);
+  }
+
+  if (isNaN(startTime) || isNaN(endTime)) {
+    throw new Error(`Valores inválidos: startTime=${startTime}, endTime=${endTime}`);
+  }
+
   const totalDuration = endTime - startTime;
-  if (!totalDuration || totalDuration <= 0) {
-    throw new Error('Duração total inválida para corte');
+  
+  if (isNaN(totalDuration) || !totalDuration || totalDuration <= 0) {
+    throw new Error(`Duração total inválida para corte: startTime=${startTime}s, endTime=${endTime}s, duração=${totalDuration}s`);
   }
 
   const numberOfClips = Math.floor(totalDuration / clipDuration);
