@@ -315,31 +315,43 @@ export async function downloadWithProgress(req, res) {
   
   // ESTRATÉGIAS MÚLTIPLAS PARA CONTORNAR ERRO 403
   // Tentar com diferentes clientes do YouTube em ordem de prioridade
+  // Ordem baseada em taxa de sucesso: iOS > Mweb > Android > TV > Web
   const strategies = [
     {
-      name: 'iOS Client',
+      name: 'iOS Client (Mais confiável)',
       extractorArgs: 'youtube:player_client=ios',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+      additionalArgs: ['--extractor-args', 'youtube:skip=dash']
+    },
+    {
+      name: 'Mweb Client (Mobile Web)',
+      extractorArgs: 'youtube:player_client=mweb',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+      additionalArgs: []
     },
     {
       name: 'Android Client',
       extractorArgs: 'youtube:player_client=android',
-      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+      additionalArgs: []
     },
     {
       name: 'Android Embedded',
       extractorArgs: 'youtube:player_client=android_embedded',
-      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+      additionalArgs: []
     },
     {
-      name: 'Web Client (TV)',
+      name: 'TV Embedded',
       extractorArgs: 'youtube:player_client=tv_embedded',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      additionalArgs: []
     },
     {
-      name: 'Web Client (Default)',
+      name: 'Web Client (Fallback)',
       extractorArgs: 'youtube:player_client=web',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      additionalArgs: ['--extractor-args', 'youtube:skip=dash']
     }
   ];
   
@@ -352,30 +364,44 @@ export async function downloadWithProgress(req, res) {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
       // Preparar argumentos do yt-dlp com a estratégia atual
+      // Usar formato mais compatível: best (qualidade mais alta disponível)
       const downloadArgs = [
-        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4",
+        "-f", "best[ext=mp4]/best[height<=1080]/best",
         "--merge-output-format", "mp4",
         "--no-playlist",
         "--no-warnings",
         "--newline",
-        // Headers HTTP completos
+        "--verbose", // Mais logs para debug
+        // Headers HTTP completos e atualizados
         "--user-agent", strategy.userAgent,
         "--referer", "https://www.youtube.com/",
-        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "--add-header", "Accept-Language:en-US,en;q=0.9",
-        "--add-header", "Accept-Encoding:gzip, deflate, br",
+        "--add-header", "Accept-Encoding:gzip, deflate, br, zstd",
         "--add-header", "Origin:https://www.youtube.com",
         "--add-header", "Sec-Fetch-Dest:document",
         "--add-header", "Sec-Fetch-Mode:navigate",
         "--add-header", "Sec-Fetch-Site:none",
         "--add-header", "Sec-Fetch-User:?1",
+        "--add-header", "Sec-CH-UA:Chromium;v=120, Not A Brand;v=8",
+        "--add-header", "Sec-CH-UA-Mobile:?0",
+        "--add-header", "Sec-CH-UA-Platform:Windows",
         // Usar cliente específico da estratégia
         "--extractor-args", strategy.extractorArgs,
+        // Opções adicionais da estratégia
+        ...(strategy.additionalArgs || []),
+        // Opções de robustez
         "--no-check-certificate",
-        "--retries", "3",
-        "--fragment-retries", "3",
-        "--file-access-retries", "3",
+        "--retries", "5", // Aumentar tentativas
+        "--fragment-retries", "10", // Mais tentativas para fragmentos
+        "--file-access-retries", "5",
+        "--sleep-interval", "1", // Delay entre requisições
+        "--max-sleep-interval", "3",
+        "--sleep-requests", "1",
         "-4", // Forçar IPv4
+        "--prefer-insecure", // Tentar HTTP primeiro
+        "--no-mtime", // Não atualizar mtime
+        "--hls-prefer-native", // Usar FFmpeg para HLS
         "-o", outputPath,
         cleanUrl
       ];
@@ -461,9 +487,28 @@ export async function downloadWithProgress(req, res) {
       
       // Se ainda há estratégias para tentar, continuar
       if (strategies.indexOf(strategy) < strategies.length - 1) {
-        console.log(`[DOWNLOAD] Tentando próxima estratégia...`);
-        // Pequeno delay entre tentativas
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`[DOWNLOAD] Tentando próxima estratégia em 2 segundos...`);
+        // Delay maior entre tentativas para evitar rate limiting
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Limpar cache entre tentativas
+        try {
+          const cmd = ytDlpCommandCache || { executable: 'python3', useModule: true };
+          const clearCacheProc = spawn(
+            cmd.useModule ? cmd.executable : 'python3',
+            cmd.useModule ? ['-m', 'yt_dlp', '--rm-cache-dir'] : ['--rm-cache-dir'],
+            { stdio: 'ignore' }
+          );
+          clearCacheProc.on('close', () => {
+            console.log('[DOWNLOAD] Cache limpo entre tentativas');
+          });
+          setTimeout(() => {
+            if (!clearCacheProc.killed) clearCacheProc.kill();
+          }, 1000);
+        } catch (cacheError) {
+          // Ignorar erro de limpeza de cache
+        }
+        
         continue;
       }
     }
