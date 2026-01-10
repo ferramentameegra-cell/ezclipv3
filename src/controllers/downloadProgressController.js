@@ -321,7 +321,7 @@ export async function downloadWithProgress(req, res) {
       name: 'iOS Client (Mais confiável)',
       extractorArgs: 'youtube:player_client=ios',
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
-      additionalArgs: ['--extractor-args', 'youtube:skip=dash']
+      additionalArgs: []
     },
     {
       name: 'Mweb Client (Mobile Web)',
@@ -351,7 +351,7 @@ export async function downloadWithProgress(req, res) {
       name: 'Web Client (Fallback)',
       extractorArgs: 'youtube:player_client=web',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      additionalArgs: ['--extractor-args', 'youtube:skip=dash']
+      additionalArgs: []
     }
   ];
   
@@ -364,44 +364,23 @@ export async function downloadWithProgress(req, res) {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
       // Preparar argumentos do yt-dlp com a estratégia atual
-      // Usar formato mais compatível: best (qualidade mais alta disponível)
+      // Usar formato mais simples e compatível
       const downloadArgs = [
-        "-f", "best[ext=mp4]/best[height<=1080]/best",
+        "-f", "best[ext=mp4]/best[height<=720]/best",
         "--merge-output-format", "mp4",
         "--no-playlist",
-        "--no-warnings",
         "--newline",
-        "--verbose", // Mais logs para debug
-        // Headers HTTP completos e atualizados
+        // Headers HTTP básicos
         "--user-agent", strategy.userAgent,
         "--referer", "https://www.youtube.com/",
-        "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "--add-header", "Accept-Language:en-US,en;q=0.9",
-        "--add-header", "Accept-Encoding:gzip, deflate, br, zstd",
-        "--add-header", "Origin:https://www.youtube.com",
-        "--add-header", "Sec-Fetch-Dest:document",
-        "--add-header", "Sec-Fetch-Mode:navigate",
-        "--add-header", "Sec-Fetch-Site:none",
-        "--add-header", "Sec-Fetch-User:?1",
-        "--add-header", "Sec-CH-UA:Chromium;v=120, Not A Brand;v=8",
-        "--add-header", "Sec-CH-UA-Mobile:?0",
-        "--add-header", "Sec-CH-UA-Platform:Windows",
         // Usar cliente específico da estratégia
         "--extractor-args", strategy.extractorArgs,
-        // Opções adicionais da estratégia
-        ...(strategy.additionalArgs || []),
-        // Opções de robustez
-        "--no-check-certificate",
-        "--retries", "5", // Aumentar tentativas
-        "--fragment-retries", "10", // Mais tentativas para fragmentos
-        "--file-access-retries", "5",
-        "--sleep-interval", "1", // Delay entre requisições
-        "--max-sleep-interval", "3",
+        // Opções de robustez (simplificadas)
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--file-access-retries", "3",
         "--sleep-requests", "1",
         "-4", // Forçar IPv4
-        "--prefer-insecure", // Tentar HTTP primeiro
-        "--no-mtime", // Não atualizar mtime
-        "--hls-prefer-native", // Usar FFmpeg para HLS
         "-o", outputPath,
         cleanUrl
       ];
@@ -446,6 +425,12 @@ export async function downloadWithProgress(req, res) {
         if (hasResolved) return;
         
         console.log(`[DOWNLOAD] ${strategy.name} finalizou com código: ${code}`);
+        
+        // Log detalhado do erro para debug
+        if (code !== 0) {
+          console.error(`[DOWNLOAD] Erro ${strategy.name} - stderr:`, stderr.slice(-500));
+          console.error(`[DOWNLOAD] Erro ${strategy.name} - stdout:`, stdout.slice(-500));
+        }
         
         // Se sucesso, resolver
         if (code === 0 && fs.existsSync(outputPath)) {
