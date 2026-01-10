@@ -23,15 +23,17 @@ async function detectYtDlpCommand() {
     return ytDlpCommandCache;
   }
 
+  // Tentar python3 -m yt_dlp primeiro (mais comum quando instalado via pip)
   const possibleCommands = [
-    { cmd: 'yt-dlp', args: ['--version'] },
-    { cmd: '/usr/local/bin/yt-dlp', args: ['--version'] },
-    { cmd: '/usr/bin/yt-dlp', args: ['--version'] },
-    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'] },
-    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'] }
+    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'], useModule: true },
+    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'], useModule: true },
+    { cmd: 'yt-dlp', args: ['--version'], useModule: false },
+    { cmd: '/usr/local/bin/yt-dlp', args: ['--version'], useModule: false },
+    { cmd: '/usr/bin/yt-dlp', args: ['--version'], useModule: false },
+    { cmd: process.env.HOME + '/Library/Python/3.9/bin/yt-dlp', args: ['--version'], useModule: false }
   ];
 
-  for (const { cmd, args } of possibleCommands) {
+  for (const { cmd, args, useModule } of possibleCommands) {
     const available = await new Promise((resolve) => {
       try {
         const proc = spawn(cmd, args, { stdio: 'pipe' });
@@ -41,7 +43,7 @@ async function detectYtDlpCommand() {
         proc.stderr.on('data', (data) => { output += data.toString(); });
         
         proc.on('close', (code) => {
-          resolve(code === 0 || output.includes('yt-dlp'));
+          resolve(code === 0 || output.includes('yt-dlp') || output.includes('yt_dlp'));
         });
         
         proc.on('error', () => resolve(false));
@@ -56,11 +58,7 @@ async function detectYtDlpCommand() {
     });
 
     if (available) {
-      if (args.includes('-m')) {
-        ytDlpCommandCache = { executable: cmd, useModule: true };
-      } else {
-        ytDlpCommandCache = { executable: cmd, useModule: false };
-      }
+      ytDlpCommandCache = { executable: cmd, useModule: useModule || false };
       console.log(`[DOWNLOAD] ✅ yt-dlp detectado: ${ytDlpCommandCache.executable}${ytDlpCommandCache.useModule ? ' -m yt_dlp' : ''}`);
       return ytDlpCommandCache;
     }

@@ -521,7 +521,9 @@ async function handleYouTubeSubmit() {
         
     } catch (error) {
         console.error('Erro:', error);
-        showStatus('Erro ao baixar vídeo do YouTube. Verifique sua conexão.', 'error');
+        // Mostrar mensagem de erro mais específica se disponível
+        const errorMessage = error.message || 'Erro ao baixar vídeo do YouTube. Verifique sua conexão.';
+        showStatus(errorMessage, 'error');
         clearDownloadProgress();
     } finally {
         if (btn) {
@@ -552,9 +554,11 @@ async function downloadWithProgress(url) {
                     if (!hasResolved) {
                         hasResolved = true;
                         eventSource.close();
-                        showStatus(data.error || 'Erro ao baixar vídeo', 'error');
+                        // Mostrar mensagem de erro específica do backend
+                        const errorMsg = data.error || 'Erro ao baixar vídeo do YouTube';
+                        showStatus(errorMsg, 'error');
                         clearDownloadProgress();
-                        reject(new Error(data.error || 'Erro desconhecido'));
+                        reject(new Error(errorMsg));
                     }
                     return;
                 }
