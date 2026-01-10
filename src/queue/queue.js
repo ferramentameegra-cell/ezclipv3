@@ -26,28 +26,77 @@ if (process.env.REDIS_URL) {
 
   console.log('[QUEUE] Filas configuradas com Redis');
 } else {
-  // Mock para desenvolvimento sem Redis
-  console.warn('[QUEUE] REDIS_URL não definida. Usando filas mock (desenvolvimento)');
+  // Mock para desenvolvimento sem Redis com processamento direto
+  console.warn('[QUEUE] REDIS_URL não definida. Usando filas mock com processamento direto (desenvolvimento)');
+  
+  // Armazenar handlers e jobs
+  const processors = new Map();
+  const jobs = new Map();
   
   const createMockQueue = (name) => ({
     async add(jobName, data, options) {
-      console.log(`[QUEUE-MOCK] Job adicionado: ${jobName}`, data);
-      return {
-        id: `mock-${Date.now()}`,
+      const jobId = `mock-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const job = {
+        id: jobId,
+        name: jobName,
+        data: data,
+        _progress: 0,
+        _state: 'waiting',
         async progress(value) {
-          console.log(`[QUEUE-MOCK] Progresso: ${value}%`);
+          this._progress = value;
+          console.log(`[QUEUE-MOCK:${name}] Job ${jobId} progresso: ${value}%`);
+          // Atualizar job no map
+          jobs.set(jobId, this);
         },
         async getState() {
-          return 'completed';
+          return this._state;
         },
         progress() {
-          return 100;
+          return this._progress || 0;
         },
         failedReason: null
       };
+      
+      jobs.set(jobId, job);
+      console.log(`[QUEUE-MOCK:${name}] Job adicionado: ${jobName} (${jobId})`, data);
+      
+      // Processar imediatamente se houver handler
+      const handler = processors.get(`${name}:${jobName}`);
+      if (handler) {
+        // Processar de forma assíncrona para não bloquear
+        setImmediate(async () => {
+          try {
+            job._state = 'active';
+            console.log(`[QUEUE-MOCK:${name}] Processando job ${jobId}...`);
+            await handler(job);
+            job._state = 'completed';
+            job._progress = 100;
+            console.log(`[QUEUE-MOCK:${name}] Job ${jobId} concluído`);
+          } catch (error) {
+            job._state = 'failed';
+            job.failedReason = error.message;
+            console.error(`[QUEUE-MOCK:${name}] Job ${jobId} falhou:`, error.message);
+          }
+          jobs.set(jobId, job);
+        });
+      } else {
+        console.warn(`[QUEUE-MOCK:${name}] Nenhum handler registrado para ${jobName}`);
+      }
+      
+      return job;
     },
     async getJob(jobId) {
-      return null;
+      return jobs.get(jobId) || null;
+    },
+    process(jobName, concurrency, handler) {
+      const key = `${name}:${jobName}`;
+      if (typeof concurrency === 'function') {
+        handler = concurrency;
+        concurrency = 1;
+      }
+      processors.set(key, handler);
+      console.log(`[QUEUE-MOCK:${name}] Handler registrado para ${jobName} (concurrency: ${concurrency})`);
+      return this;
     }
   });
 

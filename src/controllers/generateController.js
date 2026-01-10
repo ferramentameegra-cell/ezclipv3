@@ -76,16 +76,24 @@ export const getSeriesStatus = async (req, res) => {
     const job = await videoProcessQueue.getJob(req.params.jobId);
 
     if (!job) {
-      return res.status(404).json({ error: 'Job não encontrado' });
+      return res.status(404).json({ 
+        error: 'Job não encontrado',
+        jobId: req.params.jobId,
+        status: 'not_found'
+      });
     }
+
+    const state = typeof job.getState === 'function' ? await job.getState() : job._state || 'unknown';
+    const progress = typeof job.progress === 'function' ? (job.progress() || 0) : (job._progress || 0);
 
     res.json({
       jobId: job.id,
-      status: await job.getState(),
-      progress: job.progress() || 0,
+      status: state,
+      progress: progress,
       failedReason: job.failedReason || null
     });
   } catch (error) {
+    console.error('[GENERATE] Erro ao buscar status:', error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -11,6 +11,9 @@ import generateRoutes from "./routes/generate.js";
 import nichesRoutes from "./routes/niches.js";
 import retentionRoutes from "./routes/retention.js";
 
+// Importar workers para processar jobs (funciona mesmo sem Redis)
+import "./workers/videoProcessWorker.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
