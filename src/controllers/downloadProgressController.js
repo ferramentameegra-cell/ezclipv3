@@ -189,6 +189,10 @@ function parseYtDlpError(stderr, exitCode) {
     return 'YouTube bloqueou o acesso (403). Isso pode ser temporário. Tente novamente em alguns minutos ou verifique se o vídeo está disponível. Se persistir, atualize: python3 -m pip install --upgrade yt-dlp';
   }
   
+  if (errorLower.includes('requested format is not available') || errorLower.includes('format is not available')) {
+    return 'Formato de vídeo não disponível para este vídeo. Isso pode ser temporário. Tente novamente em alguns minutos.';
+  }
+  
   if (errorLower.includes('sign in to download') || errorLower.includes('private video') || errorLower.includes('members-only')) {
     return 'Este vídeo requer login ou é privado. Use um vídeo público.';
   }
