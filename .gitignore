@@ -7,3 +7,5 @@ node_modules/
 uploads/
 dist/
 build/
+ezclip-backend@2.0.0
+node
