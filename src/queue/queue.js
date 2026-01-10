@@ -29,11 +29,12 @@ if (process.env.REDIS_URL) {
   // Mock para desenvolvimento sem Redis com processamento direto
   console.warn('[QUEUE] REDIS_URL não definida. Usando filas mock com processamento direto (desenvolvimento)');
   
-  // Armazenar handlers e jobs
+  // Armazenar handlers e jobs (compartilhados entre filas)
   const processors = new Map();
   const jobs = new Map();
   
-  const createMockQueue = (name) => ({
+  const createMockQueue = (name) => {
+    const queue = {
     async add(jobName, data, options) {
       const jobId = `mock-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const job = {
