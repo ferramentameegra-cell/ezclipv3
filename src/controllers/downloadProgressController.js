@@ -364,18 +364,19 @@ export async function downloadWithProgress(req, res) {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
       // Preparar argumentos do yt-dlp com a estratégia atual
-      // Usar formato mais simples e compatível
+      // Formato flexível: aceita qualquer formato de vídeo (bestvideo+bestaudio ou best)
       const downloadArgs = [
-        "-f", "best[ext=mp4]/best[height<=720]/best",
+        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best",
         "--merge-output-format", "mp4",
         "--no-playlist",
+        "--no-warnings",
         "--newline",
         // Headers HTTP básicos
         "--user-agent", strategy.userAgent,
         "--referer", "https://www.youtube.com/",
         // Usar cliente específico da estratégia
         "--extractor-args", strategy.extractorArgs,
-        // Opções de robustez (simplificadas)
+        // Opções de robustez
         "--retries", "3",
         "--fragment-retries", "3",
         "--file-access-retries", "3",
