@@ -25,6 +25,14 @@ export async function generateCaptionsForVideo(req, res) {
       });
     }
 
+    // Verificar se OpenAI API key está configurada
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI API key não configurada. Configure OPENAI_API_KEY no ambiente.'
+      });
+    }
+
     // Buscar vídeo no store
     const video = videoStore.get(videoId);
     if (!video || !video.path || !fs.existsSync(video.path)) {
@@ -41,6 +49,7 @@ export async function generateCaptionsForVideo(req, res) {
     };
 
     console.log(`[CAPTION] Gerando legendas para vídeo: ${videoId}`);
+    console.log(`[CAPTION] OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✅ Configurada' : '❌ Não configurada'}`);
 
     // Gerar legendas
     const result = await generateCaptions(video.path, options);

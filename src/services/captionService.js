@@ -10,11 +10,41 @@
 
 import fs from 'fs';
 import path from 'path';
-import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Inicializar OpenAI apenas quando necessário (lazy loading)
+let openai = null;
+
+async function getOpenAIClient() {
+  if (!openai) {
+    // Carregar dotenv se ainda não foi carregado
+    if (!process.env.OPENAI_API_KEY) {
+      try {
+        const dotenv = await import('dotenv');
+        dotenv.default.config();
+      } catch (e) {
+        // dotenv pode não estar disponível, continuar
+      }
+    }
+    
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.warn('[CAPTION] ⚠️ OPENAI_API_KEY não configurada no ambiente');
+      return null;
+    }
+    
+    try {
+      const OpenAI = (await import('openai')).default;
+      openai = new OpenAI({
+        apiKey: apiKey
+      });
+      console.log('[CAPTION] ✅ OpenAI client inicializado com sucesso');
+    } catch (error) {
+      console.error('[CAPTION] ❌ Erro ao inicializar OpenAI:', error.message);
+      return null;
+    }
+  }
+  return openai;
+}
 
 /**
  * Extrai áudio do vídeo usando FFmpeg
@@ -46,10 +76,15 @@ async function extractAudio(videoPath, audioPath) {
  * Transcreve áudio usando OpenAI Whisper
  */
 async function transcribeAudio(audioPath) {
+  const client = await getOpenAIClient();
+  if (!client) {
+    throw new Error('OpenAI API key não configurada. Configure OPENAI_API_KEY no ambiente.');
+  }
+
   try {
     console.log('[CAPTION] Iniciando transcrição com Whisper...');
     
-    const transcription = await openai.audio.transcriptions.create({
+    const transcription = await client.audio.transcriptions.create({
       file: fs.createReadStream(audioPath),
       model: 'whisper-1',
       response_format: 'verbose_json',
