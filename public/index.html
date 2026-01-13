@@ -157,32 +157,32 @@
                             </div>
                             <div class="step-label">YouTube</div>
                         </div>
-                        <div class="progress-step" data-step="trim">
+                        <div class="progress-step" data-step="captions">
                             <div class="step-indicator">
                                 <div class="step-number">2</div>
+                                <div class="step-line"></div>
+                            </div>
+                            <div class="step-label">Legendas</div>
+                        </div>
+                        <div class="progress-step" data-step="trim">
+                            <div class="step-indicator">
+                                <div class="step-number">3</div>
                                 <div class="step-line"></div>
                             </div>
                             <div class="step-label">Intervalo</div>
                         </div>
                         <div class="progress-step" data-step="niche">
                             <div class="step-indicator">
-                                <div class="step-number">3</div>
-                                <div class="step-line"></div>
-                            </div>
-                            <div class="step-label">Nicho</div>
-                        </div>
-                        <div class="progress-step" data-step="retention">
-                            <div class="step-indicator">
                                 <div class="step-number">4</div>
                                 <div class="step-line"></div>
                             </div>
-                            <div class="step-label">Retenção</div>
+                            <div class="step-label">Nicho</div>
                         </div>
                         <div class="progress-step" data-step="generate">
                             <div class="step-indicator">
                                 <div class="step-number">5</div>
                             </div>
-                            <div class="step-label">Gerar</div>
+                            <div class="step-label">Gerar Clipes</div>
                         </div>
                     </div>
                     
@@ -278,6 +278,13 @@
 
                         <div id="youtube-status" class="status-message hidden"></div>
                         <div id="upload-status" class="status-message hidden"></div>
+                    </div>
+
+                    <!-- Captions Editor -->
+                    <div class="tool-card hidden" id="captions-card" data-step-card="captions">
+                        <h3 class="card-title">Editar Legendas</h3>
+                        <p class="card-subtitle">Gere legendas automaticamente com IA ou edite manualmente</p>
+                        <div id="captions-editor-container"></div>
                     </div>
 
                     <!-- Trim Tool -->

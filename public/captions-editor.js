@@ -570,12 +570,12 @@ class CaptionsEditor {
       const data = await response.json();
       
       if (data.success) {
-        alert('Legendas salvas com sucesso!');
+        return Promise.resolve();
       } else {
-        alert('Erro ao salvar legendas: ' + data.error);
+        throw new Error(data.error || 'Erro ao salvar legendas');
       }
     } catch (error) {
-      alert('Erro ao salvar legendas: ' + error.message);
+      throw error;
     }
   }
 

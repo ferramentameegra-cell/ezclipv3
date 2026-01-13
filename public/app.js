@@ -58,7 +58,7 @@ function switchTab(tabName) {
 
 // ========== PROGRESS STEPS INDICATOR ==========
 function updateProgressSteps(stepName) {
-    const steps = ['youtube', 'trim', 'niche', 'retention', 'generate'];
+    const steps = ['youtube', 'captions', 'trim', 'niche', 'generate'];
     const stepIndex = steps.indexOf(stepName);
     
     if (stepIndex === -1) return;
@@ -815,15 +815,12 @@ async function downloadWithProgress(url) {
                         // Renderizar player IMEDIATAMENTE com arquivo baixado
                         renderVideoPlayer(data.playableUrl);
                         
-                        // Exibir trim tool APENAS quando estado === ready
-                        showTrimSection();
+                        // Exibir editor de legendas APENAS quando estado === ready (PASSO 2)
+                        showCaptionsSection();
                         
                         // Aguardar um pouco para garantir que elementos estão prontos
                         setTimeout(() => {
-                            setupTrimControlsForVideo({
-                                duration: data.duration || data.videoDuration,
-                                playableUrl: data.playableUrl
-                            });
+                            initializeCaptionsEditor(data.videoId);
                         }, 100);
                         
                         clearDownloadProgress();
@@ -1010,6 +1007,186 @@ async function verifyVideoReady(videoId) {
         console.error('[VERIFY] Erro ao verificar estado:', error);
         return false;
     }
+}
+
+/**
+ * Mostra a seção de legendas (PASSO 2)
+ */
+function showCaptionsSection() {
+    const captionsCard = document.getElementById('captions-card');
+    if (captionsCard) {
+        captionsCard.classList.remove('hidden');
+        updateProgressSteps('captions');
+        setTimeout(() => {
+            captionsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+}
+
+/**
+ * Inicializa o editor de legendas
+ */
+let captionsEditorInstance = null;
+
+function initializeCaptionsEditor(videoId) {
+    const container = document.getElementById('captions-editor-container');
+    if (!container) return;
+
+    // Limpar container anterior
+    container.innerHTML = '';
+
+    // Carregar CSS e JS do editor se ainda não foram carregados
+    if (!document.getElementById('captions-editor-css')) {
+        const link = document.createElement('link');
+        link.id = 'captions-editor-css';
+        link.rel = 'stylesheet';
+        link.href = '/captions-editor.css';
+        document.head.appendChild(link);
+    }
+
+    if (!document.getElementById('captions-editor-js')) {
+        const script = document.createElement('script');
+        script.id = 'captions-editor-js';
+        script.src = '/captions-editor.js';
+        script.onload = () => {
+            createCaptionsEditor(videoId);
+        };
+        document.body.appendChild(script);
+    } else {
+        createCaptionsEditor(videoId);
+    }
+}
+
+function createCaptionsEditor(videoId) {
+    const container = document.getElementById('captions-editor-container');
+    if (!container || !window.CaptionsEditor) return;
+
+    // Criar wrapper para o editor
+    const wrapper = document.createElement('div');
+    wrapper.id = 'captions-editor-wrapper';
+    container.appendChild(wrapper);
+
+    // Inicializar editor
+    captionsEditorInstance = new CaptionsEditor('captions-editor-wrapper', {
+        videoId: videoId,
+        apiBase: API_BASE
+    });
+
+    // Adicionar botão de continuar após salvar legendas
+    const continueBtn = document.createElement('button');
+    continueBtn.className = 'btn btn-primary';
+    continueBtn.style.marginTop = '20px';
+    continueBtn.textContent = 'Continuar para Intervalo →';
+    continueBtn.onclick = () => {
+        if (captionsEditorInstance) {
+            captionsEditorInstance.saveCaptions().then(() => {
+                showTrimSection();
+            });
+        } else {
+            showTrimSection();
+        }
+    };
+    container.appendChild(continueBtn);
+}
+
+/**
+ * Mostra a seção de legendas (PASSO 2)
+ */
+function showCaptionsSection() {
+    const captionsCard = document.getElementById('captions-card');
+    if (!captionsCard) return;
+    
+    // Verificar se vídeo está pronto
+    if (!appState.videoId) {
+        showStatus('Vídeo não encontrado', 'error');
+        return;
+    }
+    
+    captionsCard.classList.remove('hidden');
+    updateProgressSteps('captions');
+    
+    // Inicializar editor de legendas
+    setTimeout(() => {
+        initializeCaptionsEditor(appState.videoId);
+        captionsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+}
+
+/**
+ * Inicializa o editor de legendas
+ */
+let captionsEditorInstance = null;
+
+function initializeCaptionsEditor(videoId) {
+    const container = document.getElementById('captions-editor-container');
+    if (!container) return;
+
+    // Limpar container anterior
+    container.innerHTML = '';
+
+    // Carregar CSS e JS do editor se ainda não foram carregados
+    if (!document.getElementById('captions-editor-css')) {
+        const link = document.createElement('link');
+        link.id = 'captions-editor-css';
+        link.rel = 'stylesheet';
+        link.href = '/captions-editor.css';
+        document.head.appendChild(link);
+    }
+
+    if (!document.getElementById('captions-editor-js')) {
+        const script = document.createElement('script');
+        script.id = 'captions-editor-js';
+        script.src = '/captions-editor.js';
+        script.onload = () => {
+            createCaptionsEditor(videoId);
+        };
+        document.body.appendChild(script);
+    } else {
+        createCaptionsEditor(videoId);
+    }
+}
+
+function createCaptionsEditor(videoId) {
+    const container = document.getElementById('captions-editor-container');
+    if (!container || !window.CaptionsEditor) {
+        // Tentar novamente após um delay
+        setTimeout(() => createCaptionsEditor(videoId), 500);
+        return;
+    }
+
+    // Criar wrapper para o editor
+    const wrapper = document.createElement('div');
+    wrapper.id = 'captions-editor-wrapper';
+    container.appendChild(wrapper);
+
+    // Inicializar editor
+    captionsEditorInstance = new CaptionsEditor('captions-editor-wrapper', {
+        videoId: videoId,
+        apiBase: API_BASE
+    });
+
+    // Adicionar botão de continuar após salvar legendas
+    const continueBtn = document.createElement('button');
+    continueBtn.className = 'btn btn-primary';
+    continueBtn.style.marginTop = '20px';
+    continueBtn.style.width = '100%';
+    continueBtn.textContent = 'Salvar Legendas e Continuar para Intervalo →';
+    continueBtn.onclick = async () => {
+        if (captionsEditorInstance) {
+            try {
+                await captionsEditorInstance.saveCaptions();
+                showStatus('Legendas salvas com sucesso!', 'success');
+                setTimeout(() => {
+                    showTrimSection();
+                }, 500);
+            } catch (error) {
+                showStatus('Erro ao salvar legendas: ' + error.message, 'error');
+            }
+        } else {
+            showTrimSection();
+        }
+    };
+    container.appendChild(continueBtn);
 }
 
 async function showTrimSection() {
