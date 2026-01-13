@@ -9,3 +9,8 @@ dist/
 build/
 ezclip-backend@2.0.0
 node
+
+# Cookies do YouTube (não commitar!)
+cookies/
+*.cookies.txt
+cookies.txt

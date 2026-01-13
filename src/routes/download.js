@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "path";
 import { downloadWithProgress, getVideoState } from "../controllers/downloadProgressController.js";
 import { uploadVideo } from "../controllers/uploadController.js";
+import { getWorkerStatus } from "../controllers/workerStatusController.js";
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ const upload = multer({
 // Rotas de download YouTube
 router.get("/progress", downloadWithProgress);
 router.get("/state/:videoId", getVideoState);
+router.get("/worker/status", getWorkerStatus);
 
 // Rota de upload de vídeo
 router.post("/upload", upload.single('video'), uploadVideo);
