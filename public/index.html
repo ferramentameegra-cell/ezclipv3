@@ -386,6 +386,16 @@
                             </div>
                             <div class="preview-controls">
                                 <div class="control-field">
+                                    <label>Texto da Headline</label>
+                                    <input 
+                                        type="text" 
+                                        id="headline-text-input" 
+                                        class="input-field" 
+                                        placeholder="Digite o texto da headline..."
+                                        oninput="updateHeadlineText()"
+                                    >
+                                </div>
+                                <div class="control-field">
                                     <label>Fonte</label>
                                     <select id="headline-font-select" class="select-field" onchange="updatePreviewStyle()">
                                         <option value="Inter">Inter</option>

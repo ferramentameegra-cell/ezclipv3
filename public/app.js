@@ -5,6 +5,7 @@ const appState = {
     trimStart: 0,
     trimEnd: 0,
     cutDuration: 60,
+    headlineText: 'Headline',
     numberOfCuts: 0,
     nicheId: null,
     retentionVideoId: 'random',
@@ -1662,6 +1663,17 @@ function updateRetentionMode(mode) {
     appState.retentionVideoId = mode;
 }
 
+function updateHeadlineText() {
+    const headline = document.getElementById('preview-headline');
+    const textInput = document.getElementById('headline-text-input');
+    
+    if (!headline || !textInput) return;
+    
+    const text = textInput.value.trim() || 'Headline';
+    appState.headlineText = text;
+    headline.textContent = text;
+}
+
 function updatePreviewStyle() {
     const headline = document.getElementById('preview-headline');
     const fontSelect = document.getElementById('headline-font-select');
@@ -1715,6 +1727,7 @@ async function generateSeries() {
                 retentionVideoId: appState.retentionVideoId,
                 numberOfCuts: appState.numberOfCuts,
                 headlineStyle: appState.headlineStyle,
+                headlineText: appState.headlineText || 'Headline',
                 font: appState.font,
                 trimStart: appState.trimStart,
                 trimEnd: appState.trimEnd,
