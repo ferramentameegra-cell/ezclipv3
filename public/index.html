@@ -145,7 +145,7 @@
                 <div class="container">
                     <div class="section-header">
                         <h2 class="section-title">Crie seus clips agora</h2>
-                        <p class="section-subtitle">Cole o link do YouTube e nossa IA fará o resto</p>
+                        <p class="section-subtitle">Envie seu vídeo ou cole o link do YouTube - nossa IA fará o resto</p>
                     </div>
                     
                     <!-- Progress Steps Indicator -->
@@ -186,25 +186,86 @@
                         </div>
                     </div>
                     
-                    <!-- YouTube Input -->
+                    <!-- Video Input Options (YouTube ou Upload) -->
                     <div class="tool-card" data-step-card="youtube">
-                        <div class="input-group-large">
-                            <div class="input-wrapper">
-                                <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                    <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2"/>
-                                    <path d="M9 12L11 14L15 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <!-- Tabs para escolher entre YouTube e Upload -->
+                        <div class="input-tabs">
+                            <button class="input-tab active" data-tab="youtube" onclick="switchInputTab('youtube')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="currentColor"/>
                                 </svg>
-                                <input 
-                                    type="text" 
-                                    id="youtube-url" 
-                                    class="input-large" 
-                                    placeholder="Cole aqui o link do YouTube..."
-                                    autocomplete="off"
-                                >
+                                YouTube
+                            </button>
+                            <button class="input-tab" data-tab="upload" onclick="switchInputTab('upload')">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                                    <path d="M14 2H6C4.89 2 4 2.89 4 4V20C4 21.11 4.89 22 6 22H18C19.11 22 20 21.11 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M16 13H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M10 9H9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                Upload
+                            </button>
+                        </div>
+
+                        <!-- YouTube Input -->
+                        <div class="input-option active" id="input-youtube">
+                            <div class="input-group-large">
+                                <div class="input-wrapper">
+                                    <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="currentColor"/>
+                                    </svg>
+                                    <input 
+                                        type="text" 
+                                        id="youtube-url" 
+                                        class="input-large" 
+                                        placeholder="Cole aqui o link do YouTube..."
+                                        autocomplete="off"
+                                    >
+                                </div>
+                                <button class="btn-process-large" id="btn-process-youtube" onclick="handleYouTubeSubmit()">
+                                    <span id="btn-text-youtube">Processar</span>
+                                    <span id="btn-loader-youtube" class="hidden">
+                                        <svg class="spinner" width="20" height="20" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                                <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                                <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                            </circle>
+                                        </svg>
+                                    </span>
+                                </button>
                             </div>
-                            <button class="btn-process-large" id="btn-process" onclick="handleYouTubeSubmit()">
-                                <span id="btn-text">Processar</span>
-                                <span id="btn-loader" class="hidden">
+                        </div>
+
+                        <!-- Upload Input -->
+                        <div class="input-option hidden" id="input-upload">
+                            <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+                                <input 
+                                    type="file" 
+                                    id="file-input" 
+                                    accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska,.mp4,.webm,.mov,.avi,.mkv"
+                                    style="display: none;"
+                                    onchange="handleFileSelect(event)"
+                                >
+                                <div class="upload-content">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" class="upload-icon">
+                                        <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <p class="upload-text">
+                                        <strong>Clique para fazer upload</strong> ou arraste seu vídeo aqui
+                                    </p>
+                                    <p class="upload-hint">Formatos suportados: MP4, WebM, MOV, AVI, MKV (máx. 500MB)</p>
+                                </div>
+                                <div id="file-info" class="file-info hidden">
+                                    <span id="file-name"></span>
+                                    <span id="file-size"></span>
+                                </div>
+                            </div>
+                            <button class="btn-process-large" id="btn-process-upload" onclick="handleUploadSubmit()" style="margin-top: 1rem;" disabled>
+                                <span id="btn-text-upload">Enviar Vídeo</span>
+                                <span id="btn-loader-upload" class="hidden">
                                     <svg class="spinner" width="20" height="20" viewBox="0 0 24 24">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
                                             <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
@@ -214,7 +275,9 @@
                                 </span>
                             </button>
                         </div>
+
                         <div id="youtube-status" class="status-message hidden"></div>
+                        <div id="upload-status" class="status-message hidden"></div>
                     </div>
 
                     <!-- Trim Tool -->

@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initializeApp() {
     setupYouTubeInput();
+    setupUploadDragDrop();
     setupTrimControls();
     loadNiches();
     loadCursos();
@@ -376,9 +377,9 @@ function comprarCurso(cursoId) {
 // ========== YOUTUBE & VIDEO PROCESSING ==========
 function setupYouTubeInput() {
     const input = document.getElementById('youtube-url');
-    const btn = document.getElementById('btn-process');
+    const btn = document.getElementById('btn-process-youtube');
     
-    if (!input || !btn) return;
+    if (!input) return;
     
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -390,18 +391,20 @@ function setupYouTubeInput() {
     let previewTimeout = null;
     input.addEventListener('input', () => {
         const url = input.value.trim();
-        if (isValidYouTubeUrl(url)) {
-            btn.disabled = false;
-            
-            // Buscar preview após 1 segundo de inatividade
-            clearTimeout(previewTimeout);
-            previewTimeout = setTimeout(() => {
-                loadYouTubePreview(url);
-            }, 1000);
-        } else {
-            btn.disabled = url.length === 0;
-            clearTimeout(previewTimeout);
-            clearVideoPreview();
+        if (btn) {
+            if (isValidYouTubeUrl(url)) {
+                btn.disabled = false;
+                
+                // Buscar preview após 1 segundo de inatividade
+                clearTimeout(previewTimeout);
+                previewTimeout = setTimeout(() => {
+                    loadYouTubePreview(url);
+                }, 1000);
+            } else {
+                btn.disabled = url.length === 0;
+                clearTimeout(previewTimeout);
+                clearVideoPreview();
+            }
         }
     });
 }
@@ -489,12 +492,226 @@ function formatDuration(seconds) {
  * REFATORADO: Download automático de vídeo YouTube com progresso em tempo real
  * Quando URL é submetida, baixa com progresso SSE e renderiza player
  */
+// Estado do arquivo selecionado para upload
+let selectedFile = null;
+
+/**
+ * Trocar entre tabs (YouTube e Upload)
+ */
+function switchInputTab(tabName) {
+    // Atualizar tabs
+    document.querySelectorAll('.input-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
+    
+    // Mostrar opção correspondente
+    document.getElementById('input-youtube')?.classList.toggle('active', tabName === 'youtube');
+    document.getElementById('input-youtube')?.classList.toggle('hidden', tabName !== 'youtube');
+    document.getElementById('input-upload')?.classList.toggle('active', tabName === 'upload');
+    document.getElementById('input-upload')?.classList.toggle('hidden', tabName !== 'upload');
+    
+    // Limpar status
+    const statusYoutube = document.getElementById('youtube-status');
+    const statusUpload = document.getElementById('upload-status');
+    if (statusYoutube) statusYoutube.classList.add('hidden');
+    if (statusUpload) statusUpload.classList.add('hidden');
+}
+
+/**
+ * Handler para seleção de arquivo
+ */
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    selectedFile = file;
+    
+    // Mostrar informações do arquivo
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const uploadBtn = document.getElementById('btn-process-upload');
+    
+    if (fileInfo && fileName && fileSize) {
+        fileName.textContent = file.name;
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        fileSize.textContent = `${sizeMB} MB`;
+        fileInfo.classList.remove('hidden');
+    }
+    
+    // Habilitar botão de upload
+    if (uploadBtn) {
+        uploadBtn.disabled = false;
+    }
+    
+    // Ocultar conteúdo de upload inicial
+    const uploadContent = document.querySelector('.upload-content');
+    if (uploadContent && fileInfo) {
+        uploadContent.style.display = fileInfo.classList.contains('hidden') ? 'flex' : 'none';
+    }
+}
+
+/**
+ * Handler para upload de vídeo
+ */
+async function handleUploadSubmit() {
+    if (!selectedFile) {
+        showUploadStatus('Por favor, selecione um arquivo de vídeo', 'error');
+        return;
+    }
+    
+    const btn = document.getElementById('btn-process-upload');
+    const btnText = document.getElementById('btn-text-upload');
+    const btnLoader = document.getElementById('btn-loader-upload');
+    const statusMsg = document.getElementById('upload-status');
+    
+    // Estado de loading
+    if (btn) {
+        btn.disabled = true;
+        if (btnText) btnText.classList.add('hidden');
+        if (btnLoader) btnLoader.classList.remove('hidden');
+    }
+    if (statusMsg) statusMsg.classList.add('hidden');
+    
+    try {
+        const formData = new FormData();
+        formData.append('video', selectedFile);
+        
+        showUploadStatus('Enviando e validando vídeo...', 'info');
+        
+        const response = await fetch(`${API_BASE}/api/download/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao enviar vídeo');
+        }
+        
+        if (data.success && data.videoId && data.ready) {
+            // Vídeo enviado e validado com sucesso
+            appState.videoId = data.videoId;
+            appState.videoInfo = {
+                id: data.videoId,
+                playableUrl: data.playableUrl,
+                duration: data.duration || data.videoDuration,
+                uploaded: true,
+                validated: true,
+                state: 'ready'
+            };
+            
+            console.log('[UPLOAD] Vídeo pronto:', {
+                videoId: data.videoId,
+                duration: data.duration || data.videoDuration,
+                playableUrl: data.playableUrl
+            });
+            
+            showUploadStatus('Vídeo enviado e validado com sucesso!', 'success');
+            
+            // Renderizar player IMEDIATAMENTE (igual ao YouTube)
+            renderVideoPlayer(data.playableUrl);
+            
+            // Limpar seleção de arquivo
+            selectedFile = null;
+            document.getElementById('file-input').value = '';
+            const fileInfo = document.getElementById('file-info');
+            if (fileInfo) fileInfo.classList.add('hidden');
+            const uploadContent = document.querySelector('.upload-content');
+            if (uploadContent) uploadContent.style.display = 'flex';
+            
+            // Exibir trim tool APENAS quando estado === ready (igual ao YouTube)
+            showTrimSection();
+            
+            // Aguardar um pouco para garantir que elementos estão prontos
+            setTimeout(() => {
+                setupTrimControlsForVideo({
+                    duration: data.duration || data.videoDuration,
+                    playableUrl: data.playableUrl
+                });
+            }, 300);
+        } else {
+            throw new Error(data.error || 'Upload incompleto');
+        }
+        
+    } catch (error) {
+        console.error('[UPLOAD] Erro:', error);
+        const errorMessage = error.message || 'Erro ao enviar vídeo. Verifique o formato e tamanho do arquivo.';
+        showUploadStatus(errorMessage, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnLoader) btnLoader.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Mostrar status de upload
+ */
+function showUploadStatus(message, type) {
+    const statusMsg = document.getElementById('upload-status');
+    if (!statusMsg) return;
+    
+    statusMsg.textContent = message;
+    statusMsg.className = `status-message ${type}`;
+    statusMsg.classList.remove('hidden');
+}
+
+/**
+ * Configurar drag and drop para upload
+ */
+function setupUploadDragDrop() {
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('file-input');
+    
+    if (!uploadArea || !fileInput) return;
+    
+    // Prevenir comportamento padrão do navegador
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    // Highlight quando arrastar sobre
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.classList.add('dragover');
+        }, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.classList.remove('dragover');
+        }, false);
+    });
+    
+    // Handle drop
+    uploadArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect({ target: fileInput });
+        }
+    }, false);
+}
+
 async function handleYouTubeSubmit() {
     const input = document.getElementById('youtube-url');
     const url = input.value.trim();
-    const btn = document.getElementById('btn-process');
-    const btnText = document.getElementById('btn-text');
-    const btnLoader = document.getElementById('btn-loader');
+    const btn = document.getElementById('btn-process-youtube');
+    const btnText = document.getElementById('btn-text-youtube');
+    const btnLoader = document.getElementById('btn-loader-youtube');
     const statusMsg = document.getElementById('youtube-status');
     
     if (!url) {

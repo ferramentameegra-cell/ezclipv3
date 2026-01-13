@@ -67,6 +67,19 @@ export const NICHES = {
   }
 };
 
+/**
+ * VÍDEOS DE RETENÇÃO
+ * 
+ * Para adicionar um novo vídeo de retenção:
+ * 1. Adicione o metadado abaixo com um ID único
+ * 2. Faça upload do arquivo via POST /api/retention/upload com o mesmo ID
+ *    ou coloque manualmente o arquivo em retention-library/{id}.mp4
+ * 
+ * Exemplo:
+ * - ID: 'meu-video'
+ * - Nome do arquivo: 'meu-video.mp4'
+ * - Caminho: retention-library/meu-video.mp4
+ */
 export const RETENTION_VIDEOS = {
   'hydraulic-press': {
     id: 'hydraulic-press',

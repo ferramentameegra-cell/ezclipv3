@@ -270,18 +270,20 @@ export const playVideo = (req, res) => {
       const start = parseInt(startStr, 10);
       const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
 
+      const contentType = video.mimetype || 'video/mp4';
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': end - start + 1,
-        'Content-Type': 'video/mp4'
+        'Content-Type': contentType
       });
 
       fs.createReadStream(video.path, { start, end }).pipe(res);
     } else {
+      const contentType = video.mimetype || 'video/mp4';
       res.writeHead(200, {
         'Content-Length': fileSize,
-        'Content-Type': 'video/mp4'
+        'Content-Type': contentType
       });
       fs.createReadStream(video.path).pipe(res);
     }
