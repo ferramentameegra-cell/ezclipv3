@@ -817,12 +817,8 @@ async function downloadWithProgress(url) {
                         renderVideoPlayer(data.playableUrl);
                         
                         // Exibir editor de legendas APENAS quando estado === ready (PASSO 2)
+                        // Legendas são independentes do trim - podem ser geradas e renderizadas separadamente
                         showCaptionsSection();
-                        
-                        // Aguardar um pouco para garantir que elementos estão prontos
-                        setTimeout(() => {
-                            initializeCaptionsEditor(data.videoId);
-                        }, 100);
                         
                         clearDownloadProgress();
                         resolve(data);
@@ -1026,7 +1022,7 @@ function showCaptionsSection() {
     captionsCard.classList.remove('hidden');
     updateProgressSteps('captions');
     
-    // Inicializar editor de legendas
+    // Inicializar editor de legendas (ferramenta independente do trim)
     setTimeout(() => {
         initializeCaptionsEditor(appState.videoId);
         captionsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1080,10 +1076,10 @@ function createCaptionsEditor(videoId) {
     wrapper.id = 'captions-editor-wrapper';
     container.appendChild(wrapper);
 
-    // Inicializar editor
+    // Inicializar editor (ferramenta independente do trim)
     captionsEditorInstance = new CaptionsEditor('captions-editor-wrapper', {
         videoId: videoId,
-        apiBase: API_BASE
+        apiBase: window.location.origin // Usar origem completa para garantir URLs corretas
     });
 
     // Adicionar botão de continuar após salvar legendas

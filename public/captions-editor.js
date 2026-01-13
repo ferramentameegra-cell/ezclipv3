@@ -7,7 +7,9 @@ class CaptionsEditor {
   constructor(containerId, options = {}) {
     this.container = document.getElementById(containerId);
     this.videoId = options.videoId;
-    this.apiBase = options.apiBase || '/api';
+    // apiBase deve ser a origem (ex: http://localhost:8080)
+    // As URLs serão construídas como ${this.apiBase}/api/captions/...
+    this.apiBase = options.apiBase || window.location.origin;
     this.captions = [];
     this.style = {
       font: 'Arial',
@@ -238,28 +240,45 @@ class CaptionsEditor {
 
   async loadCaptions() {
     try {
-      const response = await fetch(`${this.apiBase}/captions/${this.videoId}`);
+      const url = `${this.apiBase}/api/captions/${this.videoId}`;
+      const response = await fetch(url);
+      
+      // Verificar se é JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('[CAPTIONS] Nenhuma legenda encontrada ou resposta inválida');
+        return;
+      }
+
       const data = await response.json();
       
-      if (data.success && data.captions) {
+      if (data.success && data.captions && data.captions.length > 0) {
         this.captions = data.captions;
         this.updatePreview();
       }
     } catch (error) {
-      console.error('Erro ao carregar legendas:', error);
+      console.warn('[CAPTIONS] Erro ao carregar legendas (pode não existir ainda):', error.message);
     }
   }
 
   async loadPresets() {
     try {
-      const response = await fetch(`${this.apiBase}/captions/presets/list`);
+      const url = `${this.apiBase}/api/captions/presets/list`;
+      const response = await fetch(url);
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('[CAPTIONS] Erro ao carregar presets: resposta não é JSON');
+        return;
+      }
+
       const data = await response.json();
       
       if (data.success) {
         this.renderPresets(data.captions, data.headlines);
       }
     } catch (error) {
-      console.error('Erro ao carregar presets:', error);
+      console.error('[CAPTIONS] Erro ao carregar presets:', error);
     }
   }
 
@@ -529,36 +548,64 @@ class CaptionsEditor {
   async generateCaptions() {
     try {
       const btn = document.getElementById('btn-generate-captions');
-      btn.disabled = true;
-      btn.textContent = 'Gerando...';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Gerando...';
+      }
 
-      const response = await fetch(`${this.apiBase}/captions/generate`, {
+      const url = `${this.apiBase}/api/captions/generate`;
+      console.log('[CAPTIONS] Gerando legendas:', url, this.videoId);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoId: this.videoId })
       });
 
+      // Verificar se a resposta é JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('[CAPTIONS] Resposta não é JSON:', text.substring(0, 200));
+        throw new Error(`Servidor retornou HTML em vez de JSON. Status: ${response.status}. Verifique se a rota /api/captions/generate existe.`);
+      }
+
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || `Erro HTTP ${response.status}`);
+      }
       
       if (data.success) {
         this.captions = data.captions;
         this.updatePreview();
-        alert('Legendas geradas com sucesso!');
+        if (btn) {
+          btn.textContent = 'Legendas Geradas ✓';
+          setTimeout(() => {
+            btn.textContent = 'Gerar Legendas (IA)';
+          }, 2000);
+        }
       } else {
-        alert('Erro ao gerar legendas: ' + data.error);
+        throw new Error(data.error || 'Erro desconhecido ao gerar legendas');
       }
     } catch (error) {
+      console.error('[CAPTIONS] Erro:', error);
       alert('Erro ao gerar legendas: ' + error.message);
     } finally {
       const btn = document.getElementById('btn-generate-captions');
-      btn.disabled = false;
-      btn.textContent = 'Gerar Legendas (IA)';
+      if (btn) {
+        btn.disabled = false;
+        if (btn.textContent === 'Gerando...') {
+          btn.textContent = 'Gerar Legendas (IA)';
+        }
+      }
     }
   }
 
   async saveCaptions() {
     try {
-      const response = await fetch(`${this.apiBase}/captions/update`, {
+      const url = `${this.apiBase}/api/captions/update`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -566,6 +613,12 @@ class CaptionsEditor {
           captions: this.captions
         })
       });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Servidor retornou HTML. Status: ${response.status}`);
+      }
 
       const data = await response.json();
       
@@ -582,8 +635,10 @@ class CaptionsEditor {
   async renderVideo() {
     try {
       const btn = document.getElementById('btn-render-video');
-      btn.disabled = true;
-      btn.textContent = 'Renderizando...';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Renderizando...';
+      }
 
       // Coletar estilo atual
       const style = { ...this.style };
@@ -593,7 +648,8 @@ class CaptionsEditor {
         endTime: 5
       } : null;
 
-      const response = await fetch(`${this.apiBase}/captions/render`, {
+      const url = `${this.apiBase}/api/captions/render`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -603,33 +659,54 @@ class CaptionsEditor {
         })
       });
 
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Servidor retornou HTML. Status: ${response.status}`);
+      }
+
       const data = await response.json();
       
       if (data.success) {
         alert('Vídeo renderizado! Download disponível.');
-        window.open(data.downloadUrl, '_blank');
+        if (data.downloadUrl) {
+          window.open(data.downloadUrl, '_blank');
+        }
       } else {
-        alert('Erro ao renderizar: ' + data.error);
+        throw new Error(data.error || 'Erro ao renderizar');
       }
     } catch (error) {
+      console.error('[CAPTIONS] Erro ao renderizar:', error);
       alert('Erro ao renderizar: ' + error.message);
     } finally {
       const btn = document.getElementById('btn-render-video');
-      btn.disabled = false;
-      btn.textContent = 'Renderizar Vídeo';
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Renderizar Vídeo';
+      }
     }
   }
 
   applyPreset(presetKey) {
     // Carregar preset e aplicar
-    fetch(`${this.apiBase}/captions/presets/list`)
-      .then(r => r.json())
+    const url = `${this.apiBase}/api/captions/presets/list`;
+    fetch(url)
+      .then(r => {
+        const contentType = r.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Resposta não é JSON');
+        }
+        return r.json();
+      })
       .then(data => {
-        if (data.captions[presetKey]) {
+        if (data.success && data.captions && data.captions[presetKey]) {
           this.style = { ...data.captions[presetKey] };
           this.updateStyleInputs();
           this.updatePreview();
         }
+      })
+      .catch(error => {
+        console.error('[CAPTIONS] Erro ao aplicar preset:', error);
       });
   }
 
