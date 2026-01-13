@@ -77,6 +77,30 @@ app.get("/health", (req, res) => {
 });
 
 // =====================
+// LIMPEZA AUTOMÁTICA DE ARQUIVOS
+// =====================
+import { cleanupOldFiles } from './services/fileCleanup.js';
+
+// Limpar arquivos antigos a cada 30 minutos
+setInterval(async () => {
+  try {
+    const result = await cleanupOldFiles(1); // Arquivos > 1 hora
+    if (result.cleanedCount > 0) {
+      console.log(`[CLEANUP] Limpeza automática: ${result.cleanedCount} arquivos removidos, ${(result.totalSizeFreed / 1024 / 1024).toFixed(2)} MB liberados`);
+    }
+  } catch (error) {
+    console.error('[CLEANUP] Erro na limpeza automática:', error.message);
+  }
+}, 30 * 60 * 1000); // A cada 30 minutos
+
+// Limpar arquivos antigos na inicialização
+cleanupOldFiles(24).then(result => {
+  if (result.cleanedCount > 0) {
+    console.log(`[CLEANUP] Limpeza inicial: ${result.cleanedCount} arquivos removidos`);
+  }
+});
+
+// =====================
 // INICIALIZAÇÃO
 // =====================
 async function initializeServer() {
@@ -90,9 +114,15 @@ async function initializeServer() {
     console.error('[INIT] Algumas funcionalidades podem não funcionar. Por favor, instale o ffmpeg.');
   }
   
+  // Log de recursos disponíveis
+  const memUsage = process.memoryUsage();
+  console.log(`[INIT] Memória disponível: ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`[INIT] Concurrency de processamento: ${process.env.VIDEO_PROCESS_CONCURRENCY || '2'}`);
+  
   // Iniciar servidor mesmo se ffmpeg não estiver configurado
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 EZ Clips rodando na porta ${PORT}`);
+    console.log(`[INIT] Capacidade estimada: 10-20 usuários simultâneos`);
   });
 }
 

@@ -10,8 +10,13 @@ const __dirname = path.dirname(__filename);
  * Executa periodicamente para evitar acúmulo de arquivos
  */
 export async function cleanupOldFiles(maxAgeHours = 24) {
-  const uploadsDir = path.join(__dirname, '../../uploads');
-  const seriesDir = path.join(__dirname, '../../uploads/series');
+  // Usar /tmp/uploads no Railway, fallback para uploads local
+  const baseDir = process.env.RAILWAY_ENVIRONMENT 
+    ? '/tmp/uploads' 
+    : path.join(__dirname, '../../uploads');
+  
+  const uploadsDir = baseDir;
+  const seriesDir = path.join(baseDir, 'series');
   const maxAge = maxAgeHours * 60 * 60 * 1000; // Converter para milissegundos
   const now = Date.now();
   let cleanedCount = 0;

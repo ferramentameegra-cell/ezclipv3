@@ -14,7 +14,11 @@ export function configureWorker(videoStore) {
 // Criar um jobsMap para armazenar progresso dos jobs
 const jobsMap = new Map();
 
-videoProcessQueue.process('generate-video-series', async (job) => {
+// Concurrency: 2 (processar 2 vídeos simultaneamente)
+// Aumentar conforme recursos disponíveis (RAM/CPU)
+const CONCURRENCY = parseInt(process.env.VIDEO_PROCESS_CONCURRENCY || '2');
+
+videoProcessQueue.process('generate-video-series', CONCURRENCY, async (job) => {
   try {
     console.log(`[WORKER] Processando job ${job.id}: generate-video-series`);
     
