@@ -2108,6 +2108,14 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 2000;
+    visibility: visible;
+    opacity: 1;
+}
+
+.modal.hidden {
+    display: none !important;
+    visibility: hidden;
+    opacity: 0;
 }
 
 .modal-content {
