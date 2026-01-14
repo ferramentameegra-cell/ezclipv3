@@ -14,8 +14,46 @@
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { getRetentionVideoPath, getRandomRetentionVideoPath } from './retentionVideoManager.js';
 import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ===============================
+// BACKGROUND FIXO (OBRIGATÓRIO)
+// ===============================
+/**
+ * Obter caminho da imagem de background fixo
+ * A imagem será aplicada como layer 0 em TODOS os vídeos gerados
+ * 
+ * @returns {string|null} - Caminho da imagem de background ou null se não encontrada
+ */
+function getFixedBackgroundPath() {
+  // Tentar diferentes locais e extensões
+  const possiblePaths = [
+    // Em produção (Railway): /tmp/assets/backgrounds
+    path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.png'),
+    path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.jpg'),
+    // Em desenvolvimento: assets/backgrounds na raiz
+    path.join(__dirname, '../../assets/backgrounds/ezclip-background.png'),
+    path.join(__dirname, '../../assets/backgrounds/ezclip-background.jpg'),
+    // Fallback: variável de ambiente
+    process.env.FIXED_BACKGROUND_PATH || null
+  ].filter(p => p !== null);
+
+  for (const bgPath of possiblePaths) {
+    if (fs.existsSync(bgPath)) {
+      console.log(`[COMPOSER] ✅ Background fixo encontrado: ${bgPath}`);
+      return bgPath;
+    }
+  }
+
+  console.warn(`[COMPOSER] ⚠️ Background fixo não encontrado. Usando cor sólida como fallback.`);
+  console.warn(`[COMPOSER] Coloque a imagem em: assets/backgrounds/ezclip-background.png (1080x1920)`);
+  return null;
+}
 
 // ===============================
 // CONSTANTES DE LAYOUT (DINÂMICAS BASEADAS EM FORMATO)
@@ -189,19 +227,44 @@ export async function composeFinalVideo({
       currentLabel = '[main_scaled]';
 
       // 2. Adicionar padding para centralizar vídeo principal
-      filterParts.push(`${currentLabel}pad=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor.replace('#', '')}[main_padded]`);
+      // Usar cor transparente ou cor de fallback se background não existir
+      const paddingColor = backgroundColor.replace('#', '');
+      filterParts.push(`${currentLabel}pad=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${paddingColor}[main_padded]`);
       currentLabel = '[main_padded]';
 
-      // 3. Criar background sólido 1080x1920
-      filterParts.push(`color=c=${backgroundColor.replace('#', '')}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:d=${videoDuration}[bg]`);
+      // 3. OBTER BACKGROUND FIXO (LAYER 0 - OBRIGATÓRIO)
+      const fixedBackgroundPath = getFixedBackgroundPath();
+      let backgroundInputIndex = null;
+      let inputCount = 1; // clipPath é input 0
+      
+      if (fixedBackgroundPath) {
+        // Background fixo será um input adicional
+        backgroundInputIndex = inputCount;
+        inputCount++;
+        
+        // Redimensionar background para 1080x1920 mantendo proporção (sem distorção)
+        // force_original_aspect_ratio=increase garante que preencha todo o canvas
+        // crop garante que não ultrapasse as dimensões
+        filterParts.push(`[${backgroundInputIndex}:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=increase[bg_scaled]`);
+        filterParts.push(`[bg_scaled]crop=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}[bg_fixed]`);
+        console.log(`[COMPOSER] Background fixo aplicado como layer 0`);
+      } else {
+        // Fallback: criar background sólido se imagem não existir
+        filterParts.push(`color=c=${backgroundColor.replace('#', '')}:s=${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}:d=${videoDuration}[bg_fixed]`);
+        console.log(`[COMPOSER] Usando background sólido (fallback)`);
+      }
 
       // 4. Sobrepor vídeo principal no background (topo)
-      filterParts.push(`[bg][main_padded]overlay=0:0[composed]`);
+      // Vídeo fica acima do background (layer 1)
+      filterParts.push(`[bg_fixed][main_padded]overlay=0:0[composed]`);
       currentLabel = '[composed]';
 
       // 5. Adicionar vídeo de retenção (se houver)
+      // IMPORTANTE: Ajustar índice do input baseado na presença do background
       if (retentionVideoPath) {
-        filterParts.push(`[1:v]scale=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}:force_original_aspect_ratio=increase[retention_scaled]`);
+        // Se background existe, retention é input 2, senão é input 1
+        const retentionInputIndex = fixedBackgroundPath ? 2 : 1;
+        filterParts.push(`[${retentionInputIndex}:v]scale=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}:force_original_aspect_ratio=increase[retention_scaled]`);
         filterParts.push(`[retention_scaled]crop=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}[retention_cropped]`);
         filterParts.push(`${currentLabel}[retention_cropped]overlay=0:${OUTPUT_HEIGHT - RETENTION_HEIGHT}[with_retention]`);
         currentLabel = '[with_retention]';
@@ -260,12 +323,19 @@ export async function composeFinalVideo({
       // Construir comando FFmpeg
       const command = ffmpeg();
 
-      // Input principal
+      // Input 0: vídeo principal
       command.input(clipPath);
 
-      // Input de retenção (se houver)
+      // Input 1: Background fixo (se existir) - LAYER 0
+      if (fixedBackgroundPath) {
+        command.input(fixedBackgroundPath);
+        console.log(`[COMPOSER] Background fixo adicionado como input 1: ${fixedBackgroundPath}`);
+      }
+
+      // Input 2 (ou 1 se não houver background): vídeo de retenção (se houver)
       if (retentionVideoPath) {
         command.input(retentionVideoPath);
+        console.log(`[COMPOSER] Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}`);
       }
 
       // Aplicar filter_complex como string
