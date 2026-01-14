@@ -377,17 +377,43 @@ export async function composeFinalVideo({
       
       // Verificar se [final] existe no filter
       if (!filterComplex.includes('[final]')) {
+        console.error('[COMPOSER] ❌ Label [final] não encontrado no filter_complex');
+        console.error('[COMPOSER] Filter parts:', filterParts);
+        console.error('[COMPOSER] Current label:', currentLabel);
         return reject(new Error('Label [final] não encontrado no filter_complex'));
       }
       
-      // Log completo do filter (limitado a 500 chars para não poluir)
-      console.log('[COMPOSER] Filter complex (primeiros 500 chars):', filterComplex.substring(0, 500));
+      // Verificar se há referências a labels que não existem
+      const labelPattern = /\[([^\]]+)\]/g;
+      const usedLabels = new Set();
+      const definedLabels = new Set();
+      let match;
+      
+      while ((match = labelPattern.exec(filterComplex)) !== null) {
+        const label = match[1];
+        if (label.includes(':')) {
+          // É um input como [0:v] ou [1:v], ignorar
+          continue;
+        }
+        if (filterComplex.indexOf(`[${label}]`) < filterComplex.indexOf(`=${label}]`)) {
+          // Label usado antes de ser definido
+          usedLabels.add(label);
+        } else {
+          // Label definido
+          definedLabels.add(label);
+        }
+      }
+      
+      // Log completo do filter (limitado a 800 chars para debug)
+      console.log('[COMPOSER] Filter complex (primeiros 800 chars):', filterComplex.substring(0, 800));
       console.log('[COMPOSER] Total de filtros:', filterParts.length);
+      console.log('[COMPOSER] Labels definidos:', Array.from(definedLabels));
+      console.log('[COMPOSER] Labels usados:', Array.from(usedLabels));
       
       try {
         command.complexFilter(filterComplex);
       } catch (filterError) {
-        console.error('[COMPOSER] Erro ao aplicar filter_complex:', filterError);
+        console.error('[COMPOSER] ❌ Erro ao aplicar filter_complex:', filterError);
         console.error('[COMPOSER] Filter complex completo:', filterComplex);
         return reject(new Error(`Erro ao criar filter_complex: ${filterError.message}`));
       }
