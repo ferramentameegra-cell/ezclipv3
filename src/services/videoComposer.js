@@ -226,13 +226,7 @@ export async function composeFinalVideo({
       filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
 
-      // 2. Adicionar padding para centralizar vídeo principal
-      // Usar cor transparente ou cor de fallback se background não existir
-      const paddingColor = backgroundColor.replace('#', '');
-      filterParts.push(`${currentLabel}pad=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${paddingColor}[main_padded]`);
-      currentLabel = '[main_padded]';
-
-      // 3. OBTER BACKGROUND FIXO (LAYER 0 - OBRIGATÓRIO)
+      // 2. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
       const fixedBackgroundPath = getFixedBackgroundPath();
       let backgroundInputIndex = null;
       let inputCount = 1; // clipPath é input 0
@@ -254,8 +248,16 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Usando background sólido (fallback)`);
       }
 
+      // 3. Adicionar padding TRANSPARENTE ao vídeo principal (para centralizar)
+      // IMPORTANTE: Usar cor transparente (0x00000000) quando background fixo existe
+      // Isso permite que o background apareça através do padding
+      const paddingColor = fixedBackgroundPath ? '0x00000000' : backgroundColor.replace('#', '');
+      filterParts.push(`${currentLabel}pad=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${paddingColor}[main_padded]`);
+      currentLabel = '[main_padded]';
+
       // 4. Sobrepor vídeo principal no background (topo)
       // Vídeo fica acima do background (layer 1)
+      // O padding transparente permite que o background apareça nas áreas vazias
       filterParts.push(`[bg_fixed][main_padded]overlay=0:0[composed]`);
       currentLabel = '[composed]';
 
