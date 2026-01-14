@@ -331,10 +331,19 @@ export async function composeFinalVideo({
       }
       
       // 6. GARANTIR resolução final 1080x1920 (FORÇAR)
-      // Usar scale para garantir que o output final seja exatamente 1080x1920
-      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
-      filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=0x00000000[final]`);
-      console.log(`[COMPOSER] Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+      // O background já tem 1080x1920, então precisamos garantir que o [final] também tenha
+      // Se o currentLabel já tem as dimensões corretas (do background), apenas copiar
+      // Caso contrário, fazer scale e pad para garantir 1080x1920
+      // IMPORTANTE: O background já foi aplicado, então o [composed] ou [with_retention] já tem 1080x1920
+      // Apenas garantir que o [final] mantenha essas dimensões
+      if (currentLabel !== '[final]') {
+        // Se ainda não chegou em [final], garantir dimensões
+        filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
+        // Pad com cor do background (não transparente, pois o background já está aplicado)
+        const padColor = fixedBackgroundPath ? backgroundColor.replace('#', '') : backgroundColor.replace('#', '');
+        filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
+        console.log(`[COMPOSER] Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+      }
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
       // O background já tem as dimensões corretas, então o overlay deve manter isso
