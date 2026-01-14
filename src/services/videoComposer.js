@@ -325,14 +325,16 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x=(w-text_w)/2
         const yPos = `(h-text_h)/2`;
 
-        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[final]`);
-        currentLabel = '[final]';
+        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[headline_added]`);
+        currentLabel = '[headline_added]';
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
-      } else {
-        // Sem headline, apenas copiar para [final]
-        filterParts.push(`${currentLabel}copy[final]`);
-        currentLabel = '[final]';
       }
+      
+      // 6. GARANTIR resolução final 1080x1920 (FORÇAR)
+      // Usar scale para garantir que o output final seja exatamente 1080x1920
+      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
+      filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=0x00000000[final]`);
+      console.log(`[COMPOSER] Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
       // O background já tem as dimensões corretas, então o overlay deve manter isso
