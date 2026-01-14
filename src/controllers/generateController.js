@@ -155,11 +155,25 @@ export const downloadSeries = async (req, res) => {
 
   archive.pipe(res);
 
-  fs.readdirSync(seriesPath)
-    .filter(f => f.endsWith('.mp4'))
-    .forEach(file => {
-      archive.file(path.join(seriesPath, file), { name: file });
-    });
+  // Buscar apenas arquivos finais (_final.mp4)
+  const files = fs.readdirSync(seriesPath)
+    .filter(f => f.endsWith('_final.mp4') || f.endsWith('.mp4'))
+    .sort(); // Ordenar para garantir ordem consistente
+
+  if (files.length === 0) {
+    return res.status(404).json({ error: 'Nenhum clip encontrado na série' });
+  }
+
+  files.forEach(file => {
+    archive.file(path.join(seriesPath, file), { name: file });
+  });
+
+  archive.on('error', (err) => {
+    console.error('[DOWNLOAD] Erro ao criar arquivo ZIP:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Erro ao criar arquivo ZIP' });
+    }
+  });
 
   archive.finalize();
 };

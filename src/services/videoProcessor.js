@@ -421,7 +421,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           retentionVideoId,
           nicheId,
           backgroundColor,
-          onProgress: (percent) => {
+          onProgress: async (percent) => {
             // Progresso individual do clip
             // Garantir que percent está entre 0 e 100
             const safePercent = Math.min(100, Math.max(0, percent));
