@@ -417,6 +417,23 @@ export async function composeFinalVideo({
           if (stats.size === 0) {
             return reject(new Error('Arquivo de saída está vazio'));
           }
+          
+          // VALIDAR resolução final do vídeo gerado
+          ffmpeg.ffprobe(outputPath, (err, metadata) => {
+            if (!err && metadata?.streams) {
+              const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+              if (videoStream) {
+                const actualWidth = videoStream.width;
+                const actualHeight = videoStream.height;
+                console.log(`[COMPOSER] ✅ Resolução de saída: ${actualWidth}x${actualHeight}`);
+                if (actualWidth !== OUTPUT_WIDTH || actualHeight !== OUTPUT_HEIGHT) {
+                  console.warn(`[COMPOSER] ⚠️ ATENÇÃO: Resolução esperada ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}, mas obteve ${actualWidth}x${actualHeight}`);
+                } else {
+                  console.log(`[COMPOSER] ✅ Resolução correta: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+                }
+              }
+            }
+          });
 
           // Validar resolução do arquivo gerado
           ffmpeg.ffprobe(outputPath, (probeErr, probeData) => {
