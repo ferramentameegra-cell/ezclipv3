@@ -290,7 +290,27 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
       }
 
-      // 6. Adicionar legendas (burn-in)
+      // 5. Adicionar headline PRIMEIRO (CENTRO VERTICAL do frame)
+      // Headline fica acima de tudo (exceto legendas que ficam na parte inferior)
+      if (headlineText || (headline && headline.text)) {
+        const headlineTextValue = headlineText || headline.text;
+        const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
+        const fontSize = headlineStyle.fontSize || 72;
+        const color = headlineStyle.color || '#FFFFFF';
+        const startTime = headline?.startTime || 0;
+        const endTime = headline?.endTime || Math.min(5, videoDuration);
+
+        // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
+        // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
+        // Centralizar horizontalmente: x=(w-text_w)/2
+        const yPos = `(h-text_h)/2`;
+
+        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`);
+        currentLabel = '[with_headline]';
+        console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
+      }
+
+      // 6. Adicionar legendas (burn-in) - PARTE INFERIOR
       if (captions && captions.length > 0) {
         captions.forEach((caption, index) => {
           const text = (caption.lines && caption.lines.length > 0) 
@@ -314,32 +334,12 @@ export async function composeFinalVideo({
           currentLabel = outputLabel;
         });
       }
-
-      // 5. Adicionar headline (CENTRO VERTICAL do frame)
-      if (headlineText || (headline && headline.text)) {
-        const headlineTextValue = headlineText || headline.text;
-        const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
-        const fontSize = headlineStyle.fontSize || 72;
-        const color = headlineStyle.color || '#FFFFFF';
-        const startTime = headline?.startTime || 0;
-        const endTime = headline?.endTime || Math.min(5, videoDuration);
-
-        // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
-        // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
-        // Centralizar horizontalmente: x=(w-text_w)/2
-        const yPos = `(h-text_h)/2`;
-
-        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`);
-        currentLabel = '[with_headline]';
-        console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
-      }
       
-      // 6. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // 7. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
-      // Se o currentLabel já tem 1080x1920 (do background), apenas copiar
-      // Caso contrário, fazer scale e pad
+      // O currentLabel já tem 1080x1920 (do background via overlay), mas garantimos com scale+pad
       filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
       // Pad com cor do background (não transparente, pois o background já está aplicado)
       const padColor = backgroundColor.replace('#', '');
