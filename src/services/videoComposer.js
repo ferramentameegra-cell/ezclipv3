@@ -330,19 +330,27 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
       }
       
-      // 6. GARANTIR resolução final 1080x1920 (FORÇAR)
-      // O background já tem 1080x1920, então precisamos garantir que o [final] também tenha
-      // Se o currentLabel já tem as dimensões corretas (do background), apenas copiar
-      // Caso contrário, fazer scale e pad para garantir 1080x1920
-      // IMPORTANTE: O background já foi aplicado, então o [composed] ou [with_retention] já tem 1080x1920
-      // Apenas garantir que o [final] mantenha essas dimensões
+      // 6. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE APLICAR
+      // O background já tem 1080x1920, mas precisamos garantir que [final] também tenha
+      // Isso garante que mesmo se algo der errado, o output será sempre 1080x1920
       if (currentLabel !== '[final]') {
-        // Se ainda não chegou em [final], garantir dimensões
+        // Garantir dimensões exatas: scale para 1080x1920 e pad se necessário
         filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
-        // Pad com cor do background (não transparente, pois o background já está aplicado)
-        const padColor = fixedBackgroundPath ? backgroundColor.replace('#', '') : backgroundColor.replace('#', '');
+        // Pad com cor do background para preencher se necessário
+        const padColor = backgroundColor.replace('#', '');
         filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
-        console.log(`[COMPOSER] Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+        console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+      } else {
+        // Se já está em [final], garantir dimensões mesmo assim
+        filterParts.push(`[final]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_resized]`);
+        const padColor = backgroundColor.replace('#', '');
+        filterParts.push(`[final_resized]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final_forced]`);
+        // Substituir [final] por [final_forced]
+        const filterComplexStr = filterParts.join(';');
+        const newFilterComplex = filterComplexStr.replace(/\[final\]/g, '[final_forced]');
+        filterParts.length = 0;
+        filterParts.push(...newFilterComplex.split(';'));
+        console.log(`[COMPOSER] ✅ Forçando resolução de [final] para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
       }
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
@@ -374,18 +382,23 @@ export async function composeFinalVideo({
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
+      // Determinar qual label usar (pode ser [final] ou [final_forced])
+      const finalLabel = filterParts.join(';').includes('[final_forced]') ? '[final_forced]' : '[final]';
+      
       const outputOptions = [
-        '-map', '[final]',
+        '-map', finalLabel,
         '-s', `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`, // FORÇAR 1080x1920
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
-        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
+        '-aspect', '9:16', // FORÇAR aspect ratio 9:16
+        '-vf', `scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2` // FORÇAR DUPLO
       ];
       
-      console.log(`[COMPOSER] Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+      console.log(`[COMPOSER] ✅ Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+      console.log(`[COMPOSER] Usando label: ${finalLabel}`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
