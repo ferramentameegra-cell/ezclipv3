@@ -9,7 +9,10 @@ cmds = [
   "mv /tmp/yt-dlp /usr/local/bin/yt-dlp 2>/dev/null || true",
   # Fallback: instalar via pip se o binário falhar
   "pip install yt-dlp || true",
-  "npm ci"
+  "npm ci",
+  # Criar diretório para assets e copiar background
+  "mkdir -p /tmp/assets/backgrounds",
+  "cp assets/backgrounds/ezclip-background.png /tmp/assets/backgrounds/ 2>/dev/null || cp assets/backgrounds/ezclip-background.jpg /tmp/assets/backgrounds/ 2>/dev/null || echo 'Background não encontrado, será usado fallback'"
 ]
 
 [phases.build]

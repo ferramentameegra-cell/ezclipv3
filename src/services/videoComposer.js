@@ -43,7 +43,9 @@ function getFixedBackgroundPath() {
     process.env.FIXED_BACKGROUND_PATH || null
   ].filter(p => p !== null);
 
+  console.log(`[COMPOSER] Procurando background fixo nos seguintes caminhos:`);
   for (const bgPath of possiblePaths) {
+    console.log(`[COMPOSER]   - ${bgPath} ${fs.existsSync(bgPath) ? '✅ EXISTE' : '❌ não existe'}`);
     if (fs.existsSync(bgPath)) {
       console.log(`[COMPOSER] ✅ Background fixo encontrado: ${bgPath}`);
       return bgPath;
@@ -52,6 +54,7 @@ function getFixedBackgroundPath() {
 
   console.warn(`[COMPOSER] ⚠️ Background fixo não encontrado. Usando cor sólida como fallback.`);
   console.warn(`[COMPOSER] Coloque a imagem em: assets/backgrounds/ezclip-background.png (1080x1920)`);
+  console.warn(`[COMPOSER] Ou em: /tmp/assets/backgrounds/ezclip-background.png (Railway)`);
   return null;
 }
 
@@ -420,7 +423,8 @@ export async function composeFinalVideo({
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
-      // [final] sempre existe após a etapa 6
+      // [final] sempre existe após a etapa 6 e já tem as dimensões corretas
+      // NÃO usar -vf aqui pois já temos complexFilter que força as dimensões
       const outputOptions = [
         '-map', '[final]',
         '-s', `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`, // FORÇAR 1080x1920
@@ -434,6 +438,8 @@ export async function composeFinalVideo({
       
       console.log(`[COMPOSER] ✅ Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
       console.log(`[COMPOSER] Usando label final: [final]`);
+      console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
+      console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
@@ -448,15 +454,17 @@ export async function composeFinalVideo({
       command.outputOptions(outputOptions);
 
       // Configurar saída - FORÇAR 1080x1920 vertical
+      // IMPORTANTE: Não usar .size() e .aspect() quando já temos complexFilter
+      // O complexFilter já força as dimensões através do [final] que tem 1080x1920
       command
-        .size(`${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`) // FORÇAR tamanho 1080x1920
-        .aspect('9:16') // FORÇAR aspect ratio 9:16
         .on('start', (cmdline) => {
           console.log('[COMPOSER] Comando iniciado');
           console.log(`[COMPOSER] Saída FORÇADA: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
           console.log(`[COMPOSER] Aspect ratio FORÇADO: 9:16`);
-          console.log('[COMPOSER] Headline: centralizada verticalmente');
+          console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM ✅' : 'NÃO ❌'}`);
+          console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM ✅' : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Safe zones: topo ${safeZones.top}px, rodapé ${safeZones.bottom}px`);
+          console.log(`[COMPOSER] Comando FFmpeg: ${cmdline}`);
         })
         .on('progress', (progress) => {
           if (progress.percent !== undefined && progress.percent !== null) {
