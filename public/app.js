@@ -2245,26 +2245,57 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
+    console.log('[GENERATE] Iniciando processo de geração...');
+    console.log('[GENERATE] Estado atual:', {
+        videoId: appState.videoId,
+        nicheId: appState.nicheId,
+        numberOfCuts: appState.numberOfCuts,
+        trimStart: appState.trimStart,
+        trimEnd: appState.trimEnd,
+        cutDuration: appState.cutDuration
+    });
+    
     // Atualizar progresso para step de geração
     updateProgressSteps('generate');
     updateGenerateSummary();
     
-    // Verificar se todos os dados necessários estão disponíveis (apenas log, sem bloquear)
-    if (!appState.videoId || !appState.nicheId) {
-        console.warn('[GENERATE] Alguns dados podem estar faltando, mas permitindo tentativa de geração');
+    // Verificar dados mínimos necessários
+    if (!appState.videoId) {
+        alert('Erro: Vídeo não encontrado. Por favor, baixe o vídeo primeiro.');
+        return;
+    }
+    
+    if (!appState.nicheId) {
+        alert('Erro: Nicho não selecionado. Por favor, selecione um nicho antes de gerar.');
+        return;
     }
     
     // Calcular número de clipes baseado no intervalo e duração
-    if (!appState.numberOfCuts && appState.trimStart && appState.trimEnd && appState.cutDuration) {
-        const duration = appState.trimEnd - appState.trimStart;
-        appState.numberOfCuts = Math.floor(duration / appState.cutDuration);
+    if (!appState.numberOfCuts) {
+        if (appState.trimStart !== undefined && appState.trimEnd !== undefined && appState.cutDuration) {
+            const duration = appState.trimEnd - appState.trimStart;
+            appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
+            console.log('[GENERATE] Número de clipes calculado:', appState.numberOfCuts);
+        } else {
+            // Valores padrão se não houver trim definido
+            appState.trimStart = appState.trimStart || 0;
+            appState.trimEnd = appState.trimEnd || appState.videoDuration || 60;
+            appState.cutDuration = appState.cutDuration || 60;
+            const duration = appState.trimEnd - appState.trimStart;
+            appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
+            console.log('[GENERATE] Usando valores padrão. Clipes calculados:', appState.numberOfCuts);
+        }
     }
     
     // Confirmar antes de gerar
-    const confirmMessage = `Você está prestes a gerar ${appState.numberOfCuts || 'vários'} clipes.\n\nDeseja continuar?`;
+    const clipsCount = appState.numberOfCuts || 1;
+    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nDeseja continuar?`;
     if (confirm(confirmMessage)) {
+        console.log('[GENERATE] Usuário confirmou. Iniciando geração...');
         // Gerar clipes diretamente
         generateSeries();
+    } else {
+        console.log('[GENERATE] Usuário cancelou a geração.');
     }
 }
 
@@ -2322,18 +2353,18 @@ async function generateSeries() {
             queueInfoEl.textContent = 'Adicionando à fila de processamento...';
         }
 
-        // Enviar TODAS as configurações para o backend
-        const { data } = await apiClient.post('/api/generate/series', {
+        // Preparar dados para envio
+        const requestData = {
             videoId: appState.videoId,
             nicheId: appState.nicheId,
-            retentionVideoId: appState.retentionVideoId,
-            numberOfCuts: appState.numberOfCuts,
-            headlineStyle: appState.headlineStyle,
+            retentionVideoId: appState.retentionVideoId || 'random',
+            numberOfCuts: appState.numberOfCuts || 1,
+            headlineStyle: appState.headlineStyle || 'bold',
             headlineText: appState.headlineText || 'Headline',
-            font: appState.font,
-            trimStart: appState.trimStart,
-            trimEnd: appState.trimEnd,
-            cutDuration: appState.cutDuration,
+            font: appState.font || 'Inter',
+            trimStart: appState.trimStart || 0,
+            trimEnd: appState.trimEnd || appState.videoDuration || null,
+            cutDuration: appState.cutDuration || 60,
             backgroundColor: appState.backgroundColor || '#000000',
             // CONFIGURAÇÕES DE VÍDEO (obrigatórias)
             format: appState.configurations?.format || '9:16',
@@ -2342,7 +2373,14 @@ async function generateSeries() {
             captionStyle: appState.configurations?.captionStyle || 'modern',
             clipsQuantity: appState.configurations?.clipsQuantity || null,
             safeMargins: appState.configurations?.safeMargins || 10
-        });
+        };
+        
+        console.log('[GENERATE] Enviando requisição para /api/generate/series:', requestData);
+        
+        // Enviar TODAS as configurações para o backend
+        const { data } = await apiClient.post('/api/generate/series', requestData);
+        
+        console.log('[GENERATE] Resposta do backend:', data);
         
         if (data) {
             appState.jobId = data.jobId;
@@ -2363,9 +2401,12 @@ async function generateSeries() {
                 `;
             }
         }
+            console.log('[GENERATE] Job criado com sucesso:', data.jobId);
+            console.log('[GENERATE] Iniciando monitoramento de progresso...');
             monitorProgress(data.jobId);
         } else {
-            alert('Erro ao gerar série: ' + data.error);
+            console.error('[GENERATE] Erro ao criar job:', data);
+            alert('Erro ao gerar série: ' + (data.error || 'Erro desconhecido'));
             if (loadingOverlay) loadingOverlay.classList.add('hidden');
         }
     } catch (error) {
