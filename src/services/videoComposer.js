@@ -267,7 +267,7 @@ export async function composeFinalVideo({
       // IMPORTANTE: overlay preserva dimensões do primeiro input ([bg_fixed] = 1080x1920)
       // Posição: x=(W-w)/2 (centralizado horizontalmente), y=0 (topo)
       // O background aparecerá automaticamente nas áreas vazias (sem tarja preta)
-      filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0:format=auto[composed]`);
+      filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0[composed]`);
       currentLabel = '[composed]';
       console.log(`[COMPOSER] Vídeo principal posicionado no topo (y=0), centralizado horizontalmente`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
@@ -284,7 +284,7 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x = (W-w)/2
         // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
         const retentionY = OUTPUT_HEIGHT - RETENTION_HEIGHT;
-        filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}:format=auto[with_retention]`);
+        filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}[with_retention]`);
         currentLabel = '[with_retention]';
         console.log(`[COMPOSER] Vídeo de retenção posicionado na parte inferior (y=${retentionY}), centralizado horizontalmente`);
         console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
@@ -338,9 +338,11 @@ export async function composeFinalVideo({
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
+      // Se o currentLabel já tem 1080x1920 (do background), apenas copiar
+      // Caso contrário, fazer scale e pad
       filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
-      // Pad com cor do background (ou transparente se background fixo existe)
-      const padColor = fixedBackgroundPath ? '0x00000000' : backgroundColor.replace('#', '');
+      // Pad com cor do background (não transparente, pois o background já está aplicado)
+      const padColor = backgroundColor.replace('#', '');
       filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
       console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
       
