@@ -329,33 +329,20 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x=(w-text_w)/2
         const yPos = `(h-text_h)/2`;
 
-        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[headline_added]`);
-        currentLabel = '[headline_added]';
+        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`);
+        currentLabel = '[with_headline]';
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
       }
       
-      // 6. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE APLICAR
-      // O background já tem 1080x1920, mas precisamos garantir que [final] também tenha
-      // Isso garante que mesmo se algo der errado, o output será sempre 1080x1920
-      if (currentLabel !== '[final]') {
-        // Garantir dimensões exatas: scale para 1080x1920 e pad se necessário
-        filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
-        // Pad com cor do background para preencher se necessário
-        const padColor = backgroundColor.replace('#', '');
-        filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
-        console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
-      } else {
-        // Se já está em [final], garantir dimensões mesmo assim
-        filterParts.push(`[final]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_resized]`);
-        const padColor = backgroundColor.replace('#', '');
-        filterParts.push(`[final_resized]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final_forced]`);
-        // Substituir [final] por [final_forced]
-        const filterComplexStr = filterParts.join(';');
-        const newFilterComplex = filterComplexStr.replace(/\[final\]/g, '[final_forced]');
-        filterParts.length = 0;
-        filterParts.push(...newFilterComplex.split(';'));
-        console.log(`[COMPOSER] ✅ Forçando resolução de [final] para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
-      }
+      // 6. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // O background já tem 1080x1920, mas garantimos que [final] também tenha
+      // Isso garante que o output seja sempre 1080x1920 vertical
+      // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
+      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
+      // Pad com cor do background (ou transparente se background fixo existe)
+      const padColor = fixedBackgroundPath ? '0x00000000' : backgroundColor.replace('#', '');
+      filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
+      console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -386,12 +373,9 @@ export async function composeFinalVideo({
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
-      // Determinar qual label usar (pode ser [final] ou [final_forced])
-      const filterComplexStr = filterParts.join(';');
-      const finalLabel = filterComplexStr.includes('[final_forced]') ? '[final_forced]' : '[final]';
-      
+      // [final] sempre existe após a etapa 6
       const outputOptions = [
-        '-map', finalLabel,
+        '-map', '[final]',
         '-s', `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`, // FORÇAR 1080x1920
         '-c:v', 'libx264',
         '-preset', 'medium',
@@ -399,11 +383,10 @@ export async function composeFinalVideo({
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
         '-aspect', '9:16' // FORÇAR aspect ratio 9:16
-        // NÃO usar -vf aqui pois já temos complexFilter
       ];
       
       console.log(`[COMPOSER] ✅ Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
-      console.log(`[COMPOSER] Usando label final: ${finalLabel}`);
+      console.log(`[COMPOSER] Usando label final: [final]`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
