@@ -423,6 +423,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
         } : null;
 
         // Aplicar composição final
+        // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
         await composeFinalVideo({
           clipPath,
           outputPath: finalClipPath,
@@ -434,6 +435,9 @@ export const generateVideoSeries = async (job, jobsMap) => {
           retentionVideoId,
           nicheId,
           backgroundColor,
+          format: '9:16', // FORÇAR formato vertical 9:16 (1080x1920)
+          platforms: { tiktok: true, reels: true, shorts: true },
+          safeMargins: 10,
           onProgress: async (percent) => {
             // Progresso individual do clip
             // Garantir que percent está entre 0 e 100

@@ -362,15 +362,19 @@ export async function composeFinalVideo({
       command.complexFilter(filterComplex);
 
       // Mapear saída e configurar codecs
-      // O filter_complex já garante a resolução 1080x1920, então não precisamos de -s ou -vf adicionais
+      // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
       const outputOptions = [
         '-map', '[final]',
+        '-s', `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`, // FORÇAR 1080x1920
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart'
+        '-movflags', '+faststart',
+        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
       ];
+      
+      console.log(`[COMPOSER] Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
@@ -384,11 +388,14 @@ export async function composeFinalVideo({
 
       command.outputOptions(outputOptions);
 
-      // Configurar saída - NÃO usar .size() ou .aspect() pois o filter_complex já define isso
+      // Configurar saída - FORÇAR 1080x1920 vertical
       command
+        .size(`${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`) // FORÇAR tamanho 1080x1920
+        .aspect('9:16') // FORÇAR aspect ratio 9:16
         .on('start', (cmdline) => {
           console.log('[COMPOSER] Comando iniciado');
-          console.log(`[COMPOSER] Saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (${format})`);
+          console.log(`[COMPOSER] Saída FORÇADA: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+          console.log(`[COMPOSER] Aspect ratio FORÇADO: 9:16`);
           console.log('[COMPOSER] Headline: centralizada verticalmente');
           console.log(`[COMPOSER] Safe zones: topo ${safeZones.top}px, rodapé ${safeZones.bottom}px`);
         })
