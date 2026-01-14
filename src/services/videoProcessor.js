@@ -101,7 +101,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
       if (needsDownload) {
         console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
 
-        job.progress = 5;
+        // Atualizar progresso usando função do BullMQ
+        if (typeof job.progress === 'function') {
+          await job.progress(5);
+        } else {
+          job.progress = 5;
+        }
         if (jobsMap) jobsMap.set(job.id, job);
 
         // Importar downloadYouTubeVideo dinamicamente se necessário
@@ -127,7 +132,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
         sourceVideoPath = downloadPath;
 
-        job.progress = 20;
+        // Atualizar progresso usando função do BullMQ
+        if (typeof job.progress === 'function') {
+          await job.progress(20);
+        } else {
+          job.progress = 20;
+        }
         if (jobsMap) jobsMap.set(job.id, job);
       }
     }
@@ -211,7 +221,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
     let actualEndTime = null; // Inicializar como null para forçar definição
 
     if (startTime > 0 || endTime < videoDuration) {
-      job.progress = 30;
+      // Atualizar progresso usando função do BullMQ
+      if (typeof job.progress === 'function') {
+        await job.progress(30);
+      } else {
+        job.progress = 30;
+      }
       if (jobsMap) jobsMap.set(job.id, job);
 
       const trimmedPath = path.join(
@@ -234,7 +249,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
       
       console.log(`[PROCESSING] Trim aplicado - actualStartTime: ${actualStartTime}s, actualEndTime: ${actualEndTime}s (trimmedDuration: ${trimmedDuration}s)`);
 
-      job.progress = 50;
+      // Atualizar progresso usando função do BullMQ
+      if (typeof job.progress === 'function') {
+        await job.progress(50);
+      } else {
+        job.progress = 50;
+      }
       if (jobsMap) jobsMap.set(job.id, job);
     } else {
       // Quando não há trim físico aplicado, obter a duração real do vídeo
@@ -407,7 +427,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
             const safePercent = Math.min(100, Math.max(0, percent));
             const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (safePercent / 100) / finalClips.length);
             const finalProgress = Math.min(100, Math.max(compositionProgress, Math.round(clipProgress)));
-            job.progress = finalProgress;
+            // Atualizar progresso usando função do BullMQ
+            if (typeof job.progress === 'function') {
+              await job.progress(finalProgress);
+            } else {
+              job.progress = finalProgress;
+            }
             if (jobsMap) jobsMap.set(job.id, job);
             console.log(`[PROCESSING] Progresso clip ${clipIndex}: ${safePercent}% -> Progresso geral: ${finalProgress}%`);
           }
@@ -435,7 +460,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
       // Atualizar progresso geral após cada clip
       const overallProgress = Math.min(99, Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length))));
-      job.progress = overallProgress;
+      // Atualizar progresso usando função do BullMQ
+      if (typeof job.progress === 'function') {
+        await job.progress(overallProgress);
+      } else {
+        job.progress = overallProgress;
+      }
       if (jobsMap) jobsMap.set(job.id, job);
       console.log(`[PROCESSING] Progresso geral após clip ${clipIndex}: ${overallProgress}%`);
     }
@@ -445,7 +475,12 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // FINALIZAR JOB
     // ===============================
-    job.progress = 100;
+    // Atualizar progresso usando função do BullMQ
+    if (typeof job.progress === 'function') {
+      await job.progress(100);
+    } else {
+      job.progress = 100;
+    }
     job.status = 'completed';
     job.completedAt = new Date();
     job.clips = finalClips;
