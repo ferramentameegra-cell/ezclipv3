@@ -403,12 +403,19 @@ export const generateVideoSeries = async (job, jobsMap) => {
           backgroundColor,
           onProgress: (percent) => {
             // Progresso individual do clip
-            const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (percent / 100) / finalClips.length);
-            job.progress = Math.round(clipProgress);
+            // Garantir que percent está entre 0 e 100
+            const safePercent = Math.min(100, Math.max(0, percent));
+            const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (safePercent / 100) / finalClips.length);
+            const finalProgress = Math.min(100, Math.max(compositionProgress, Math.round(clipProgress)));
+            job.progress = finalProgress;
             if (jobsMap) jobsMap.set(job.id, job);
+            console.log(`[PROCESSING] Progresso clip ${clipIndex}: ${safePercent}% -> Progresso geral: ${finalProgress}%`);
           }
         });
 
+        // Substituir clip original pelo clip final no array
+        finalClips[i] = finalClipPath;
+        
         // Remover clip original (economizar espaço)
         if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
           try {
@@ -418,18 +425,19 @@ export const generateVideoSeries = async (job, jobsMap) => {
           }
         }
 
-        finalClips.push(finalClipPath);
         console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
 
       } catch (compositionError) {
         console.error(`[PROCESSING] Erro ao compor clip ${clipIndex}:`, compositionError);
-        // Se composição falhar, usar clip original
-        finalClips.push(clipPath);
+        // Se composição falhar, manter clip original (já está em finalClips[i])
+        console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} devido a erro na composição`);
       }
 
-      // Atualizar progresso geral
-      job.progress = Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length)));
+      // Atualizar progresso geral após cada clip
+      const overallProgress = Math.min(99, Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length))));
+      job.progress = overallProgress;
       if (jobsMap) jobsMap.set(job.id, job);
+      console.log(`[PROCESSING] Progresso geral após clip ${clipIndex}: ${overallProgress}%`);
     }
 
     console.log(`[PROCESSING] ✅ Composição final concluída: ${finalClips.length} clips finais`);

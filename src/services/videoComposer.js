@@ -298,11 +298,12 @@ export async function composeFinalVideo({
           console.log(`[COMPOSER] Safe zones: topo ${safeZones.top}px, rodapé ${safeZones.bottom}px`);
         })
         .on('progress', (progress) => {
-          if (progress.percent && onProgress) {
-            onProgress(Math.round(progress.percent));
-          }
-          if (progress.percent) {
-            console.log(`[COMPOSER] Progresso: ${Math.round(progress.percent)}%`);
+          if (progress.percent !== undefined && progress.percent !== null) {
+            const percent = Math.min(100, Math.max(0, Math.round(progress.percent)));
+            if (onProgress) {
+              onProgress(percent);
+            }
+            console.log(`[COMPOSER] Progresso: ${percent}%`);
           }
         })
         .on('end', () => {
