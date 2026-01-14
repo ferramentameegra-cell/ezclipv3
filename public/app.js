@@ -2,6 +2,8 @@
 const appState = {
     videoId: null,
     videoInfo: null,
+    videoDuration: null,
+    videoPlayableUrl: null,
     trimStart: 0,
     trimEnd: 0,
     cutDuration: 60,
@@ -11,13 +13,102 @@ const appState = {
     retentionVideoId: 'random',
     headlineStyle: 'bold',
     font: 'Inter',
+    backgroundColor: '#000000',
     jobId: null,
     seriesId: null,
     currentUser: null,
-    currentTab: 'home'
+    currentTab: 'home',
+    configurations: {
+        format: '9:16',
+        platforms: { tiktok: true, reels: true, shorts: true },
+        captionLanguage: 'pt',
+        captionStyle: 'modern',
+        clipsQuantity: null,
+        safeMargins: 10
+    }
 };
 
+// Tornar appState globalmente acessível
+if (typeof window !== 'undefined') {
+    window.appState = appState;
+}
+
 const API_BASE = window.location.origin;
+
+// Cliente API com retry (definido inline para compatibilidade)
+class ApiClient {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl;
+    this.maxRetries = 3;
+    this.retryDelay = 1000;
+  }
+
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async fetchWithRetry(url, options = {}, retries = this.maxRetries) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+        if (retries > 0) {
+          console.log(`[API] Rate limited. Aguardando ${retryAfter}s...`);
+          await this.sleep(retryAfter * 1000);
+          return this.fetchWithRetry(url, options, retries - 1);
+        }
+      }
+
+      if (response.status >= 500 && retries > 0) {
+        console.log(`[API] Erro ${response.status}. Tentando novamente...`);
+        await this.sleep(this.retryDelay * (this.maxRetries - retries + 1));
+        return this.fetchWithRetry(url, options, retries - 1);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Resposta não é JSON: ${text.substring(0, 100)}`);
+      }
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `Erro ${response.status}`);
+      }
+
+      return { data, response };
+    } catch (error) {
+      if (retries > 0 && !error.message.includes('JSON')) {
+        await this.sleep(this.retryDelay * (this.maxRetries - retries + 1));
+        return this.fetchWithRetry(url, options, retries - 1);
+      }
+      throw error;
+    }
+  }
+
+  async get(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    return this.fetchWithRetry(url, { ...options, method: 'GET' });
+  }
+
+  async post(endpoint, body, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    return this.fetchWithRetry(url, {
+      ...options,
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+  }
+}
+
+const apiClient = new ApiClient(window.location.origin);
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,9 +120,24 @@ function initializeApp() {
     setupUploadDragDrop();
     setupTrimControls();
     loadNiches();
-    loadCursos();
     checkAuth();
-    updateProgressSteps('youtube'); // Inicializar com primeiro step
+    // Inicializar com primeiro step (etapa 1)
+    currentStepIndex = 0;
+    
+    // Mostrar TODOS os cards desde o início (sempre acessíveis e editáveis)
+    // IMPORTANTE: Todos os cards devem permanecer visíveis durante todo o processo
+    setTimeout(() => {
+        document.querySelectorAll('[data-step-card]').forEach(card => {
+            card.style.display = 'block';
+            card.classList.remove('hidden');
+            // Garantir que está visível
+            if (card.style.display === 'none') {
+                card.style.display = 'block';
+            }
+        });
+    }, 100);
+    
+    updateProgressSteps('youtube'); // Etapa 1
 }
 
 // ========== TAB NAVIGATION ==========
@@ -53,17 +159,36 @@ function switchTab(tabName) {
     const panel = document.getElementById(`tab-${tabName}`);
     if (panel) panel.classList.add('active');
     
-    // Scroll para o topo
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // NÃO fazer scroll automático - usuário controla a rolagem
+    // window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ========== PROGRESS STEPS INDICATOR ==========
+// Ordem sequencial das etapas (OBRIGATÓRIA): youtube → trim → captions → configurations → niche → headline → generate
+const STEP_ORDER = ['youtube', 'trim', 'captions', 'configurations', 'niche', 'headline', 'generate'];
+let currentStepIndex = 0; // Rastrear etapa atual
+
 function updateProgressSteps(stepName) {
-    const steps = ['youtube', 'captions', 'trim', 'niche', 'generate'];
-    const stepIndex = steps.indexOf(stepName);
+    const stepIndex = STEP_ORDER.indexOf(stepName);
     
-    if (stepIndex === -1) return;
+    if (stepIndex === -1) {
+        console.warn('[STEPS] Etapa desconhecida:', stepName);
+        return;
+    }
     
+    // VALIDAÇÃO CRÍTICA: Não permitir pular etapas (apenas log, sem alerta bloqueante)
+    if (stepIndex > currentStepIndex + 1) {
+        console.error('[STEPS] ❌ TENTATIVA DE PULAR ETAPAS!');
+        console.error(`[STEPS] Etapa atual: ${STEP_ORDER[currentStepIndex]} (índice ${currentStepIndex})`);
+        console.error(`[STEPS] Tentando ir para: ${stepName} (índice ${stepIndex})`);
+        // Não bloquear - apenas logar para debug
+        console.warn('[STEPS] Pulando validação - permitindo avanço controlado pelo usuário');
+    }
+    
+    // Atualizar índice atual
+    currentStepIndex = stepIndex;
+    
+    // Atualizar indicadores visuais
     document.querySelectorAll('.progress-step').forEach((step, index) => {
         step.classList.remove('active', 'completed');
         
@@ -74,22 +199,80 @@ function updateProgressSteps(stepName) {
         }
     });
     
-    // Atualizar card ativo
+    // NUNCA esconder cards - manter TODOS sempre visíveis e editáveis
+    // Apenas marcar qual está ativo (visualmente)
     document.querySelectorAll('[data-step-card]').forEach(card => {
         card.classList.remove('active');
+        // Remover hidden se existir
+        card.classList.remove('hidden');
+        // Garantir que está sempre visível
+        card.style.display = 'block';
     });
     
+    // Marcar card atual como ativo (apenas visual)
+    // NÃO fazer scroll automático - usuário controla a rolagem
     const activeCard = document.querySelector(`[data-step-card="${stepName}"]`);
     if (activeCard) {
         activeCard.classList.add('active');
+        activeCard.style.display = 'block';
+        // NÃO fazer scroll - removido scrollIntoView
+    }
+    
+    console.log(`[STEPS] ✅ Etapa atualizada: ${stepName} (índice ${stepIndex})`);
+}
+
+/**
+ * Valida se pode avançar para próxima etapa
+ */
+function canAdvanceToStep(stepName) {
+    const stepIndex = STEP_ORDER.indexOf(stepName);
+    if (stepIndex === -1) return false;
+    
+    // Só pode avançar para a próxima etapa sequencial
+    return stepIndex === currentStepIndex + 1;
+}
+
+/**
+ * Avança para próxima etapa sequencial
+ */
+function advanceToNextStep() {
+    if (currentStepIndex < STEP_ORDER.length - 1) {
+        const nextStep = STEP_ORDER[currentStepIndex + 1];
+        updateProgressSteps(nextStep);
+        return nextStep;
+    }
+    return null;
+}
+
+/**
+ * Faz scroll suave até um card específico
+ */
+function scrollToCard(stepName) {
+    const card = document.querySelector(`[data-step-card="${stepName}"]`);
+    if (card) {
+        // Garantir que o card esteja visível antes de fazer scroll
+        if (card.style.display === 'none') {
+            card.style.display = 'block';
+        }
+        
+        setTimeout(() => {
+            // Scroll suave até o card
+            const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
+            const offset = 80; // Offset maior para melhor visualização
+            
+            window.scrollTo({
+                top: cardPosition - offset,
+                behavior: 'smooth'
+            });
+        }, 200);
+    } else {
+        console.warn(`[SCROLL] Card não encontrado: ${stepName}`);
     }
 }
 
 function scrollToTool() {
-    const toolSection = document.getElementById('tool-section');
-    if (toolSection) {
-        toolSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    // Fazer scroll até a etapa 1 (youtube/upload)
+    scrollToCard('youtube');
 }
 
 // ========== AUTHENTICATION ==========
@@ -250,130 +433,8 @@ function logout() {
     switchTab('home');
 }
 
-// ========== CURSOS ==========
-const cursosData = [
-    {
-        id: 1,
-        title: 'Criação de Vídeos Virais para TikTok',
-        description: 'Aprenda a criar conteúdo que viraliza no TikTok usando técnicas de retenção e storytelling.',
-        category: 'video',
-        price: 297,
-        oldPrice: 497,
-        image: '🎬'
-    },
-    {
-        id: 2,
-        title: 'Marketing Digital Completo',
-        description: 'Domine todas as estratégias de marketing digital: SEO, ads, redes sociais e muito mais.',
-        category: 'marketing',
-        price: 497,
-        oldPrice: 797,
-        image: '📈'
-    },
-    {
-        id: 3,
-        title: 'Como Criar um Negócio Online',
-        description: 'Do zero ao primeiro cliente: aprenda a criar e escalar seu negócio digital.',
-        category: 'business',
-        price: 397,
-        oldPrice: 597,
-        image: '💼'
-    },
-    {
-        id: 4,
-        title: 'Programação para Iniciantes',
-        description: 'Aprenda programação do zero e crie seus primeiros projetos web e mobile.',
-        category: 'tech',
-        price: 347,
-        oldPrice: 547,
-        image: '💻'
-    },
-    {
-        id: 5,
-        title: 'Edição de Vídeo Profissional',
-        description: 'Domine Premiere, After Effects e crie vídeos de nível profissional.',
-        category: 'video',
-        price: 447,
-        oldPrice: 697,
-        image: '🎞️'
-    },
-    {
-        id: 6,
-        title: 'Estratégias de Growth Hacking',
-        description: 'Técnicas avançadas para fazer sua empresa crescer rapidamente.',
-        category: 'marketing',
-        price: 547,
-        oldPrice: 847,
-        image: '🚀'
-    }
-];
-
-let currentFilter = 'all';
-
-function loadCursos() {
-    renderCursos(cursosData);
-}
-
-function filterCursos(category) {
-    currentFilter = category;
-    
-    // Atualizar botões de filtro
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    // Filtrar cursos
-    const filtered = category === 'all' 
-        ? cursosData 
-        : cursosData.filter(curso => curso.category === category);
-    
-    renderCursos(filtered);
-}
-
-function renderCursos(cursos) {
-    const grid = document.getElementById('cursos-grid');
-    if (!grid) return;
-    
-    grid.innerHTML = '';
-    
-    cursos.forEach(curso => {
-        const card = document.createElement('div');
-        card.className = 'curso-card';
-        card.innerHTML = `
-            <div class="curso-image">${curso.image}</div>
-            <div class="curso-content">
-                <span class="curso-category">${curso.category.toUpperCase()}</span>
-                <h3 class="curso-title">${curso.title}</h3>
-                <p class="curso-description">${curso.description}</p>
-                <div class="curso-footer">
-                    <div>
-                        <span class="curso-price-old">R$ ${curso.oldPrice}</span>
-                        <span class="curso-price">R$ ${curso.price}</span>
-                    </div>
-                    <button class="btn-comprar" onclick="comprarCurso(${curso.id})">
-                        Comprar
-                    </button>
-                </div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-}
-
-function comprarCurso(cursoId) {
-    if (!appState.currentUser) {
-        alert('Por favor, faça login para comprar cursos.');
-        switchTab('login');
-        return;
-    }
-    
-    const curso = cursosData.find(c => c.id === cursoId);
-    if (curso) {
-        alert(`Redirecionando para compra do curso: ${curso.title}\n\nValor: R$ ${curso.price}`);
-        // Aqui você pode integrar com gateway de pagamento
-    }
-}
+// ========== CURSOS - REMOVIDO ==========
+// A aba de estudos foi removida conforme solicitado
 
 // ========== YOUTUBE & VIDEO PROCESSING ==========
 function setupYouTubeInput() {
@@ -456,11 +517,7 @@ function displayYouTubePreview(videoInfo) {
         </div>
     `;
     
-    // Mostrar container de vídeo
-    const trimCard = document.getElementById('trim-card');
-    if (trimCard) {
-        trimCard.classList.remove('hidden');
-    }
+    // NÃO mostrar trim card automaticamente - apenas preview
 }
 
 /**
@@ -623,8 +680,16 @@ async function handleUploadSubmit() {
             const uploadContent = document.querySelector('.upload-content');
             if (uploadContent) uploadContent.style.display = 'flex';
             
-            // Exibir trim tool APENAS quando estado === ready (igual ao YouTube)
-            showTrimSection();
+            // Salvar dados do vídeo no estado
+            appState.videoDuration = data.duration || data.videoDuration;
+            appState.videoPlayableUrl = data.playableUrl;
+            
+            // AVANÇAR AUTOMATICAMENTE para etapa 2 (Trim) após upload
+            setTimeout(() => {
+                showTrimSection();
+                // Fazer scroll para a etapa de trim
+                scrollToCard('trim');
+            }, 500);
             
             // Aguardar um pouco para garantir que elementos estão prontos
             setTimeout(() => {
@@ -816,9 +881,16 @@ async function downloadWithProgress(url) {
                         // Renderizar player IMEDIATAMENTE com arquivo baixado
                         renderVideoPlayer(data.playableUrl);
                         
-                        // Exibir editor de legendas APENAS quando estado === ready (PASSO 2)
-                        // Legendas são independentes do trim - podem ser geradas e renderizadas separadamente
-                        showCaptionsSection();
+                        // Salvar dados do vídeo no estado
+                        appState.videoDuration = data.duration || data.videoDuration;
+                        appState.videoPlayableUrl = data.playableUrl;
+                        
+                        // AVANÇAR AUTOMATICAMENTE para etapa 2 (Trim) após download
+                        setTimeout(() => {
+                            showTrimSection();
+                            // Fazer scroll para a etapa de trim
+                            scrollToCard('trim');
+                        }, 500);
                         
                         clearDownloadProgress();
                         resolve(data);
@@ -897,6 +969,7 @@ function updateDownloadProgress(percent, message) {
             color: white;
             z-index: 10;
             border-radius: 12px;
+            pointer-events: none;
         `;
         
         const preview = container.querySelector('.youtube-preview');
@@ -937,47 +1010,104 @@ function clearDownloadProgress() {
  * NUNCA usa iframe/embed do YouTube
  */
 function renderVideoPlayer(playableUrl) {
+    // Renderizar no container principal (trim card)
     const container = document.getElementById('video-player-container');
-    if (!container) return;
+    let videoElement = null;
     
-    container.innerHTML = '';
+    if (container) {
+        container.innerHTML = '';
+        
+        // SEMPRE usar elemento <video> HTML5 com arquivo local
+        videoElement = document.createElement('video');
+        videoElement.src = playableUrl;
+        videoElement.controls = true;
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.borderRadius = '12px';
+        videoElement.style.objectFit = 'contain';
+        videoElement.preload = 'metadata';
+        videoElement.crossOrigin = 'anonymous';
+        
+        container.appendChild(videoElement);
+    }
     
-    // SEMPRE usar elemento <video> HTML5 com arquivo local
-    const videoElement = document.createElement('video');
-    videoElement.src = playableUrl;
-    videoElement.controls = true;
-    videoElement.style.width = '100%';
-    videoElement.style.height = '100%';
-    videoElement.style.borderRadius = '12px';
-    videoElement.style.objectFit = 'contain';
-    videoElement.preload = 'metadata';
-    videoElement.crossOrigin = 'anonymous';
+    // TAMBÉM renderizar no player fixo (sempre visível após download)
+    const fixedContainer = document.getElementById('fixed-video-container');
+    const fixedPlayer = document.getElementById('fixed-video-player');
+    if (fixedContainer && fixedPlayer) {
+        fixedContainer.innerHTML = '';
+        
+        const fixedVideoElement = document.createElement('video');
+        fixedVideoElement.src = playableUrl;
+        fixedVideoElement.controls = true;
+        fixedVideoElement.style.width = '100%';
+        fixedVideoElement.style.height = '100%';
+        fixedVideoElement.style.borderRadius = '8px';
+        fixedVideoElement.style.objectFit = 'contain';
+        fixedVideoElement.preload = 'metadata';
+        fixedVideoElement.crossOrigin = 'anonymous';
+        
+        fixedContainer.appendChild(fixedVideoElement);
+        
+        // Mostrar player fixo (sempre visível)
+        fixedPlayer.style.display = 'block';
+        
+        // Usar o vídeo fixo para eventos se o principal não existir
+        if (!videoElement) {
+            videoElement = fixedVideoElement;
+        }
+    }
+    
+    if (!videoElement) return;
     
     videoElement.addEventListener('loadedmetadata', () => {
         console.log('[PLAYER] Vídeo local carregado:', playableUrl);
+        console.log('[PLAYER] Duração:', videoElement.duration);
+        
+        // Remover overlay imediatamente quando vídeo carregar
+        clearDownloadProgress();
+        
         // Atualizar duração no estado se necessário
-        if (videoElement.duration) {
+        if (videoElement.duration && !isNaN(videoElement.duration) && videoElement.duration > 0) {
             appState.videoInfo = appState.videoInfo || {};
             appState.videoInfo.duration = Math.floor(videoElement.duration);
             if (!appState.trimEnd && appState.videoInfo.duration) {
                 appState.trimEnd = appState.videoInfo.duration;
-                // Atualizar trim controls se já foram inicializados
-                if (appState.videoInfo.duration > 0) {
-                    const trimDurationEl = document.getElementById('trim-duration');
-                    const endTimecode = document.getElementById('end-timecode');
-                    if (trimDurationEl) trimDurationEl.textContent = formatTime(Math.floor(appState.videoInfo.duration));
-                    if (endTimecode) endTimecode.textContent = formatTime(Math.floor(appState.videoInfo.duration));
-                }
             }
+            
+            // Inicializar trim controls automaticamente quando duração estiver disponível
+            // Isso garante que o trim funcione mesmo se a seção ainda não estiver visível
+            if (appState.videoInfo.duration > 0) {
+                // Aguardar um pouco para garantir que elementos DOM estão prontos
+                setTimeout(() => {
+                    console.log('[PLAYER] Inicializando trim controls...');
+                    setupTrimControlsForVideo({
+                        duration: appState.videoInfo.duration,
+                        playableUrl: playableUrl
+                    });
+                }, 500);
+            }
+        } else {
+            console.warn('[PLAYER] Duração inválida:', videoElement.duration);
         }
+    });
+    
+    // Garantir que o overlay seja removido quando o vídeo puder ser reproduzido
+    videoElement.addEventListener('canplay', () => {
+        clearDownloadProgress();
+    });
+    
+    // Remover overlay em caso de erro também
+    videoElement.addEventListener('error', () => {
+        clearDownloadProgress();
     });
     
     videoElement.addEventListener('error', (e) => {
         console.error('[PLAYER] Erro ao carregar vídeo local:', e);
-        container.innerHTML = '<div class="video-placeholder"><p>Erro ao carregar vídeo. Verifique se o download foi concluído.</p></div>';
+        if (container) {
+            container.innerHTML = '<div class="video-placeholder"><p>Erro ao carregar vídeo. Verifique se o download foi concluído.</p></div>';
+        }
     });
-    
-    container.appendChild(videoElement);
 }
 
 function showStatus(message, type) {
@@ -1007,25 +1137,131 @@ async function verifyVideoReady(videoId) {
 }
 
 /**
- * Mostra a seção de legendas (PASSO 2)
+ * Mostra a seção de trim (ETAPA 3 - após configurações)
+ */
+async function showTrimSection() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    
+    const trimCard = document.getElementById('trim-card');
+    if (!trimCard) return;
+    
+    // Verificar se vídeo está pronto (apenas log, sem bloquear)
+    if (!appState.videoId) {
+        console.warn('[TRIM] VideoId não encontrado, mas permitindo continuar');
+    }
+    
+    // Verificar estado no backend (apenas log, sem bloquear)
+    const isReady = await verifyVideoReady(appState.videoId);
+    if (!isReady) {
+        console.warn('[TRIM] Vídeo pode não estar pronto, mas permitindo continuar');
+    }
+    
+    // Card sempre visível - garantir que está visível
+    trimCard.style.display = 'block';
+    updateProgressSteps('trim'); // Etapa 2 (após download)
+    
+    // Configurar controles de trim se ainda não foram configurados
+    if (appState.videoDuration && appState.videoPlayableUrl) {
+        setTimeout(() => {
+            setupTrimControlsForVideo({
+                duration: appState.videoDuration,
+                playableUrl: appState.videoPlayableUrl
+            });
+        }, 300);
+    }
+    
+    // Fazer scroll automático para a etapa de trim
+    scrollToCard('trim');
+}
+
+/**
+ * Salva o intervalo e AVANÇA AUTOMATICAMENTE para etapa 3 (Legendas)
+ */
+function saveTrimInterval() {
+    // Validação básica apenas (sem bloquear)
+    if (appState.trimStart >= appState.trimEnd) {
+        console.warn('[TRIM] Tempo de início maior ou igual ao fim - pode causar problemas');
+        // Não bloquear - deixar usuário decidir
+    }
+    
+    console.log('[TRIM] Intervalo salvo:', appState.trimStart, '-', appState.trimEnd);
+    
+    // Calcular número de clipes
+    if (appState.trimStart !== undefined && appState.trimEnd !== undefined && appState.cutDuration) {
+        const duration = appState.trimEnd - appState.trimStart;
+        appState.numberOfCuts = Math.floor(duration / appState.cutDuration);
+        updateClipsCount();
+    }
+    
+    // AVANÇAR AUTOMATICAMENTE para etapa 3 (Legendas) após salvar intervalo
+    setTimeout(() => {
+        showCaptionsSection();
+        // Fazer scroll para a etapa de legendas
+        scrollToCard('captions');
+    }, 500);
+}
+
+/**
+ * Mostra botão para continuar após salvar intervalo
+ */
+function showContinueButtonAfterTrim() {
+    const trimCard = document.getElementById('trim-card');
+    if (!trimCard) return;
+    
+    // Verificar se botão já existe
+    let continueSection = document.getElementById('trim-continue-section');
+    if (!continueSection) {
+        continueSection = document.createElement('div');
+        continueSection.id = 'trim-continue-section';
+        continueSection.style.cssText = 'margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);';
+        continueSection.innerHTML = `
+            <button class="btn-primary" onclick="continueToCaptions()" style="width: 100%;">
+                Gerar Conteúdo com Clipes Selecionados
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
+                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+        `;
+        trimCard.appendChild(continueSection);
+    }
+    
+    continueSection.classList.remove('hidden');
+    // NÃO fazer scroll automático
+}
+
+/**
+ * Continua para geração de legendas após trim (ETAPA 3)
+ */
+function continueToCaptions() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    showCaptionsSection(); // Etapa 3
+    // Fazer scroll para a etapa de legendas
+    scrollToCard('captions');
+}
+
+/**
+ * Mostra a seção de legendas (ETAPA 4 - após salvar trim)
  */
 function showCaptionsSection() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    
     const captionsCard = document.getElementById('captions-card');
     if (!captionsCard) return;
     
-    // Verificar se vídeo está pronto
+    // Verificar se vídeo está pronto (apenas log, sem bloquear)
     if (!appState.videoId) {
-        showStatus('Vídeo não encontrado', 'error');
-        return;
+        console.warn('[CAPTIONS] VideoId não encontrado, mas permitindo continuar');
     }
     
-    captionsCard.classList.remove('hidden');
-    updateProgressSteps('captions');
+    // Card sempre visível - garantir que está visível
+    captionsCard.style.display = 'block';
+    updateProgressSteps('captions'); // Etapa 3 (após trim)
     
-    // Inicializar editor de legendas (ferramenta independente do trim)
+    // Inicializar editor de legendas
     setTimeout(() => {
         initializeCaptionsEditor(appState.videoId);
-        captionsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Fazer scroll para a etapa de legendas
+        scrollToCard('captions');
     }, 100);
 }
 
@@ -1036,30 +1272,37 @@ let captionsEditorInstance = null;
 
 function initializeCaptionsEditor(videoId) {
     const container = document.getElementById('captions-editor-container');
-    if (!container) return;
+    if (!container) {
+        console.error('[CAPTIONS] Container não encontrado');
+        return;
+    }
 
     // Limpar container anterior
     container.innerHTML = '';
 
-    // Carregar CSS e JS do editor se ainda não foram carregados
-    if (!document.getElementById('captions-editor-css')) {
-        const link = document.createElement('link');
-        link.id = 'captions-editor-css';
-        link.rel = 'stylesheet';
-        link.href = '/captions-editor.css';
-        document.head.appendChild(link);
+    // Garantir que o card está visível
+    const captionsCard = document.getElementById('captions-card');
+    if (captionsCard) {
+        captionsCard.style.display = 'block';
     }
 
-    if (!document.getElementById('captions-editor-js')) {
-        const script = document.createElement('script');
-        script.id = 'captions-editor-js';
-        script.src = '/captions-editor.js';
-        script.onload = () => {
-            createCaptionsEditor(videoId);
-        };
-        document.body.appendChild(script);
-    } else {
+    // Verificar se o script já foi carregado
+    if (window.CaptionsEditor) {
         createCaptionsEditor(videoId);
+    } else {
+        // Carregar script dinamicamente se necessário
+        if (!document.getElementById('captions-editor-js')) {
+            const script = document.createElement('script');
+            script.id = 'captions-editor-js';
+            script.src = '/captions-editor.js?v=3.0.0';
+            script.onload = () => {
+                createCaptionsEditor(videoId);
+            };
+            document.body.appendChild(script);
+        } else {
+            // Aguardar um pouco e tentar novamente
+            setTimeout(() => createCaptionsEditor(videoId), 500);
+        }
     }
 }
 
@@ -1082,53 +1325,10 @@ function createCaptionsEditor(videoId) {
         apiBase: window.location.origin // Usar origem completa para garantir URLs corretas
     });
 
-    // Adicionar botão de continuar após salvar legendas
-    const continueBtn = document.createElement('button');
-    continueBtn.className = 'btn btn-primary';
-    continueBtn.style.marginTop = '20px';
-    continueBtn.style.width = '100%';
-    continueBtn.textContent = 'Salvar Legendas e Continuar para Intervalo →';
-    continueBtn.onclick = async () => {
-        if (captionsEditorInstance) {
-            try {
-                await captionsEditorInstance.saveCaptions();
-                showStatus('Legendas salvas com sucesso!', 'success');
-                setTimeout(() => {
-                    showTrimSection();
-                }, 500);
-            } catch (error) {
-                showStatus('Erro ao salvar legendas: ' + error.message, 'error');
-            }
-        } else {
-            showTrimSection();
-        }
-    };
-    container.appendChild(continueBtn);
+    // Fluxo agora avança automaticamente após gerar legendas
 }
 
-async function showTrimSection() {
-    const trimCard = document.getElementById('trim-card');
-    if (!trimCard) return;
-    
-    // Verificar se vídeo está pronto
-    if (!appState.videoId) {
-        showStatus('Vídeo não encontrado', 'error');
-        return;
-    }
-    
-    // Verificar estado no backend
-    const isReady = await verifyVideoReady(appState.videoId);
-    if (!isReady) {
-        showStatus('Vídeo ainda não está pronto. Aguarde a validação completar.', 'error');
-        return;
-    }
-    
-    trimCard.classList.remove('hidden');
-    updateProgressSteps('trim');
-    setTimeout(() => {
-        trimCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
-}
+// Função removida - usando showTrimSection() que já existe acima
 
 // Função removida - substituída por renderVideoPlayer
 
@@ -1155,11 +1355,38 @@ function setupTrimControls() {
  * Timeline estilo YouTube Studio/Premiere com handles arrastáveis
  */
 function setupTrimControlsForVideo(video) {
+    // Verificar se o card de trim está visível
+    const trimCard = document.getElementById('trim-card');
+    if (!trimCard) {
+        console.warn('[TRIM] Card de trim não encontrado');
+        return;
+    }
+    
     const duration = video.duration || appState.videoInfo?.duration || 0;
     
-    if (duration === 0 || !duration) {
+    if (duration === 0 || !duration || isNaN(duration)) {
         console.warn('[TRIM] Duração do vídeo não disponível:', duration);
-        showStatus('Duração do vídeo não disponível. Aguarde o processamento.', 'error');
+        console.warn('[TRIM] video object:', video);
+        console.warn('[TRIM] appState.videoInfo:', appState.videoInfo);
+        
+        // Tentar obter duração do elemento de vídeo diretamente
+        const videoElement = document.querySelector('#video-player-container video');
+        if (videoElement && videoElement.duration && !isNaN(videoElement.duration) && videoElement.duration > 0) {
+            const videoDuration = Math.floor(videoElement.duration);
+            console.log('[TRIM] Usando duração do elemento de vídeo:', videoDuration);
+            return setupTrimControlsForVideo({ duration: videoDuration, playableUrl: video.playableUrl });
+        }
+        
+        // Tentar novamente após um delay
+        setTimeout(() => {
+            const retryVideoElement = document.querySelector('#video-player-container video');
+            if (retryVideoElement && retryVideoElement.duration) {
+                console.log('[TRIM] Retry: Usando duração do elemento de vídeo:', retryVideoElement.duration);
+                setupTrimControlsForVideo({ duration: Math.floor(retryVideoElement.duration), playableUrl: video.playableUrl });
+            } else {
+                showStatus('Duração do vídeo não disponível. Aguarde o processamento.', 'error');
+            }
+        }, 1000);
         return;
     }
     
@@ -1179,17 +1406,34 @@ function setupTrimControlsForVideo(video) {
     if (endTimecode) endTimecode.textContent = formatTime(Math.floor(duration));
     if (trimDurationEl) trimDurationEl.textContent = formatTime(Math.floor(duration));
     
-    // Inicializar timeline drag-based
-    initializeTimeline(Math.floor(duration));
-    
-    // Calcular clips inicial
-    calculateClips();
-    
-    console.log('[TRIM] Timeline configurada - Início:', appState.trimStart, 'Fim:', appState.trimEnd);
+    // Aguardar um pouco para garantir que o DOM está pronto e o card está visível
+    setTimeout(() => {
+        // Verificar novamente se elementos existem
+        const track = document.getElementById('timeline-track');
+        if (!track) {
+            console.warn('[TRIM] Timeline track não encontrado, tentando novamente...');
+            setTimeout(() => initializeTimeline(Math.floor(duration)), 500);
+            return;
+        }
+        
+        // Inicializar timeline drag-based
+        console.log('[TRIM] Inicializando timeline...');
+        initializeTimeline(Math.floor(duration));
+        
+        // Calcular clips inicial
+        calculateClips();
+        
+        console.log('[TRIM] Timeline configurada - Início:', appState.trimStart, 'Fim:', appState.trimEnd);
+    }, 200);
 }
+
+// Variável para rastrear se a timeline já foi inicializada e armazenar handlers
+let timelineInitialized = false;
+let timelineHandlers = null;
 
 /**
  * Inicializar timeline drag-based trim tool
+ * Previne múltiplas inicializações que causam listeners duplicados
  */
 function initializeTimeline(duration) {
     const track = document.getElementById('timeline-track');
@@ -1198,8 +1442,40 @@ function initializeTimeline(duration) {
     const handleEnd = document.getElementById('timeline-handle-end');
     
     if (!track || !selected || !handleStart || !handleEnd) {
-        console.warn('[TIMELINE] Elementos não encontrados');
+        console.warn('[TIMELINE] Elementos não encontrados. Tentando novamente...');
+        // Tentar novamente após um delay se elementos não estiverem prontos
+        setTimeout(() => {
+            const retryTrack = document.getElementById('timeline-track');
+            if (retryTrack) {
+                console.log('[TIMELINE] Elementos encontrados na segunda tentativa');
+                initializeTimeline(duration);
+            } else {
+                console.error('[TIMELINE] Elementos ainda não encontrados após retry');
+            }
+        }, 500);
         return;
+    }
+    
+    console.log('[TIMELINE] Inicializando timeline com duração:', duration);
+    
+    // Limpar listeners anteriores se já foi inicializado
+    if (timelineInitialized && timelineHandlers) {
+        console.log('[TIMELINE] Limpando listeners anteriores...');
+        if (timelineHandlers.mousemove) {
+            document.removeEventListener('mousemove', timelineHandlers.mousemove);
+        }
+        if (timelineHandlers.touchmove) {
+            document.removeEventListener('touchmove', timelineHandlers.touchmove);
+        }
+        if (timelineHandlers.mouseup) {
+            document.removeEventListener('mouseup', timelineHandlers.mouseup);
+        }
+        if (timelineHandlers.touchend) {
+            document.removeEventListener('touchend', timelineHandlers.touchend);
+        }
+        if (timelineHandlers.resize) {
+            window.removeEventListener('resize', timelineHandlers.resize);
+        }
     }
     
     const trackRect = track.getBoundingClientRect();
@@ -1211,8 +1487,10 @@ function initializeTimeline(duration) {
     
     // Atualizar visual da timeline
     function updateTimeline() {
-        const startPx = (startPercent / 100) * trackWidth;
-        const endPx = (endPercent / 100) * trackWidth;
+        const rect = track.getBoundingClientRect();
+        const currentTrackWidth = rect.width;
+        const startPx = (startPercent / 100) * currentTrackWidth;
+        const endPx = (endPercent / 100) * currentTrackWidth;
         const selectedWidth = Math.max(0, endPx - startPx);
         
         selected.style.left = startPx + 'px';
@@ -1263,11 +1541,13 @@ function initializeTimeline(duration) {
     let isDraggingStart = false;
     handleStart.addEventListener('mousedown', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         isDraggingStart = true;
     });
     
     handleStart.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         isDraggingStart = true;
     });
     
@@ -1275,16 +1555,18 @@ function initializeTimeline(duration) {
     let isDraggingEnd = false;
     handleEnd.addEventListener('mousedown', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         isDraggingEnd = true;
     });
     
     handleEnd.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         isDraggingEnd = true;
     });
     
-    // Mouse move
-    document.addEventListener('mousemove', (e) => {
+    // Criar handlers que podem ser removidos depois
+    const mousemoveHandler = (e) => {
         if (isDraggingStart || isDraggingEnd) {
             const percent = getPercentFromEvent(e);
             
@@ -1296,9 +1578,9 @@ function initializeTimeline(duration) {
             
             updateTimeline();
         }
-    });
+    };
     
-    document.addEventListener('touchmove', (e) => {
+    const touchmoveHandler = (e) => {
         if (isDraggingStart || isDraggingEnd) {
             e.preventDefault();
             const percent = getPercentFromEvent(e);
@@ -1311,18 +1593,23 @@ function initializeTimeline(duration) {
             
             updateTimeline();
         }
-    });
+    };
     
-    // Mouse up
-    document.addEventListener('mouseup', () => {
+    const mouseupHandler = () => {
         isDraggingStart = false;
         isDraggingEnd = false;
-    });
+    };
     
-    document.addEventListener('touchend', () => {
+    const touchendHandler = () => {
         isDraggingStart = false;
         isDraggingEnd = false;
-    });
+    };
+    
+    // Adicionar listeners
+    document.addEventListener('mousemove', mousemoveHandler);
+    document.addEventListener('touchmove', touchmoveHandler);
+    document.addEventListener('mouseup', mouseupHandler);
+    document.addEventListener('touchend', touchendHandler);
     
     // Clique na track para mover playhead (opcional)
     track.addEventListener('click', (e) => {
@@ -1331,17 +1618,27 @@ function initializeTimeline(duration) {
         }
     });
     
-    // Atualizar inicialmente
-    updateTimeline();
-    
     // Atualizar ao redimensionar (debounced)
     let resizeTimeout;
-    window.addEventListener('resize', () => {
+    const resizeHandler = () => {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             updateTimeline();
         }, 100);
-    });
+    };
+    window.addEventListener('resize', resizeHandler);
+    
+    // Armazenar handlers para poder remover depois
+    timelineHandlers = {
+        mousemove: mousemoveHandler,
+        touchmove: touchmoveHandler,
+        mouseup: mouseupHandler,
+        touchend: touchendHandler,
+        resize: resizeHandler
+    };
+    
+    timelineInitialized = true;
+    console.log('[TIMELINE] Timeline inicializada com sucesso');
 }
 
 // Funções updateStartTime e updateEndTime removidas - agora usamos timeline drag-based
@@ -1476,13 +1773,122 @@ function updateClipsDisplay(clips60s, clips120s, selectedClips) {
 }
 
 function showNextSteps() {
+    // AVANÇAR AUTOMATICAMENTE para headline após selecionar nicho - ETAPA 6
+    updateProgressSteps('headline'); // Etapa 6
+    updateGenerateSummary();
+    const headlineCard = document.getElementById('headline-card');
+    if (headlineCard) {
+        headlineCard.style.display = 'block';
+        // Fazer scroll para a etapa de headline
+        scrollToCard('headline');
+    }
+}
+
+/**
+ * Avança para step de nicho (ETAPA 5)
+ */
+function showNicheSection() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    
     const nicheCard = document.getElementById('niche-card');
     if (nicheCard) {
-        nicheCard.classList.remove('hidden');
-        updateProgressSteps('niche');
-        setTimeout(() => {
-            nicheCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 300);
+        // Card sempre visível - garantir que está visível
+        nicheCard.style.display = 'block';
+        updateProgressSteps('niche'); // Etapa 5 (após configurations)
+        // Fazer scroll para a etapa de nicho
+        scrollToCard('niche');
+    }
+}
+
+/**
+ * Atualiza resumo na tela de gerar
+ */
+function updateGenerateSummary() {
+    const summaryTrim = document.getElementById('summary-trim');
+    const summaryClips = document.getElementById('summary-clips');
+    const summaryNiche = document.getElementById('summary-niche');
+    const summaryHeadline = document.getElementById('summary-headline');
+    
+    if (summaryTrim) {
+        if (appState.trimStart !== undefined && appState.trimEnd !== undefined) {
+            summaryTrim.textContent = `${formatTime(appState.trimStart)} - ${formatTime(appState.trimEnd)}`;
+        } else {
+            summaryTrim.textContent = 'Não definido';
+        }
+    }
+    
+    if (summaryClips) {
+        if (appState.trimStart !== undefined && appState.trimEnd !== undefined && appState.cutDuration) {
+            const duration = appState.trimEnd - appState.trimStart;
+            const clipsCount = Math.floor(duration / appState.cutDuration);
+            summaryClips.textContent = `${clipsCount} clipes`;
+        } else {
+            summaryClips.textContent = 'Não calculado';
+        }
+    }
+    
+    if (summaryNiche) {
+        // Buscar nome do nicho
+        const nicheName = document.querySelector(`.niche-card.selected h3`)?.textContent || 
+                         document.querySelector(`.niche-card.selected .card-title`)?.textContent || 
+                         '-';
+        summaryNiche.textContent = nicheName;
+    }
+    
+    if (summaryHeadline) {
+        summaryHeadline.textContent = appState.headlineText || 'Não definido';
+    }
+}
+
+/**
+ * Permite editar uma etapa específica (TODAS AS ETAPAS SEMPRE ACESSÍVEIS)
+ */
+function editStep(stepName) {
+    console.log('[EDIT] Editando etapa:', stepName);
+    
+    const stepIndex = STEP_ORDER.indexOf(stepName);
+    if (stepIndex === -1) {
+        console.warn('[EDIT] Etapa desconhecida:', stepName);
+        return;
+    }
+    
+    // Atualizar para a etapa desejada (todas sempre acessíveis)
+    updateProgressSteps(stepName);
+    
+    // Garantir que o card da etapa esteja visível
+    const targetCard = document.querySelector(`[data-step-card="${stepName}"]`);
+    
+    // Fazer scroll automático para a etapa selecionada
+    scrollToCard(stepName);
+    if (targetCard) {
+        targetCard.style.display = 'block';
+    }
+    
+    // Inicializar controles específicos se necessário
+    switch(stepName) {
+        case 'trim':
+            if (appState.videoDuration && appState.videoPlayableUrl) {
+                setTimeout(() => {
+                    setupTrimControlsForVideo({
+                        duration: appState.videoDuration,
+                        playableUrl: appState.videoPlayableUrl
+                    });
+                }, 300);
+            }
+            break;
+        case 'captions':
+            if (appState.videoId) {
+                setTimeout(() => {
+                    initializeCaptionsEditor(appState.videoId);
+                }, 100);
+            }
+            break;
+        case 'niche':
+            loadNiches();
+            break;
+        default:
+            // Outras etapas não precisam inicialização especial
+            break;
     }
 }
 
@@ -1519,16 +1925,14 @@ async function selectNiche(nicheId, cardElement) {
     cardElement.classList.add('selected');
     appState.nicheId = nicheId;
     
-    const retentionCard = document.getElementById('retention-card');
-    if (retentionCard) {
-        retentionCard.classList.remove('hidden');
-        updateProgressSteps('retention');
-        setTimeout(() => {
-            retentionCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    }
+    // Salvar nicho escolhido
+    console.log('[NICHE] Nicho selecionado:', nicheId);
     
+    // Carregar vídeos de retenção
     await loadRetentionVideos(nicheId);
+    
+    // Mostrar botão para continuar (NÃO avançar automaticamente)
+    showContinueButtonAfterNiche();
 }
 
 async function loadRetentionVideos(nicheId) {
@@ -1577,6 +1981,80 @@ function selectRetentionVideo(videoId, cardElement) {
 
 function updateRetentionMode(mode) {
     appState.retentionVideoId = mode;
+    console.log('[RETENTION] Modo atualizado:', mode);
+    
+    // Mostrar/ocultar seção de upload
+    const uploadSection = document.getElementById('retention-upload-section');
+    if (uploadSection) {
+        uploadSection.classList.toggle('hidden', mode !== 'upload');
+    }
+}
+
+// Estado do arquivo de retenção
+let retentionFile = null;
+
+/**
+ * Handler para seleção de arquivo de retenção
+ */
+function handleRetentionFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    retentionFile = file;
+    
+    const fileInfo = document.getElementById('retention-file-info');
+    const fileName = document.getElementById('retention-file-name');
+    const fileSize = document.getElementById('retention-file-size');
+    const uploadContent = document.querySelector('#retention-upload-area .upload-content');
+    
+    if (fileInfo && fileName && fileSize) {
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+        fileInfo.classList.remove('hidden');
+        
+        if (uploadContent) {
+            uploadContent.style.display = 'none';
+        }
+    }
+    
+    // Fazer upload do arquivo
+    uploadRetentionFile(file);
+}
+
+/**
+ * Upload do arquivo de retenção
+ */
+async function uploadRetentionFile(file) {
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('videoId', appState.videoId);
+        
+        const response = await fetch(`${API_BASE}/api/retention/upload-custom`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.retentionPath) {
+            appState.retentionVideoId = `upload:${data.retentionPath}`;
+            console.log('[RETENTION] Upload concluído:', data.retentionPath);
+        } else {
+            throw new Error(data.error || 'Erro ao fazer upload');
+        }
+    } catch (error) {
+        console.error('[RETENTION] Erro no upload:', error);
+        alert('Erro ao fazer upload do arquivo de retenção: ' + error.message);
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 function updateHeadlineText() {
@@ -1588,6 +2066,206 @@ function updateHeadlineText() {
     const text = textInput.value.trim() || 'Headline';
     appState.headlineText = text;
     headline.textContent = text;
+    
+    // Atualizar resumo
+    updateGenerateSummary();
+}
+
+/**
+ * Avança para step de gerar após definir headline
+ */
+/**
+ * Mostra botão para continuar após download do vídeo
+ */
+function showContinueButtonAfterDownload() {
+    const continueSection = document.getElementById('youtube-continue-section');
+    if (continueSection) {
+        continueSection.classList.remove('hidden');
+        // Fazer scroll para a etapa de youtube (caso o usuário esteja longe)
+        setTimeout(() => scrollToCard('youtube'), 300);
+    }
+}
+
+/**
+ * Continua para painel de configurações após legendas (ETAPA 4)
+ */
+function continueToConfigurations() {
+    const configCard = document.getElementById('configurations-card');
+    if (configCard) {
+        // Card sempre visível - garantir que está visível
+        configCard.style.display = 'block';
+        updateProgressSteps('configurations'); // Etapa 4
+        // Fazer scroll para a etapa de configurações
+        scrollToCard('configurations');
+    }
+}
+
+/**
+ * Atualiza configuração no estado global
+ */
+function updateConfiguration(key, value, checked = null) {
+    if (!appState.configurations) {
+        appState.configurations = {
+            format: '9:16',
+            platforms: { tiktok: true, reels: true, shorts: true },
+            captionLanguage: 'pt',
+            captionStyle: 'modern',
+            clipsQuantity: null,
+            safeMargins: 10
+        };
+    }
+    
+    if (key === 'platforms') {
+        if (!appState.configurations.platforms) {
+            appState.configurations.platforms = {};
+        }
+        appState.configurations.platforms[value] = checked;
+    } else {
+        appState.configurations[key] = value;
+    }
+    
+    console.log('[CONFIG] Configuração atualizada:', key, value, appState.configurations);
+}
+
+/**
+ * Confirma configurações e avança para próxima etapa (ETAPA 3 - TRIM)
+ */
+function confirmConfigurations() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    
+    // Validação básica (apenas log, sem bloquear)
+    if (!appState.configurations || !appState.configurations.platforms) {
+        console.warn('[CONFIG] Configurações de plataformas não encontradas');
+    }
+    
+    const hasPlatform = appState.configurations?.platforms ? 
+        Object.values(appState.configurations.platforms).some(v => v === true) : false;
+    if (!hasPlatform) {
+        console.warn('[CONFIG] Nenhuma plataforma selecionada - pode causar problemas na geração');
+    }
+    
+    console.log('[CONFIG] Configurações confirmadas:', appState.configurations);
+    
+    // AVANÇAR AUTOMATICAMENTE para etapa 5 (Nicho) após configurações
+    setTimeout(() => {
+        showNicheSection();
+        // Fazer scroll para a etapa de nicho
+        scrollToCard('niche');
+    }, 500);
+}
+
+/**
+ * Mostra botão para continuar após gerar legendas
+ */
+function showContinueButtonAfterCaptions() {
+    const continueSection = document.getElementById('captions-continue-section');
+    if (continueSection) {
+        continueSection.classList.remove('hidden');
+        // Fazer scroll para a etapa de legendas
+        setTimeout(() => scrollToCard('captions'), 300);
+    }
+}
+
+/**
+ * Continua para escolher nicho após legendas (ETAPA 5)
+ * Esta função não é mais usada - avanço automático após configurações
+ */
+function continueToNiche() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    showNicheSection(); // Etapa 5
+}
+
+/**
+ * Mostra botão para continuar após selecionar nicho
+ */
+function showContinueButtonAfterNiche() {
+    const continueSection = document.getElementById('niche-continue-section');
+    if (continueSection) {
+        continueSection.classList.remove('hidden');
+        // Fazer scroll para a etapa de nicho
+        setTimeout(() => scrollToCard('niche'), 300);
+    }
+}
+
+/**
+ * Continua para configurar headline após nicho (ETAPA 6)
+ */
+function continueToHeadline() {
+    // Sem validação bloqueante - usuário controla o fluxo
+    
+    // Definir valores padrão se não estiverem definidos
+    if (!appState.headlineText) {
+        appState.headlineText = 'Headline';
+    }
+    if (!appState.headlineStyle) {
+        appState.headlineStyle = 'bold';
+    }
+    if (!appState.font) {
+        appState.font = 'Inter';
+    }
+    if (!appState.backgroundColor) {
+        appState.backgroundColor = '#000000';
+    }
+    if (!appState.retentionVideoId) {
+        appState.retentionVideoId = 'random';
+    }
+    
+    // Mostrar card de headline - ETAPA 6
+    showNextSteps();
+    // Scroll já é feito dentro de showNextSteps
+}
+
+/**
+ * Continua para card de geração após headline (ETAPA 7)
+ */
+function continueToGenerate() {
+    // Avançar para etapa de geração - ETAPA 7
+    updateProgressSteps('generate'); // Etapa 7
+    updateGenerateSummary();
+    const generateCard = document.getElementById('generate-card');
+    if (generateCard) {
+        generateCard.style.display = 'block';
+        // Fazer scroll para a etapa de geração
+        scrollToCard('generate');
+    }
+}
+
+/**
+ * Volta para card de headline
+ */
+function goBackToHeadline() {
+    // Cards sempre visíveis - apenas atualizar etapa ativa
+    updateProgressSteps('headline');
+    const headlineCard = document.getElementById('headline-card');
+    if (headlineCard) {
+        setTimeout(() => {
+            // NÃO fazer scroll automático
+        }, 300);
+    }
+}
+
+function proceedToGenerate() {
+    // Atualizar progresso para step de geração
+    updateProgressSteps('generate');
+    updateGenerateSummary();
+    
+    // Verificar se todos os dados necessários estão disponíveis (apenas log, sem bloquear)
+    if (!appState.videoId || !appState.nicheId) {
+        console.warn('[GENERATE] Alguns dados podem estar faltando, mas permitindo tentativa de geração');
+    }
+    
+    // Calcular número de clipes baseado no intervalo e duração
+    if (!appState.numberOfCuts && appState.trimStart && appState.trimEnd && appState.cutDuration) {
+        const duration = appState.trimEnd - appState.trimStart;
+        appState.numberOfCuts = Math.floor(duration / appState.cutDuration);
+    }
+    
+    // Confirmar antes de gerar
+    const confirmMessage = `Você está prestes a gerar ${appState.numberOfCuts || 'vários'} clipes.\n\nDeseja continuar?`;
+    if (confirm(confirmMessage)) {
+        // Gerar clipes diretamente
+        generateSeries();
+    }
 }
 
 function updatePreviewStyle() {
@@ -1615,47 +2293,76 @@ function updatePreviewStyle() {
         headline.style.fontWeight = '600';
         headline.style.textTransform = 'none';
     }
+    
+    // Atualizar resumo
+    updateGenerateSummary();
 }
 
 async function generateSeries() {
+    // Sem validação bloqueante - tentar gerar mesmo se faltar dados (backend validará)
     if (!appState.videoId || !appState.nicheId || !appState.numberOfCuts) {
-        alert('Por favor, complete todas as etapas');
-        return;
+        console.warn('[GENERATE] Alguns dados podem estar faltando, mas tentando gerar mesmo assim');
     }
     
-    // Verificar se vídeo está pronto antes de gerar
+    // Verificar se vídeo está pronto antes de gerar (apenas log, sem bloquear)
     const isReady = await verifyVideoReady(appState.videoId);
     if (!isReady) {
-        alert('Vídeo ainda não está pronto. Por favor, aguarde a validação completar.');
-        return;
+        console.warn('[GENERATE] Vídeo pode não estar pronto, mas tentando gerar mesmo assim');
+        // Não bloquear - deixar backend validar
     }
     
     const loadingOverlay = document.getElementById('loading-overlay');
     if (loadingOverlay) loadingOverlay.classList.remove('hidden');
     
     try {
-        const response = await fetch(`${API_BASE}/api/generate/series`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                videoId: appState.videoId,
-                nicheId: appState.nicheId,
-                retentionVideoId: appState.retentionVideoId,
-                numberOfCuts: appState.numberOfCuts,
-                headlineStyle: appState.headlineStyle,
-                headlineText: appState.headlineText || 'Headline',
-                font: appState.font,
-                trimStart: appState.trimStart,
-                trimEnd: appState.trimEnd,
-                cutDuration: appState.cutDuration
-            })
+        // Mostrar feedback de fila
+        const queueInfoEl = document.getElementById('queue-info');
+        if (queueInfoEl) {
+            queueInfoEl.classList.remove('hidden');
+            queueInfoEl.textContent = 'Adicionando à fila de processamento...';
+        }
+
+        // Enviar TODAS as configurações para o backend
+        const { data } = await apiClient.post('/api/generate/series', {
+            videoId: appState.videoId,
+            nicheId: appState.nicheId,
+            retentionVideoId: appState.retentionVideoId,
+            numberOfCuts: appState.numberOfCuts,
+            headlineStyle: appState.headlineStyle,
+            headlineText: appState.headlineText || 'Headline',
+            font: appState.font,
+            trimStart: appState.trimStart,
+            trimEnd: appState.trimEnd,
+            cutDuration: appState.cutDuration,
+            backgroundColor: appState.backgroundColor || '#000000',
+            // CONFIGURAÇÕES DE VÍDEO (obrigatórias)
+            format: appState.configurations?.format || '9:16',
+            platforms: appState.configurations?.platforms || { tiktok: true, reels: true, shorts: true },
+            captionLanguage: appState.configurations?.captionLanguage || 'pt',
+            captionStyle: appState.configurations?.captionStyle || 'modern',
+            clipsQuantity: appState.configurations?.clipsQuantity || null,
+            safeMargins: appState.configurations?.safeMargins || 10
         });
         
-        const data = await response.json();
-        
-        if (response.ok) {
+        if (data) {
             appState.jobId = data.jobId;
             appState.seriesId = data.seriesId;
+
+        // Mostrar informações de fila se disponíveis
+        if (data.queuePosition) {
+            const queueInfoEl = document.getElementById('queue-info');
+            if (queueInfoEl) {
+                queueInfoEl.classList.remove('hidden');
+                const waitTime = data.estimatedWaitTime || 0;
+                queueInfoEl.innerHTML = `
+                    <div class="queue-status">
+                        <span class="queue-icon">⏳</span>
+                        <span>Posição na fila: ${data.queuePosition}</span>
+                        ${waitTime > 0 ? `<span>• Tempo estimado: ~${waitTime} min</span>` : ''}
+                    </div>
+                `;
+            }
+        }
             monitorProgress(data.jobId);
         } else {
             alert('Erro ao gerar série: ' + data.error);
@@ -1674,8 +2381,7 @@ async function monitorProgress(jobId) {
     
     const interval = setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE}/api/generate/status/${jobId}`);
-            const data = await response.json();
+            const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
             
             // Backend retorna { jobId, status, progress, failedReason }
             const progress = data.progress || 0;

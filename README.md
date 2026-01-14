@@ -50,6 +50,40 @@ cp .env.example .env
 npm start
 ```
 
+## 🔄 Gerenciamento de Processos
+
+### Verificar Status dos Processos
+```bash
+./manage-processes.sh status
+# ou
+./check-processes.sh
+```
+
+### Iniciar Todos os Processos
+```bash
+./manage-processes.sh start
+# ou
+./start-all.sh
+```
+
+### Parar Todos os Processos
+```bash
+./manage-processes.sh stop
+```
+
+### Reiniciar Todos os Processos
+```bash
+./manage-processes.sh restart
+```
+
+### Verificar Processos em Execução
+```bash
+./manage-processes.sh check
+```
+
+**Nota:** O servidor principal (`src/index.js`) já inclui os workers internamente. Não é necessário rodar `worker.js` separadamente, a menos que você queira escalar horizontalmente.
+```
+
 Para desenvolvimento com auto-reload:
 ```bash
 npm run dev

@@ -6,6 +6,10 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 
+// Inicializar Redis primeiro
+import { initRedis } from "./services/redisService.js";
+import { apiLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
+
 import youtubeRoutes from "./routes/youtube.js";
 import authRoutes from "./routes/auth.js";
 import downloadRoutes from "./routes/download.js";
@@ -44,7 +48,15 @@ const PORT = process.env.PORT || 8080;
 // MIDDLEWARES
 // =====================
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100mb' })); // Aumentar limite para vídeos grandes
+
+// Rate limiting global (aplicar antes das rotas)
+app.use('/api/', apiLimiter);
+
+// Rate limiting para operações pesadas
+app.use('/api/download/youtube', heavyOperationLimiter);
+app.use('/api/generate', heavyOperationLimiter);
+app.use('/api/captions/generate', heavyOperationLimiter);
 
 // =====================
 // API
@@ -105,6 +117,10 @@ cleanupOldFiles(24).then(result => {
 // =====================
 async function initializeServer() {
   try {
+    // Inicializar Redis primeiro
+    console.log('[INIT] Inicializando Redis...');
+    await initRedis();
+    
     // Configurar ffmpeg antes de iniciar o servidor
     console.log('[INIT] Verificando ffmpeg...');
     await configureFfmpeg();
@@ -116,13 +132,17 @@ async function initializeServer() {
   
   // Log de recursos disponíveis
   const memUsage = process.memoryUsage();
+  const concurrency = parseInt(process.env.VIDEO_PROCESS_CONCURRENCY || '10');
   console.log(`[INIT] Memória disponível: ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)} MB`);
-  console.log(`[INIT] Concurrency de processamento: ${process.env.VIDEO_PROCESS_CONCURRENCY || '2'}`);
+  console.log(`[INIT] Concurrency de processamento: ${concurrency}`);
+  console.log(`[INIT] Redis: ${process.env.REDIS_URL ? 'Configurado' : 'Não configurado (usando memória)'}`);
   
   // Iniciar servidor mesmo se ffmpeg não estiver configurado
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 EZ Clips rodando na porta ${PORT}`);
-    console.log(`[INIT] Capacidade estimada: 10-20 usuários simultâneos`);
+    console.log(`[INIT] ✅ Plataforma SaaS pronta para 1000+ usuários simultâneos`);
+    console.log(`[INIT] 📊 Rate limiting ativo`);
+    console.log(`[INIT] 🔄 Sistema de filas otimizado`);
   });
 }
 

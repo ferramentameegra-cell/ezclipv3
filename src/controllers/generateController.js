@@ -3,22 +3,46 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
+import { UserQuotaService } from '../services/userQuotaService.js';
 
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
 export const generateSeries = async (req, res) => {
   try {
+    // Verificar quota do usuário (se autenticado)
+    if (req.user) {
+      const plan = req.user.plan || 'free';
+      const quotaCheck = await UserQuotaService.checkVideoProcessingQuota(req.user.id, plan);
+      
+      if (!quotaCheck.allowed) {
+        return res.status(429).json({
+          error: quotaCheck.reason,
+          quota: quotaCheck,
+          retryAfter: 3600 // 1 hora
+        });
+      }
+    }
+
     const {
       videoId,
       nicheId,
       retentionVideoId,
       numberOfCuts,
       headlineStyle,
+      headlineText,
       font,
       trimStart,
       trimEnd,
-      cutDuration
+      cutDuration,
+      backgroundColor,
+      // CONFIGURAÇÕES DE VÍDEO
+      format = '9:16',
+      platforms = { tiktok: true, reels: true, shorts: true },
+      captionLanguage = 'pt',
+      captionStyle = 'modern',
+      clipsQuantity = null,
+      safeMargins = 10
     } = req.body;
 
     if (!videoId || !nicheId || !numberOfCuts) {
@@ -37,6 +61,9 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
+    // Obter posição na fila antes de adicionar
+    const waitingCount = await videoProcessQueue.getWaitingCount ? await videoProcessQueue.getWaitingCount() : 0;
+    
     const job = await videoProcessQueue.add(
       'generate-video-series',
       {
@@ -47,14 +74,25 @@ export const generateSeries = async (req, res) => {
         retentionVideoId: retentionVideoId || 'random',
         numberOfCuts,
         headlineStyle: headlineStyle || 'bold',
+        headlineText: headlineText || null,
         font: font || 'Inter',
         trimStart: trimStart || 0,
         trimEnd: trimEnd || null,
-        cutDuration: cutDuration || 60
+        cutDuration: cutDuration || 60,
+        backgroundColor: backgroundColor || '#000000',
+        // CONFIGURAÇÕES DE VÍDEO
+        format,
+        platforms,
+        captionLanguage,
+        captionStyle,
+        clipsQuantity,
+        safeMargins,
+        userId: req.user?.id || null
       },
       {
         removeOnComplete: false,
-        removeOnFail: false
+        removeOnFail: false,
+        priority: req.user?.plan === 'premium' ? 1 : 5 // Premium tem prioridade
       }
     );
 
@@ -63,7 +101,9 @@ export const generateSeries = async (req, res) => {
     res.json({
       jobId: job.id,
       seriesId,
-      status: 'processing'
+      status: 'processing',
+      queuePosition: waitingCount + 1,
+      estimatedWaitTime: Math.ceil((waitingCount + 1) / 10 * 3) // ~3 min por vídeo, 10 simultâneos
     });
   } catch (error) {
     console.error('[GENERATE] Erro:', error);

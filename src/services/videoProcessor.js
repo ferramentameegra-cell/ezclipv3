@@ -4,6 +4,7 @@ import fs from 'fs';
 import { splitVideoIntoClips, trimVideo } from './videoTrimmer.js';
 import { getVideoState, VIDEO_STATES } from './videoStateManager.js';
 import { validateVideoWithFfprobe } from './videoValidator.js';
+import { composeFinalVideo } from './videoComposer.js';
 
 // ===============================
 // CONFIGURAÇÃO RAILWAY (OBRIGATÓRIA)
@@ -40,7 +41,20 @@ export const generateVideoSeries = async (job, jobsMap) => {
       seriesId,
       trimStart = 0,
       trimEnd = null,
-      cutDuration = 60
+      cutDuration = 60,
+      nicheId,
+      retentionVideoId = 'random',
+      headlineStyle = 'bold',
+      headlineText = null,
+      font = 'Inter',
+      backgroundColor = '#000000',
+      // CONFIGURAÇÕES DE VÍDEO
+      format = '9:16',
+      platforms = { tiktok: true, reels: true, shorts: true },
+      captionLanguage = 'pt',
+      captionStyle = 'modern',
+      clipsQuantity = null,
+      safeMargins = 10
     } = job;
 
     if (!videoStore) {
@@ -285,19 +299,140 @@ export const generateVideoSeries = async (job, jobsMap) => {
     console.log(`[PROCESSING]   - actualEndTime: ${actualEndTime}s`);
     console.log(`[PROCESSING]   - Duração total: ${actualEndTime - actualStartTime}s`);
 
+    // Se clipsQuantity foi especificado, ajustar cutDuration para gerar exatamente essa quantidade
+    let finalCutDuration = cutDuration;
+    let finalNumberOfCuts = numberOfCuts;
+    
+    if (clipsQuantity && clipsQuantity > 0) {
+      // Calcular cutDuration necessário para gerar exatamente clipsQuantity clipes
+      const totalDuration = actualEndTime - actualStartTime;
+      finalCutDuration = totalDuration / clipsQuantity;
+      finalNumberOfCuts = clipsQuantity;
+      console.log(`[PROCESSING] Quantidade de clipes especificada: ${clipsQuantity}`);
+      console.log(`[PROCESSING] Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
+    }
+    
     const clips = await splitVideoIntoClips(
       processedVideoPath,
       seriesPath,
-      cutDuration,
+      finalCutDuration,
       actualStartTime,
       actualEndTime
     );
+    
+    // Limitar número de clipes se necessário
+    const finalClips = clipsQuantity && clipsQuantity > 0 
+      ? clips.slice(0, clipsQuantity)
+      : clips;
+    
+    console.log(`[PROCESSING] Clipes gerados: ${finalClips.length} (solicitado: ${finalNumberOfCuts || 'automático'})`);
 
-    // Atualizar progresso progressivo
-    for (let i = 0; i < clips.length; i++) {
-      job.progress = Math.round(50 + ((i + 1) / clips.length) * 50);
+    // ===============================
+    // APLICAR COMPOSIÇÃO FINAL EM CADA CLIP
+    // ===============================
+    console.log(`[PROCESSING] Aplicando composição final em ${finalClips.length} clips...`);
+
+    // Obter legendas do vídeo (se houver)
+    const captions = video.captions?.edited || video.captions?.raw || [];
+    
+    // Aplicar estilo de legendas baseado na configuração
+    const captionStyleConfig = getCaptionStyleConfig(captionStyle, font);
+    const captionStyleObj = {
+      font: captionStyleConfig.font,
+      fontSize: captionStyleConfig.fontSize,
+      color: captionStyleConfig.color,
+      strokeColor: captionStyleConfig.strokeColor,
+      strokeWidth: captionStyleConfig.strokeWidth
+    };
+
+    // Estilo da headline
+    const headlineStyleObj = {
+      font: font || 'Inter',
+      fontSize: 72,
+      color: '#FFFFFF',
+      fontStyle: headlineStyle || 'bold'
+    };
+
+    const finalClips = [];
+    const compositionProgress = 60; // Começar em 60% (após split)
+    const compositionRange = 40; // 40% para composição
+
+    for (let i = 0; i < finalClips.length; i++) {
+      const clipPath = finalClips[i];
+      const clipIndex = i + 1;
+
+      console.log(`[PROCESSING] Compondo clip ${clipIndex}/${finalClips.length}...`);
+
+      // Criar caminho para clip final composto
+      const finalClipPath = path.join(
+        seriesPath,
+        `clip_${String(clipIndex).padStart(3, '0')}_final.mp4`
+      );
+
+      try {
+        // Filtrar legendas para este clip específico
+        // Assumindo que cada clip tem duração finalCutDuration
+        const clipStartTime = i * finalCutDuration;
+        const clipEndTime = (i + 1) * finalCutDuration;
+        const clipCaptions = captions.filter(
+          cap => cap.start >= clipStartTime && cap.end <= clipEndTime
+        ).map(cap => ({
+          ...cap,
+          start: cap.start - clipStartTime, // Ajustar para tempo relativo do clip
+          end: cap.end - clipStartTime
+        }));
+
+        // Headline para este clip (se houver)
+        const clipHeadline = headlineText ? {
+          text: headlineText,
+          startTime: 0,
+          endTime: Math.min(5, finalCutDuration)
+        } : null;
+
+        // Aplicar composição final
+        await composeFinalVideo({
+          clipPath,
+          outputPath: finalClipPath,
+          captions: clipCaptions,
+          captionStyle,
+          headline: clipHeadline,
+          headlineStyle: headlineStyleObj,
+          headlineText: headlineText,
+          retentionVideoId,
+          nicheId,
+          backgroundColor,
+          onProgress: (percent) => {
+            // Progresso individual do clip
+            const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (percent / 100) / finalClips.length);
+            job.progress = Math.round(clipProgress);
+            if (jobsMap) jobsMap.set(job.id, job);
+          }
+        });
+
+        // Remover clip original (economizar espaço)
+        if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
+          try {
+            fs.unlinkSync(clipPath);
+          } catch (unlinkError) {
+            console.warn(`[PROCESSING] Erro ao remover clip original: ${unlinkError.message}`);
+          }
+        }
+
+        finalClips.push(finalClipPath);
+        console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
+
+      } catch (compositionError) {
+        console.error(`[PROCESSING] Erro ao compor clip ${clipIndex}:`, compositionError);
+        // Se composição falhar, usar clip original
+        finalClips.push(clipPath);
+      }
+
+      // Atualizar progresso geral
+      job.progress = Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length)));
       if (jobsMap) jobsMap.set(job.id, job);
     }
+
+    console.log(`[PROCESSING] ✅ Composição final concluída: ${finalClips.length} clips finais`);
 
     // ===============================
     // FINALIZAR JOB
@@ -305,18 +440,22 @@ export const generateVideoSeries = async (job, jobsMap) => {
     job.progress = 100;
     job.status = 'completed';
     job.completedAt = new Date();
-    job.clips = clips;
-    job.clipsCount = clips.length;
+    job.clips = finalClips;
+    job.clipsCount = finalClips.length;
 
     if (jobsMap) jobsMap.set(job.id, job);
 
-    console.log(`[PROCESSING] Série finalizada: ${clips.length} clips`);
+    console.log(`[PROCESSING] ✅ Série finalizada: ${finalClips.length} clips com layout final aplicado`);
 
     return {
       seriesId,
-      clips,
-      clipsCount: clips.length,
-      status: 'completed'
+      clips: finalClips,
+      clipsCount: finalClips.length,
+      status: 'completed',
+      format,
+      platforms,
+      captionStyle,
+      safeMargins
     };
 
   } catch (error) {
@@ -329,3 +468,41 @@ export const generateVideoSeries = async (job, jobsMap) => {
     throw error;
   }
 };
+
+// ===============================
+// HELPER: Estilo de Legendas
+// ===============================
+function getCaptionStyleConfig(styleName, defaultFont) {
+  const styles = {
+    modern: {
+      font: defaultFont || 'Inter',
+      fontSize: 48,
+      color: '#FFFFFF',
+      strokeColor: '#000000',
+      strokeWidth: 2
+    },
+    classic: {
+      font: defaultFont || 'Arial',
+      fontSize: 44,
+      color: '#FFFFFF',
+      strokeColor: '#000000',
+      strokeWidth: 3
+    },
+    bold: {
+      font: defaultFont || 'Inter',
+      fontSize: 52,
+      color: '#FFFFFF',
+      strokeColor: '#000000',
+      strokeWidth: 4
+    },
+    minimal: {
+      font: defaultFont || 'Inter',
+      fontSize: 40,
+      color: '#FFFFFF',
+      strokeColor: 'transparent',
+      strokeWidth: 0
+    }
+  };
+  
+  return styles[styleName] || styles.modern;
+}

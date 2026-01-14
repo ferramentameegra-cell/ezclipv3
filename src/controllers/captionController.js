@@ -42,16 +42,21 @@ export async function generateCaptionsForVideo(req, res) {
       });
     }
 
+    // Opções otimizadas para formato vertical 9:16 (1080x1920)
+    // Formato vertical tem menos largura, então reduzir caracteres por linha
     const options = {
       maxLinesPerBlock: req.body.maxLinesPerBlock || 2,
-      maxCharsPerLine: req.body.maxCharsPerLine || 40,
-      highlightKeywords: req.body.highlightKeywords !== false
+      maxCharsPerLine: req.body.maxCharsPerLine || 30, // Reduzido de 40 para 30 para formato vertical
+      highlightKeywords: req.body.highlightKeywords !== false,
+      trimStart: req.body.trimStart || 0,
+      trimEnd: req.body.trimEnd || null
     };
 
     console.log(`[CAPTION] Gerando legendas para vídeo: ${videoId}`);
+    console.log(`[CAPTION] Intervalo: ${options.trimStart}s - ${options.trimEnd || 'fim'}`);
     console.log(`[CAPTION] OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✅ Configurada' : '❌ Não configurada'}`);
 
-    // Gerar legendas
+    // Gerar legendas apenas no intervalo escolhido
     const result = await generateCaptions(video.path, options);
 
     // Salvar legendas no store do vídeo

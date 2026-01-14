@@ -8,6 +8,7 @@
     <meta http-equiv="Expires" content="0">
     <title>EZ Clips AI - Transforme Vídeos em Clips Virais</title>
     <link rel="stylesheet" href="styles.css?v=3.0.0">
+    <link rel="stylesheet" href="captions-editor.css?v=3.0.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -28,7 +29,6 @@
             </div>
             <div class="nav-menu">
                 <button class="nav-item active" data-tab="home" onclick="switchTab('home')">Início</button>
-                <button class="nav-item" data-tab="estudo" onclick="switchTab('estudo')">Estudo</button>
                 <button class="nav-item" data-tab="login" onclick="switchTab('login')" id="nav-login-btn">Entrar</button>
                 <div class="user-menu hidden" id="user-menu">
                     <div class="user-avatar" id="user-avatar">
@@ -68,9 +68,6 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                     <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
-                            </button>
-                            <button class="btn-secondary" onclick="switchTab('estudo')">
-                                Ver Cursos
                             </button>
                         </div>
                         <div class="hero-stats">
@@ -140,6 +137,72 @@
                 </div>
             </section>
 
+            <!-- Testimonials Section -->
+            <section class="testimonials-section">
+                <div class="container">
+                    <div class="section-header">
+                        <h2 class="section-title">O que nossos clientes dizem</h2>
+                        <p class="section-subtitle">Veja como o EzClips está transformando a criação de conteúdo</p>
+                    </div>
+                    <div class="testimonials-grid">
+                        <!-- Testimonial 1 -->
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <div class="testimonial-quote">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 21C3 17.4 5.4 15 9 15C13.2 15 16.5 11.7 16.5 7.5C16.5 3.3 13.2 0 9 0C4.8 0 1.5 3.3 1.5 7.5C1.5 8.1 1.6 8.7 1.8 9.3C2.4 11.1 3.6 12.6 5.1 13.5L3 21Z" fill="currentColor" opacity="0.1"/>
+                                        <path d="M14.25 21C14.25 17.4 16.65 15 20.25 15C24.45 15 27.75 11.7 27.75 7.5C27.75 3.3 24.45 0 20.25 0C16.05 0 12.75 3.3 12.75 7.5C12.75 8.1 12.85 8.7 13.05 9.3C13.65 11.1 14.85 12.6 16.35 13.5L14.25 21Z" fill="currentColor" opacity="0.1"/>
+                                    </svg>
+                                </div>
+                                <p class="testimonial-headline">O EzClips mudou completamente o meu negócio.</p>
+                                <p class="testimonial-text">
+                                    Antes, produzir cortes era demorado, caro e dependia de várias pessoas. 
+                                    Com o EzClips, eu ganho velocidade, consistência e escala. 
+                                    Hoje eu publico mais, com mais qualidade, e isso impactou diretamente meus resultados. 
+                                    É uma ferramenta que paga o próprio custo.
+                                </p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="author-avatar">
+                                    <span class="avatar-initial">DB</span>
+                                </div>
+                                <div class="author-info">
+                                    <div class="author-name">Daniel Braun</div>
+                                    <div class="author-role">Empresário especialista em imigração para o Canadá</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Testimonial 2 -->
+                        <div class="testimonial-card">
+                            <div class="testimonial-content">
+                                <div class="testimonial-quote">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 21C3 17.4 5.4 15 9 15C13.2 15 16.5 11.7 16.5 7.5C16.5 3.3 13.2 0 9 0C4.8 0 1.5 3.3 1.5 7.5C1.5 8.1 1.6 8.7 1.8 9.3C2.4 11.1 3.6 12.6 5.1 13.5L3 21Z" fill="currentColor" opacity="0.1"/>
+                                        <path d="M14.25 21C14.25 17.4 16.65 15 20.25 15C24.45 15 27.75 11.7 27.75 7.5C27.75 3.3 24.45 0 20.25 0C16.05 0 12.75 3.3 12.75 7.5C12.75 8.1 12.85 8.7 13.05 9.3C13.65 11.1 14.85 12.6 16.35 13.5L14.25 21Z" fill="currentColor" opacity="0.1"/>
+                                    </svg>
+                                </div>
+                                <p class="testimonial-headline">O EzClips transformou a forma como fazemos cortes.</p>
+                                <p class="testimonial-text">
+                                    Antes era um processo técnico, lento e pouco estratégico. 
+                                    Agora, os cortes já nascem no formato certo, com legenda, headline e foco em retenção. 
+                                    O EzClips trouxe clareza, agilidade e padrão para o nosso conteúdo.
+                                </p>
+                            </div>
+                            <div class="testimonial-author">
+                                <div class="author-avatar">
+                                    <span class="avatar-initial">FL</span>
+                                </div>
+                                <div class="author-info">
+                                    <div class="author-name">Dr. Fernando Lemos</div>
+                                    <div class="author-role">Médico mais influente do Brasil IBest</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Tool Section -->
             <section class="tool-section" id="tool-section">
                 <div class="container">
@@ -155,34 +218,68 @@
                                 <div class="step-number">1</div>
                                 <div class="step-line"></div>
                             </div>
-                            <div class="step-label">YouTube</div>
+                            <div class="step-label">Upload/Link</div>
                         </div>
-                        <div class="progress-step" data-step="captions">
+                        <div class="progress-step" data-step="trim">
                             <div class="step-indicator">
                                 <div class="step-number">2</div>
                                 <div class="step-line"></div>
                             </div>
-                            <div class="step-label">Legendas</div>
+                            <div class="step-label">Intervalo</div>
                         </div>
-                        <div class="progress-step" data-step="trim">
+                        <div class="progress-step" data-step="captions">
                             <div class="step-indicator">
                                 <div class="step-number">3</div>
                                 <div class="step-line"></div>
                             </div>
-                            <div class="step-label">Intervalo</div>
+                            <div class="step-label">Legendas</div>
                         </div>
-                        <div class="progress-step" data-step="niche">
+                        <div class="progress-step" data-step="configurations">
                             <div class="step-indicator">
                                 <div class="step-number">4</div>
                                 <div class="step-line"></div>
                             </div>
+                            <div class="step-label">Configurações</div>
+                        </div>
+                        <div class="progress-step" data-step="niche">
+                            <div class="step-indicator">
+                                <div class="step-number">5</div>
+                                <div class="step-line"></div>
+                            </div>
                             <div class="step-label">Nicho</div>
+                        </div>
+                        <div class="progress-step" data-step="headline">
+                            <div class="step-indicator">
+                                <div class="step-number">6</div>
+                                <div class="step-line"></div>
+                            </div>
+                            <div class="step-label">Headline</div>
                         </div>
                         <div class="progress-step" data-step="generate">
                             <div class="step-indicator">
-                                <div class="step-number">5</div>
+                                <div class="step-number">7</div>
                             </div>
                             <div class="step-label">Gerar Clipes</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Video Player Fixo (SEMPRE VISÍVEL após download) -->
+                    <div id="fixed-video-player" class="fixed-video-player" style="display: none;">
+                        <div class="fixed-player-header">
+                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600;">Vídeo</h3>
+                            <button onclick="toggleFixedPlayer()" class="btn-icon" style="background: none; border: none; cursor: pointer; padding: 0.5rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="fixed-video-container" class="fixed-video-container">
+                            <div class="video-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                                    <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+                                </svg>
+                                <p>Vídeo será exibido aqui</p>
+                            </div>
                         </div>
                     </div>
                     
@@ -236,6 +333,112 @@
                                 </button>
                             </div>
                         </div>
+                        
+                        <!-- Botão para continuar após download -->
+                        <div id="youtube-continue-section" class="hidden" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                            <button class="btn-primary" onclick="continueToConfigurations()" style="width: 100%;">
+                                Continuar para Configurações
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
+                                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Configurations Panel (Sempre Visível) -->
+                    <div class="tool-card" id="configurations-card" data-step-card="configurations" style="display: none;">
+                        <h3 class="card-title">⚙️ Configurações</h3>
+                        <p class="card-subtitle">Configure o formato, plataformas e estilo do seu conteúdo</p>
+                        
+                        <div class="configurations-panel" style="display: grid; gap: 1.5rem;">
+                            <!-- Formato do Vídeo -->
+                            <div class="config-section">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Formato do Vídeo</label>
+                                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
+                                        <input type="radio" name="video-format" value="9:16" checked onchange="updateConfiguration('format', '9:16')">
+                                        <span>9:16 (Vertical)</span>
+                                    </label>
+                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
+                                        <input type="radio" name="video-format" value="1:1" onchange="updateConfiguration('format', '1:1')">
+                                        <span>1:1 (Quadrado)</span>
+                                    </label>
+                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
+                                        <input type="radio" name="video-format" value="16:9" onchange="updateConfiguration('format', '16:9')">
+                                        <span>16:9 (Horizontal)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Plataformas -->
+                            <div class="config-section">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Plataformas</label>
+                                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                    <label class="checkbox-option">
+                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'tiktok', this.checked)">
+                                        <span>📱 TikTok</span>
+                                    </label>
+                                    <label class="checkbox-option">
+                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'reels', this.checked)">
+                                        <span>📸 Instagram Reels</span>
+                                    </label>
+                                    <label class="checkbox-option">
+                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'shorts', this.checked)">
+                                        <span>▶️ YouTube Shorts</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Idioma e Estilo de Legendas -->
+                            <div class="config-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Idioma das Legendas</label>
+                                    <select class="select-field" onchange="updateConfiguration('captionLanguage', this.value)" style="width: 100%;">
+                                        <option value="pt">Português</option>
+                                        <option value="en">Inglês</option>
+                                        <option value="es">Espanhol</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Estilo de Legendas</label>
+                                    <select class="select-field" onchange="updateConfiguration('captionStyle', this.value)" style="width: 100%;">
+                                        <option value="modern">Moderno</option>
+                                        <option value="classic">Clássico</option>
+                                        <option value="bold">Negrito</option>
+                                        <option value="minimal">Minimalista</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Quantidade de Clipes -->
+                            <div class="config-section">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Quantidade de Clipes</label>
+                                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                    <input type="number" id="clips-quantity" min="1" max="50" value="" placeholder="Auto" class="input-field" style="width: 100px;" onchange="updateConfiguration('clipsQuantity', this.value ? parseInt(this.value) : null)">
+                                    <span style="color: var(--text-secondary); font-size: 0.875rem;">Deixe em branco para gerar automaticamente</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Margens de Segurança -->
+                            <div class="config-section">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Margens de Segurança</label>
+                                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                    <input type="range" id="safe-margins" min="0" max="100" value="10" class="input-field" style="flex: 1;" oninput="updateConfiguration('safeMargins', parseInt(this.value)); document.getElementById('safe-margins-value').textContent = this.value + '%'">
+                                    <span id="safe-margins-value" style="min-width: 50px; font-weight: 600;">10%</span>
+                                </div>
+                                <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">Ajuste as margens para evitar cortes em textos importantes</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                            <button class="btn-primary" onclick="confirmConfigurations()" style="width: 100%;">
+                                Confirmar Configurações e Avançar
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
+                                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
 
                         <!-- Upload Input -->
                         <div class="input-option hidden" id="input-upload">
@@ -280,16 +483,25 @@
                         <div id="upload-status" class="status-message hidden"></div>
                     </div>
 
-                    <!-- Captions Editor - FERRAMENTA INDEPENDENTE DO TRIM -->
-                    <div class="tool-card hidden" id="captions-card" data-step-card="captions">
-                        <h3 class="card-title">Editar Legendas</h3>
-                        <p class="card-subtitle">Gere legendas automaticamente com IA, personalize o estilo e renderize o vídeo final com legendas. Esta ferramenta é independente do corte/trim.</p>
+                    <!-- Captions Editor -->
+                    <div class="tool-card" id="captions-card" data-step-card="captions" style="display: none;">
+                        <h3 class="card-title">Gerar Legendas com IA</h3>
+                        <p class="card-subtitle">Gere legendas automaticamente com OpenAI para o intervalo selecionado. Personalize fonte, cor e tamanho antes de gerar.</p>
                         <div id="captions-editor-container"></div>
+                        <div id="captions-continue-section" class="hidden" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                            <button class="btn-primary" onclick="continueToConfigurations()" style="width: 100%;">
+                                Continuar para Configurações
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
+                                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Trim Tool -->
-                    <div class="tool-card hidden" id="trim-card" data-step-card="trim">
+                    <!-- Trim Tool (SEMPRE VISÍVEL E EDITÁVEL) -->
+                    <div class="tool-card" id="trim-card" data-step-card="trim" style="display: none;">
                         <h3 class="card-title">Defina o intervalo</h3>
+                        <p class="card-subtitle">Selecione a parte do vídeo que deseja usar para gerar os clipes</p>
                         <div class="trim-layout">
                             <div class="video-preview-area">
                                 <div id="video-player-container" class="video-preview">
@@ -342,21 +554,34 @@
                                     <div class="result-label">Total de clips</div>
                                     <div class="result-value" id="clips-count">0</div>
                                 </div>
+                                <div class="trim-actions" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                                    <button class="btn-primary" onclick="saveTrimInterval()" style="width: 100%;">
+                                        Salvar Intervalo
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Niche Selection -->
-                    <div class="tool-card hidden" id="niche-card" data-step-card="niche">
+                    <div class="tool-card" id="niche-card" data-step-card="niche" style="display: none;">
                         <h3 class="card-title">Escolha o nicho</h3>
                         <p class="card-description">Cada nicho possui vídeos de retenção otimizados</p>
                         <div id="niches-grid" class="niches-grid"></div>
+                        <div id="niche-continue-section" class="hidden" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                            <button class="btn-primary" onclick="continueToHeadline()" style="width: 100%;">
+                                Continuar para Configurar Headline
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
+                                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Retention Videos -->
                     <div class="tool-card hidden" id="retention-card" data-step-card="retention">
                         <h3 class="card-title">Vídeo de Retenção</h3>
-                        <p class="card-description">Escolha o vídeo que manterá a atenção</p>
+                        <p class="card-description">Escolha o vídeo que manterá a atenção ou faça upload do seu próprio</p>
                         <div class="retention-options">
                             <label class="radio-option">
                                 <input type="radio" name="retention" value="random" checked onchange="updateRetentionMode('random')">
@@ -366,13 +591,47 @@
                                 <input type="radio" name="retention" value="none" onchange="updateRetentionMode('none')">
                                 <span>Sem vídeo de retenção</span>
                             </label>
+                            <label class="radio-option">
+                                <input type="radio" name="retention" value="upload" onchange="updateRetentionMode('upload')">
+                                <span>Upload personalizado</span>
+                            </label>
                         </div>
+                        
+                        <!-- Upload de Retenção -->
+                        <div id="retention-upload-section" class="retention-upload-section hidden">
+                            <div class="upload-area-retention" id="retention-upload-area" onclick="document.getElementById('retention-file-input').click()">
+                                <input 
+                                    type="file" 
+                                    id="retention-file-input" 
+                                    accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska,image/jpeg,image/png,image/webp,.mp4,.webm,.mov,.avi,.mkv,.jpg,.jpeg,.png,.webp"
+                                    style="display: none;"
+                                    onchange="handleRetentionFileSelect(event)"
+                                >
+                                <div class="upload-content">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" class="upload-icon">
+                                        <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <p class="upload-text">
+                                        <strong>Clique para fazer upload</strong> ou arraste seu vídeo/imagem aqui
+                                    </p>
+                                    <p class="upload-hint">Formatos: MP4, WebM, MOV, AVI, MKV, JPG, PNG, WEBP (máx. 50MB)</p>
+                                </div>
+                                <div id="retention-file-info" class="file-info hidden">
+                                    <span id="retention-file-name"></span>
+                                    <span id="retention-file-size"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="retention-grid" class="retention-grid"></div>
                     </div>
 
-                    <!-- Preview & Generate -->
-                    <div class="tool-card hidden" id="preview-card" data-step-card="generate">
-                        <h3 class="card-title">Preview e Estilo</h3>
+                    <!-- Headline -->
+                    <div class="tool-card" id="headline-card" data-step-card="headline" style="display: none;">
+                        <h3 class="card-title">Criar Headline</h3>
+                        <p class="card-subtitle">Defina o texto e estilo da headline que aparecerá no centro dos clipes</p>
                         <div class="preview-layout">
                             <div class="preview-area">
                                 <div class="preview-frame" id="preview-frame">
@@ -411,13 +670,73 @@
                                         <option value="modern">Modern</option>
                                     </select>
                                 </div>
-                                <button class="btn-generate" onclick="generateSeries()">
-                                    Gerar Série Completa
+                                <button class="btn-primary" onclick="continueToGenerate()" style="width: 100%; margin-top: 1rem;">
+                                    Continuar para Gerar Clipes
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                         <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Generate Summary Card -->
+                    <div class="tool-card" id="generate-card" data-step-card="generate" style="display: none;">
+                        <h3 class="card-title">Gerar Clipes</h3>
+                        <p class="card-subtitle">Revise as configurações e gere sua série de clipes</p>
+                        
+                        <div class="generate-summary" style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                            <h4 style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Resumo das Configurações</h4>
+                            <div style="display: grid; gap: 0.75rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                                    <div>
+                                        <span style="color: var(--text-secondary);">Intervalo:</span>
+                                        <span style="font-weight: 600; margin-left: 0.5rem;" id="summary-trim">-</span>
+                                    </div>
+                                    <button onclick="editStep('trim')" style="background: none; border: 1px solid var(--border); padding: 0.25rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; color: var(--text-secondary);">Editar</button>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                                    <div>
+                                        <span style="color: var(--text-secondary);">Total de Clipes:</span>
+                                        <span style="font-weight: 600; margin-left: 0.5rem;" id="summary-clips">-</span>
+                                    </div>
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary);">Calculado automaticamente</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                                    <div>
+                                        <span style="color: var(--text-secondary);">Legendas:</span>
+                                        <span style="font-weight: 600; margin-left: 0.5rem;" id="summary-captions-status">✓ Geradas</span>
+                                    </div>
+                                    <button onclick="editStep('captions')" style="background: none; border: 1px solid var(--border); padding: 0.25rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; color: var(--text-secondary);">Editar</button>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                                    <div>
+                                        <span style="color: var(--text-secondary);">Nicho:</span>
+                                        <span style="font-weight: 600; margin-left: 0.5rem;" id="summary-niche">-</span>
+                                    </div>
+                                    <button onclick="editStep('niche')" style="background: none; border: 1px solid var(--border); padding: 0.25rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; color: var(--text-secondary);">Editar</button>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border);">
+                                    <div>
+                                        <span style="color: var(--text-secondary);">Headline:</span>
+                                        <span style="font-weight: 600; margin-left: 0.5rem;" id="summary-headline">-</span>
+                                    </div>
+                                    <button onclick="editStep('headline')" style="background: none; border: 1px solid var(--border); padding: 0.25rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.875rem; color: var(--text-secondary);">Editar</button>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                                    <span style="color: var(--text-secondary);">Formato:</span>
+                                    <span style="font-weight: 600;">Vertical 9:16</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 1rem;">
+                            <button class="btn-secondary" onclick="goBackToHeadline()" style="flex: 1;">
+                                ← Voltar
+                            </button>
+                            <button class="btn-primary" onclick="proceedToGenerate()" style="flex: 2;">
+                                🚀 Gerar Clipes Agora
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -458,25 +777,6 @@
             </section>
         </div>
 
-        <!-- TAB: ESTUDO -->
-        <div class="tab-content" id="tab-estudo">
-            <div class="estudo-page">
-                <div class="container">
-                    <div class="page-header">
-                        <h1 class="page-title">Cursos e Estudos</h1>
-                        <p class="page-subtitle">Aprenda com os melhores cursos e transforme seu conhecimento</p>
-                    </div>
-                    <div class="filters">
-                        <button class="filter-btn active" onclick="filterCursos('all')">Todos</button>
-                        <button class="filter-btn" onclick="filterCursos('video')">Vídeo</button>
-                        <button class="filter-btn" onclick="filterCursos('marketing')">Marketing</button>
-                        <button class="filter-btn" onclick="filterCursos('business')">Negócios</button>
-                        <button class="filter-btn" onclick="filterCursos('tech')">Tecnologia</button>
-                    </div>
-                    <div id="cursos-grid" class="cursos-grid"></div>
-                </div>
-            </div>
-        </div>
 
         <!-- TAB: LOGIN -->
         <div class="tab-content" id="tab-login">
@@ -577,5 +877,6 @@
     </div>
 
     <script src="app.js?v=3.0.0"></script>
+    <script src="captions-editor.js?v=3.0.0"></script>
 </body>
 </html>

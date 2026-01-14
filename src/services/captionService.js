@@ -47,33 +47,85 @@ async function getOpenAIClient() {
 }
 
 /**
- * Extrai áudio do vídeo usando FFmpeg
+ * Extrai e comprime áudio do vídeo usando FFmpeg
+ * Comprime para MP3 com bitrate reduzido para evitar erro 413
  */
 async function extractAudio(videoPath, audioPath) {
   const ffmpegModule = await import('fluent-ffmpeg');
   const ffmpeg = ffmpegModule.default;
   
   return new Promise((resolve, reject) => {
-    
-    ffmpeg(videoPath)
-      .output(audioPath)
-      .audioCodec('pcm_s16le')
-      .audioFrequency(16000)
-      .audioChannels(1)
-      .on('end', () => {
-        console.log('[CAPTION] Áudio extraído com sucesso');
-        resolve(audioPath);
-      })
-      .on('error', (err) => {
-        console.error('[CAPTION] Erro ao extrair áudio:', err);
-        reject(err);
-      })
-      .run();
+    // Obter duração do vídeo primeiro para estimar tamanho
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        return reject(err);
+      }
+
+      const duration = metadata?.format?.duration || 0;
+      const maxDuration = 25 * 60; // 25 minutos máximo (limite seguro para 25MB)
+      
+      // Se vídeo for muito longo, precisaremos chunking
+      if (duration > maxDuration) {
+        console.log(`[CAPTION] Vídeo muito longo (${duration}s), será necessário chunking`);
+      }
+
+      // Extrair áudio comprimido (MP3, mono, 16kHz, 16kbps)
+      // Reduzir bitrate para 16kbps para garantir arquivos menores
+      // Isso reduz drasticamente o tamanho do arquivo (de ~100MB para ~2-6MB)
+      // 16kbps ainda é suficiente para transcrição de voz
+      ffmpeg(videoPath)
+        .output(audioPath)
+        .noVideo()
+        .audioCodec('libmp3lame')
+        .audioBitrate(16) // 16kbps (reduzido ainda mais para garantir arquivos menores)
+        .audioFrequency(16000) // 16kHz (Whisper funciona bem com isso)
+        .audioChannels(1) // Mono
+        .outputOptions([
+          '-ac', '1', // Forçar mono
+          '-ar', '16000', // Sample rate 16kHz
+          '-b:a', '16k', // Bitrate 16kbps (reduzido ainda mais)
+          '-f', 'mp3', // Forçar formato MP3
+          '-compression_level', '2', // Compressão máxima
+          '-q:a', '9' // Qualidade mínima (máxima compressão)
+        ])
+        .on('start', (cmdline) => {
+          console.log('[CAPTION] Extraindo áudio comprimido...');
+        })
+        .on('progress', (progress) => {
+          if (progress.percent) {
+            console.log(`[CAPTION] Extração: ${Math.round(progress.percent)}%`);
+          }
+        })
+        .on('end', () => {
+          // Verificar tamanho do arquivo após extração
+          const stats = fs.statSync(audioPath);
+          const sizeMB = stats.size / 1024 / 1024;
+          const sizeBytes = stats.size;
+          const safeSizeBytes = 18 * 1024 * 1024; // 18MB
+          
+          console.log(`[CAPTION] Áudio extraído: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`);
+          
+          // Se ainda for muito grande (>= 18MB), avisar que será necessário chunking
+          if (sizeBytes >= safeSizeBytes) {
+            console.warn(`[CAPTION] ⚠️ Áudio ainda grande (${sizeMB.toFixed(2)}MB >= 18MB), será necessário chunking automático`);
+          } else if (sizeMB > 15) {
+            console.warn(`[CAPTION] ⚠️ Áudio grande (${sizeMB.toFixed(2)}MB), próximo do limite, pode precisar chunking`);
+          }
+          
+          resolve(audioPath);
+        })
+        .on('error', (err) => {
+          console.error('[CAPTION] Erro ao extrair áudio:', err);
+          reject(err);
+        })
+        .run();
+    });
   });
 }
 
 /**
  * Transcreve áudio usando OpenAI Whisper
+ * Implementa chunking automático se o arquivo for muito grande
  */
 async function transcribeAudio(audioPath) {
   const client = await getOpenAIClient();
@@ -82,7 +134,46 @@ async function transcribeAudio(audioPath) {
   }
 
   try {
-    console.log('[CAPTION] Iniciando transcrição com Whisper...');
+    // Verificar tamanho do arquivo ANTES de tentar enviar
+    const stats = fs.statSync(audioPath);
+    const sizeBytes = stats.size;
+    const sizeMB = sizeBytes / 1024 / 1024;
+    const maxSizeBytes = 25 * 1024 * 1024; // 25MB em bytes (limite da API OpenAI)
+    const safeSizeBytes = 18 * 1024 * 1024; // 18MB como limite seguro (margem de segurança maior)
+    
+    console.log(`[CAPTION] Tamanho do áudio: ${sizeMB.toFixed(2)} MB (${sizeBytes} bytes)`);
+    console.log(`[CAPTION] Limite da API: 25MB (${maxSizeBytes} bytes)`);
+    console.log(`[CAPTION] Limite seguro: 18MB (${safeSizeBytes} bytes)`);
+    
+    // SEMPRE usar chunking se o arquivo for maior que 18MB (margem de segurança maior)
+    // Isso evita o erro 413 que ocorre quando o arquivo está próximo do limite
+    if (sizeBytes >= safeSizeBytes) {
+      console.log(`[CAPTION] Arquivo grande (${sizeMB.toFixed(2)}MB >= 18MB), usando chunking preventivo obrigatório...`);
+      return await transcribeAudioWithChunking(audioPath, client);
+    }
+    
+    // Verificar novamente antes de enviar (double-check absoluto)
+    if (sizeBytes >= maxSizeBytes) {
+      console.warn(`[CAPTION] ⚠️ CRÍTICO: Arquivo excede limite (${sizeMB.toFixed(2)}MB >= 25MB), forçando chunking...`);
+      return await transcribeAudioWithChunking(audioPath, client);
+    }
+    
+    // Verificar se está muito próximo do limite (dentro de 1MB do limite)
+    const marginBytes = 1 * 1024 * 1024; // 1MB de margem
+    if (sizeBytes > (maxSizeBytes - marginBytes)) {
+      console.warn(`[CAPTION] ⚠️ Arquivo muito próximo do limite (${sizeMB.toFixed(2)}MB), usando chunking preventivo...`);
+      return await transcribeAudioWithChunking(audioPath, client);
+    }
+    
+    // Arquivo pequeno o suficiente, transcrever diretamente
+    console.log('[CAPTION] Iniciando transcrição com Whisper (arquivo pequeno e seguro)...');
+    
+    // Verificação final antes de criar o stream
+    const finalStats = fs.statSync(audioPath);
+    if (finalStats.size >= safeSizeBytes) {
+      console.warn(`[CAPTION] ⚠️ Tamanho mudou durante verificação, usando chunking...`);
+      return await transcribeAudioWithChunking(audioPath, client);
+    }
     
     const transcription = await client.audio.transcriptions.create({
       file: fs.createReadStream(audioPath),
@@ -95,8 +186,152 @@ async function transcribeAudio(audioPath) {
     return transcription;
   } catch (error) {
     console.error('[CAPTION] Erro na transcrição:', error);
+    
+    // Verificar se é erro 413 - sempre tentar chunking se ocorrer
+    if (error.status === 413 || 
+        error.message.includes('413') || 
+        error.message.includes('Maximum content size') ||
+        error.message.includes('26214400')) {
+      console.log('[CAPTION] Erro 413 detectado, tentando chunking automático...');
+      try {
+        return await transcribeAudioWithChunking(audioPath, client);
+      } catch (chunkError) {
+        throw new Error(`Erro ao transcrever áudio (tentativa com chunking): ${chunkError.message}`);
+      }
+    }
+    
     throw new Error(`Erro ao transcrever áudio: ${error.message}`);
   }
+}
+
+/**
+ * Transcreve áudio em chunks e une os resultados
+ */
+async function transcribeAudioWithChunking(audioPath, client) {
+  const ffmpegModule = await import('fluent-ffmpeg');
+  const ffmpeg = ffmpegModule.default;
+  const path = await import('path');
+  
+  // Obter duração total
+  const metadata = await new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(audioPath, (err, data) => {
+      if (err) reject(err);
+      else resolve(data);
+    });
+  });
+  
+  const totalDuration = metadata?.format?.duration || 0;
+  // Reduzir duração do chunk para garantir que cada chunk seja < 15MB
+  // Com 16kbps, ~15 minutos de áudio = ~1.8MB, então 20 minutos = ~2.4MB (muito seguro)
+  // Usar 15 minutos para garantir chunks bem menores que 15MB
+  const chunkDuration = 15 * 60; // 15 minutos por chunk (muito seguro para < 15MB com 16kbps)
+  const chunks = Math.ceil(totalDuration / chunkDuration);
+  
+  console.log(`[CAPTION] Chunking: ${chunks} chunks de ${chunkDuration}s (~${(chunkDuration/60).toFixed(0)}min cada)`);
+  
+  console.log(`[CAPTION] Dividindo em ${chunks} chunks de ~${chunkDuration}s`);
+  
+  const tempDir = path.default.dirname(audioPath);
+  const allWords = [];
+  let currentOffset = 0;
+  
+  for (let i = 0; i < chunks; i++) {
+    const chunkStart = i * chunkDuration;
+    const chunkEnd = Math.min((i + 1) * chunkDuration, totalDuration);
+    const chunkPath = path.default.join(tempDir, `chunk_${i}_${Date.now()}.mp3`);
+    
+    console.log(`[CAPTION] Processando chunk ${i + 1}/${chunks} (${chunkStart}s - ${chunkEnd}s)...`);
+    
+    try {
+      // Extrair chunk do áudio original
+      await new Promise((resolve, reject) => {
+        ffmpeg(audioPath)
+          .seekInput(chunkStart)
+          .duration(chunkEnd - chunkStart)
+          .output(chunkPath)
+          .noVideo()
+          .audioCodec('libmp3lame')
+          .audioBitrate(16) // Mesmo bitrate reduzido para chunks (16kbps)
+          .audioFrequency(16000)
+          .audioChannels(1)
+          .outputOptions([
+            '-ac', '1',
+            '-ar', '16000',
+            '-b:a', '16k', // Mesmo bitrate reduzido (16kbps)
+            '-f', 'mp3',
+            '-compression_level', '2', // Compressão máxima
+            '-q:a', '9' // Qualidade mínima (máxima compressão)
+          ])
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+      
+      // Verificar tamanho do chunk antes de enviar
+      const chunkStats = fs.statSync(chunkPath);
+      const chunkSizeBytes = chunkStats.size;
+      const chunkSizeMB = chunkSizeBytes / 1024 / 1024;
+      const maxChunkSizeBytes = 15 * 1024 * 1024; // 15MB limite seguro para chunks
+      const absoluteMaxBytes = 20 * 1024 * 1024; // 20MB limite absoluto
+      
+      console.log(`[CAPTION] Chunk ${i + 1}/${chunks}: ${chunkSizeMB.toFixed(2)}MB (${chunkSizeBytes} bytes)`);
+      
+      if (chunkSizeBytes >= absoluteMaxBytes) {
+        throw new Error(`Chunk ${i + 1} muito grande (${chunkSizeMB.toFixed(2)}MB >= 20MB). Não é seguro enviar.`);
+      }
+      
+      if (chunkSizeBytes >= maxChunkSizeBytes) {
+        console.warn(`[CAPTION] ⚠️ Chunk ${i + 1} grande (${chunkSizeMB.toFixed(2)}MB >= 15MB), mas dentro do limite absoluto. Enviando...`);
+      }
+      
+      console.log(`[CAPTION] Enviando chunk ${i + 1}/${chunks} (${chunkSizeMB.toFixed(2)}MB)...`);
+      
+      // Transcrever chunk
+      const chunkTranscription = await client.audio.transcriptions.create({
+        file: fs.createReadStream(chunkPath),
+        model: 'whisper-1',
+        response_format: 'verbose_json',
+        timestamp_granularity: 'word'
+      });
+      
+      // Ajustar timestamps do chunk (adicionar offset)
+      if (chunkTranscription.words && Array.isArray(chunkTranscription.words)) {
+        chunkTranscription.words.forEach(word => {
+          word.start += chunkStart;
+          word.end += chunkStart;
+          allWords.push(word);
+        });
+      }
+      
+      // Limpar chunk temporário
+      try {
+        fs.unlinkSync(chunkPath);
+      } catch (e) {
+        console.warn(`[CAPTION] Erro ao limpar chunk ${i}:`, e.message);
+      }
+      
+    } catch (chunkError) {
+      console.error(`[CAPTION] Erro no chunk ${i + 1}:`, chunkError);
+      // Limpar chunk em caso de erro
+      try {
+        if (fs.existsSync(chunkPath)) fs.unlinkSync(chunkPath);
+      } catch (e) {}
+      
+      // Continuar com próximo chunk
+      continue;
+    }
+  }
+  
+  // Construir transcrição unificada
+  const unifiedTranscription = {
+    text: allWords.map(w => w.word).join(' '),
+    words: allWords.sort((a, b) => a.start - b.start),
+    duration: totalDuration,
+    language: 'pt' // Assumir português, pode ser detectado do primeiro chunk
+  };
+  
+  console.log(`[CAPTION] ✅ Transcrição unificada: ${allWords.length} palavras`);
+  return unifiedTranscription;
 }
 
 /**
@@ -260,6 +495,48 @@ function detectKeywords(words) {
 export async function generateCaptions(videoPath, options = {}) {
   try {
     console.log('[CAPTION] Iniciando geração de legendas...');
+    
+    const { trimStart = 0, trimEnd = null } = options;
+    
+    // Se há intervalo definido, criar vídeo temporário apenas com esse intervalo
+    let videoToProcess = videoPath;
+    let tempVideoPath = null;
+    
+    if (trimStart > 0 || trimEnd !== null) {
+      console.log(`[CAPTION] Gerando legendas apenas para intervalo: ${trimStart}s - ${trimEnd || 'fim'}s`);
+      
+      const ffmpegModule = await import('fluent-ffmpeg');
+      const ffmpeg = ffmpegModule.default;
+      
+      tempVideoPath = path.join(process.cwd(), 'tmp', 'captions', `trimmed_${Date.now()}.mp4`);
+      const tempDir = path.dirname(tempVideoPath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      // Criar vídeo temporário apenas com o intervalo escolhido
+      await new Promise((resolve, reject) => {
+        let command = ffmpeg(videoPath);
+        
+        if (trimStart > 0) {
+          command = command.seekInput(trimStart);
+        }
+        
+        if (trimEnd !== null) {
+          const duration = trimEnd - trimStart;
+          command = command.duration(duration);
+        }
+        
+        command
+          .output(tempVideoPath)
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+      
+      videoToProcess = tempVideoPath;
+      console.log(`[CAPTION] Vídeo temporário criado: ${tempVideoPath}`);
+    }
 
     // Criar diretório temporário
     const tempDir = path.join(process.cwd(), 'tmp', 'captions');
@@ -267,22 +544,42 @@ export async function generateCaptions(videoPath, options = {}) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    const audioPath = path.join(tempDir, `audio_${Date.now()}.wav`);
+    // Usar MP3 em vez de WAV para reduzir tamanho
+    const audioPath = path.join(tempDir, `audio_${Date.now()}.mp3`);
 
-    // 1. Extrair áudio
-    await extractAudio(videoPath, audioPath);
+    // 1. Extrair áudio do vídeo (trimado ou completo)
+    await extractAudio(videoToProcess, audioPath);
 
     // 2. Transcrever com Whisper
     const transcription = await transcribeAudio(audioPath);
+    
+    // 3. Ajustar timestamps se foi usado trim
+    if (trimStart > 0 && transcription.words) {
+      transcription.words.forEach(word => {
+        word.start += trimStart;
+        word.end += trimStart;
+      });
+    }
 
     // 3. Processar e gerar legendas
-    const result = processTranscription(transcription, options);
+    // Ajustar opções para formato vertical 9:16 (1080x1920)
+    // Formato vertical tem menos largura, então reduzir caracteres por linha
+    const verticalOptions = {
+      ...options,
+      maxCharsPerLine: options.maxCharsPerLine || 30, // Reduzido de 40 para 30 para formato vertical
+      maxLinesPerBlock: options.maxLinesPerBlock || 2 // Manter 2 linhas
+    };
+    console.log('[CAPTION] Gerando legendas para formato vertical 9:16 com opções:', verticalOptions);
+    const result = processTranscription(transcription, verticalOptions);
 
-    // Limpar arquivo temporário
+    // Limpar arquivos temporários
     try {
       fs.unlinkSync(audioPath);
+      if (tempVideoPath && fs.existsSync(tempVideoPath)) {
+        fs.unlinkSync(tempVideoPath);
+      }
     } catch (err) {
-      console.warn('[CAPTION] Erro ao limpar áudio temporário:', err);
+      console.warn('[CAPTION] Erro ao limpar arquivos temporários:', err);
     }
 
     console.log(`[CAPTION] ✅ Legendas geradas: ${result.captions.length} blocos`);
