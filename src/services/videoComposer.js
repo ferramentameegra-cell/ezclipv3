@@ -367,9 +367,28 @@ export async function composeFinalVideo({
 
       // Aplicar filter_complex como string
       const filterComplex = filterParts.join(';');
-      console.log('[COMPOSER] Filter complex:', filterComplex.substring(0, 300) + '...');
       
-      command.complexFilter(filterComplex);
+      // Validar filter_complex antes de aplicar
+      if (!filterComplex || filterComplex.trim() === '') {
+        return reject(new Error('Filter complex está vazio'));
+      }
+      
+      // Verificar se [final] existe no filter
+      if (!filterComplex.includes('[final]')) {
+        return reject(new Error('Label [final] não encontrado no filter_complex'));
+      }
+      
+      // Log completo do filter (limitado a 500 chars para não poluir)
+      console.log('[COMPOSER] Filter complex (primeiros 500 chars):', filterComplex.substring(0, 500));
+      console.log('[COMPOSER] Total de filtros:', filterParts.length);
+      
+      try {
+        command.complexFilter(filterComplex);
+      } catch (filterError) {
+        console.error('[COMPOSER] Erro ao aplicar filter_complex:', filterError);
+        console.error('[COMPOSER] Filter complex completo:', filterComplex);
+        return reject(new Error(`Erro ao criar filter_complex: ${filterError.message}`));
+      }
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
