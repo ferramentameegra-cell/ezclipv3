@@ -44,6 +44,9 @@ export const generateVideoSeries = async (job, jobsMap) => {
     }
     if (jobsMap) jobsMap.set(job.id, job);
     
+    // Extrair dados do job (pode estar em job.data ou diretamente em job)
+    const jobData = job.data || job;
+    
     const {
       videoId,
       numberOfCuts,
@@ -64,7 +67,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
       captionStyle = 'modern',
       clipsQuantity = null,
       safeMargins = 10
-    } = job;
+    } = jobData;
 
     if (!videoStore) {
       throw new Error('VideoStore não foi configurado');
@@ -93,7 +96,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // DEFINIR VÍDEO FONTE
     // ===============================
-    let sourceVideoPath = video.path;
+    // Tentar obter videoPath do jobData primeiro, depois do video.path
+    let sourceVideoPath = jobData.videoPath || video.path;
 
     // ===============================
     // DOWNLOAD YOUTUBE (SE NECESSÁRIO)
