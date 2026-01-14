@@ -6,6 +6,9 @@ export const NICHES = {
     description: 'Conversas, entrevistas e debates',
     retentionVideos: [
       'hydraulic-press',
+      'hydraulic-press-1',
+      'hydraulic-press-2',
+      'hydraulic-press-3',
       'satisfying-loops',
       'timelapse-abstract',
       'mechanical-loop'
@@ -86,6 +89,27 @@ export const RETENTION_VIDEOS = {
     name: 'Prensa Hidráulica',
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
     description: 'Loop de prensa hidráulica comprimindo objetos'
+  },
+  'hydraulic-press-1': {
+    id: 'hydraulic-press-1',
+    name: 'Prensa Hidráulica #1',
+    tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
+    description: 'Vídeo 1 de prensa hidráulica comprimindo objetos',
+    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne'
+  },
+  'hydraulic-press-2': {
+    id: 'hydraulic-press-2',
+    name: 'Prensa Hidráulica #2',
+    tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
+    description: 'Vídeo 2 de prensa hidráulica comprimindo objetos',
+    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne'
+  },
+  'hydraulic-press-3': {
+    id: 'hydraulic-press-3',
+    name: 'Prensa Hidráulica #3',
+    tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
+    description: 'Vídeo 3 de prensa hidráulica comprimindo objetos',
+    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne'
   },
   'satisfying-loops': {
     id: 'satisfying-loops',
