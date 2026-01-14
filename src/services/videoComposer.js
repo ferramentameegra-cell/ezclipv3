@@ -126,9 +126,17 @@ export async function composeFinalVideo({
       retentionVideoPath = getRetentionVideoPath(retentionVideoId);
     }
 
-    if (!retentionVideoPath || !fs.existsSync(retentionVideoPath)) {
-      console.warn(`[COMPOSER] Vídeo de retenção não encontrado: ${retentionVideoId}, continuando sem retenção`);
-      retentionVideoPath = null;
+    // Verificar se é URL externa ou arquivo local
+    if (retentionVideoPath) {
+      const isUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
+      const isLocalFile = !isUrl && fs.existsSync(retentionVideoPath);
+      
+      if (!isUrl && !isLocalFile) {
+        console.warn(`[COMPOSER] Vídeo de retenção não encontrado: ${retentionVideoId}, continuando sem retenção`);
+        retentionVideoPath = null;
+      } else if (isUrl) {
+        console.log(`[COMPOSER] Usando URL externa de retenção: ${retentionVideoPath}`);
+      }
     }
   }
   

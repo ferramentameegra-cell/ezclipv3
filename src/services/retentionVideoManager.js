@@ -26,10 +26,10 @@ if (!fs.existsSync(RETENTION_LIBRARY_DIR)) {
 }
 
 /**
- * Obter caminho do arquivo de vídeo de retenção a partir do ID
+ * Obter caminho ou URL do vídeo de retenção a partir do ID
  * 
  * @param {string} retentionVideoId - ID do vídeo de retenção (ex: 'hydraulic-press')
- * @returns {string|null} - Caminho absoluto do arquivo ou null se não encontrado
+ * @returns {string|null} - Caminho absoluto do arquivo, URL externa, ou null se não encontrado
  */
 export function getRetentionVideoPath(retentionVideoId) {
   if (!retentionVideoId || retentionVideoId === 'random') {
@@ -43,7 +43,13 @@ export function getRetentionVideoPath(retentionVideoId) {
     return null;
   }
 
-  // Tentar diferentes extensões e nomes de arquivo
+  // PRIORIDADE 1: Se o vídeo tem URL externa configurada, usar ela
+  if (videoMeta.url && (videoMeta.url.startsWith('http://') || videoMeta.url.startsWith('https://'))) {
+    console.log(`[RETENTION] Usando URL externa para ${retentionVideoId}: ${videoMeta.url}`);
+    return videoMeta.url;
+  }
+
+  // PRIORIDADE 2: Tentar encontrar arquivo local
   const possibleNames = [
     `${retentionVideoId}.mp4`,
     `${retentionVideoId}.webm`,
