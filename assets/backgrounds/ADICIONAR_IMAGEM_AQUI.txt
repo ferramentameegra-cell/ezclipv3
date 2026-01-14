@@ -1,0 +1,9 @@
+===========================================
+  ADICIONE SUA IMAGEM DE BACKGROUND AQUI
+===========================================
+
+Nome do arquivo: ezclip-background.png (ou .jpg)
+Resolução: 1080x1920 pixels (9:16)
+Formato: PNG ou JPG
+
+Instruções completas em: COMO_ADICIONAR_IMAGEM.md
