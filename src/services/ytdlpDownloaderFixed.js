@@ -11,9 +11,49 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Timeout padrão: 15 minutos (Railway pode ter timeouts)
 const DOWNLOAD_TIMEOUT = 15 * 60 * 1000;
+
+/**
+ * Cria arquivo temporário de cookies a partir da variável de ambiente
+ * Retorna o caminho do arquivo ou null se não houver cookies
+ */
+function createCookiesFile() {
+  const cookiesContent = process.env.YTDLP_COOKIES;
+  if (!cookiesContent || cookiesContent.trim() === '') {
+    return null;
+  }
+
+  try {
+    // Criar arquivo temporário
+    const tempDir = os.tmpdir();
+    const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
+    
+    // Escrever conteúdo dos cookies
+    fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
+    
+    console.log('[YT-DLP-FIXED] Arquivo de cookies criado:', cookiesPath);
+    return cookiesPath;
+  } catch (error) {
+    console.error('[YT-DLP-FIXED] Erro ao criar arquivo de cookies:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Obtém User-Agent da variável de ambiente ou usa padrão
+ */
+function getUserAgent() {
+  return process.env.YTDLP_USER_AGENT || 
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+}
 
 /**
  * Verifica se yt-dlp está disponível no sistema
@@ -59,6 +99,18 @@ export async function downloadWithYtDlpFixed(videoUrl, outputPath, onProgress) {
 
     console.log(`[YT-DLP-FIXED] Iniciando download: ${videoUrl}`);
 
+    // Criar arquivo de cookies se disponível
+    const cookiesPath = createCookiesFile();
+    const userAgent = getUserAgent();
+    
+    if (cookiesPath) {
+      console.log('[YT-DLP-FIXED] Usando cookies de variável de ambiente');
+    } else {
+      console.log('[YT-DLP-FIXED] Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+    }
+    
+    console.log('[YT-DLP-FIXED] User-Agent:', userAgent.substring(0, 50) + '...');
+
     // CONFIGURAÇÃO CRÍTICA: Forçar formato compatível
     // best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best
     // Prioriza mp4 nativo, se não houver, baixa melhor vídeo mp4 + melhor áudio m4a e mescla
@@ -76,8 +128,10 @@ export async function downloadWithYtDlpFixed(videoUrl, outputPath, onProgress) {
       // Output parseável
       '--newline',
       '--progress',
-      // Não usar cookies (Railway)
-      '--no-cookies',
+      // Cookies e User-Agent (solução para erro 403)
+      ...(cookiesPath ? ['--cookies', cookiesPath] : ['--no-cookies']),
+      '--user-agent', userAgent,
+      '--referer', 'https://www.youtube.com/',
       // Limitar qualidade para evitar downloads muito grandes
       '--format-sort', 'res:720,ext:mp4',
       // Timeout por fragmento (evitar travamentos)
@@ -219,6 +273,16 @@ export async function downloadWithYtDlpFixed(videoUrl, outputPath, onProgress) {
     // Processo finalizado
     process.on('close', (code) => {
       clearTimeout(timeoutId);
+      
+      // Limpar arquivo de cookies temporário
+      if (cookiesPath && fs.existsSync(cookiesPath)) {
+        try {
+          fs.unlinkSync(cookiesPath);
+          console.log('[YT-DLP-FIXED] Arquivo de cookies temporário removido');
+        } catch (unlinkError) {
+          console.warn('[YT-DLP-FIXED] Erro ao remover cookies temporário:', unlinkError.message);
+        }
+      }
 
       // Verificar se arquivo foi criado (mesmo com código de erro não-zero)
       if (fs.existsSync(outputPath)) {
@@ -278,6 +342,16 @@ export async function downloadWithYtDlpFixed(videoUrl, outputPath, onProgress) {
     // Erro ao executar processo
     process.on('error', (error) => {
       clearTimeout(timeoutId);
+      
+      // Limpar arquivo de cookies temporário em caso de erro
+      if (cookiesPath && fs.existsSync(cookiesPath)) {
+        try {
+          fs.unlinkSync(cookiesPath);
+        } catch (unlinkError) {
+          // Ignorar erro de limpeza
+        }
+      }
+      
       console.error(`[YT-DLP-FIXED] Erro ao executar yt-dlp: ${error.message}`);
       
       if (error.code === 'ENOENT') {

@@ -6,10 +6,45 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { v4 as uuidv4 } from "uuid";
 import { initVideoState, updateVideoState, VIDEO_STATES } from '../services/videoStateManager.js';
 
 export const videoStore = new Map();
+
+/**
+ * Cria arquivo temporário de cookies a partir da variável de ambiente
+ * Retorna o caminho do arquivo ou null se não houver cookies
+ */
+function createCookiesFile() {
+  const cookiesContent = process.env.YTDLP_COOKIES;
+  if (!cookiesContent || cookiesContent.trim() === '') {
+    return null;
+  }
+
+  try {
+    // Criar arquivo temporário
+    const tempDir = os.tmpdir();
+    const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
+    
+    // Escrever conteúdo dos cookies
+    fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
+    
+    console.log('[DOWNLOAD] Arquivo de cookies criado:', cookiesPath);
+    return cookiesPath;
+  } catch (error) {
+    console.error('[DOWNLOAD] Erro ao criar arquivo de cookies:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Obtém User-Agent da variável de ambiente ou usa padrão
+ */
+function getUserAgent() {
+  return process.env.YTDLP_USER_AGENT || 
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+}
 
 // Cache do comando yt-dlp detectado
 let ytDlpCommandCache = null;
@@ -369,6 +404,21 @@ export async function downloadWithProgress(req, res) {
     return new Promise((resolve, reject) => {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
+      // Criar arquivo de cookies se disponível (solução para erro 403)
+      const cookiesPath = createCookiesFile();
+      const userAgentFromEnv = getUserAgent();
+      
+      // Priorizar User-Agent da variável de ambiente, senão usar da estratégia
+      const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent;
+      
+      if (cookiesPath) {
+        console.log('[DOWNLOAD] Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+      } else {
+        console.log('[DOWNLOAD] Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+      }
+      
+      console.log('[DOWNLOAD] User-Agent:', finalUserAgent.substring(0, 50) + '...');
+      
       // Preparar argumentos do yt-dlp com a estratégia atual
       // Formato MÁXIMA flexibilidade: usar formato selector que aceita QUALQUER formato
       // Permitir vídeo+áudio mesclados (m3u8) ou separados (webm, mp4)
@@ -378,8 +428,9 @@ export async function downloadWithProgress(req, res) {
         "--no-playlist",
         "--no-warnings",
         "--newline",
-        // Headers HTTP básicos
-        "--user-agent", strategy.userAgent,
+        // Cookies e User-Agent (solução para erro 403)
+        ...(cookiesPath ? ["--cookies", cookiesPath] : []),
+        "--user-agent", finalUserAgent,
         "--referer", "https://www.youtube.com/",
         // Usar cliente específico da estratégia
         "--extractor-args", strategy.extractorArgs,
@@ -432,6 +483,16 @@ export async function downloadWithProgress(req, res) {
       ytdlp.on("close", async (code) => {
         if (hasResolved) return;
         
+        // Limpar arquivo de cookies temporário
+        if (cookiesPath && fs.existsSync(cookiesPath)) {
+          try {
+            fs.unlinkSync(cookiesPath);
+            console.log('[DOWNLOAD] Arquivo de cookies temporário removido');
+          } catch (unlinkError) {
+            console.warn('[DOWNLOAD] Erro ao remover cookies temporário:', unlinkError.message);
+          }
+        }
+        
         console.log(`[DOWNLOAD] ${strategy.name} finalizou com código: ${code}`);
         
         // Log detalhado do erro para debug
@@ -483,6 +544,16 @@ export async function downloadWithProgress(req, res) {
       ytdlp.on("error", (error) => {
         if (hasResolved) return;
         hasResolved = true;
+        
+        // Limpar arquivo de cookies temporário em caso de erro
+        if (cookiesPath && fs.existsSync(cookiesPath)) {
+          try {
+            fs.unlinkSync(cookiesPath);
+          } catch (unlinkError) {
+            // Ignorar erro de limpeza
+          }
+        }
+        
         lastError = { error: error.message, strategy: strategy.name };
         reject(lastError);
       });
