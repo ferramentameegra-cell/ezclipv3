@@ -126,25 +126,34 @@ export const getSeriesStatus = async (req, res) => {
     const state = typeof job.getState === 'function' ? await job.getState() : job._state || 'unknown';
     const progress = typeof job.progress === 'function' ? (job.progress() || 0) : (job._progress || 0);
     
+    // Log para debug
+    console.log(`[GENERATE-STATUS] Job ${job.id}: status=${state}, progress=${progress}, returnvalue=${!!job.returnvalue}`);
+    
     // Se progresso chegou a 100%, garantir que status seja 'completed'
     let finalStatus = state;
     if (progress >= 100 && state !== 'failed' && state !== 'error') {
       finalStatus = 'completed';
+      console.log(`[GENERATE-STATUS] Progresso 100%, marcando como completed`);
     }
     
     // Se job tem returnvalue (resultado), também considerar como completed
     if (job.returnvalue && !job.failedReason) {
       finalStatus = 'completed';
+      console.log(`[GENERATE-STATUS] Job tem returnvalue, marcando como completed`);
     }
 
-    res.json({
+    const response = {
       jobId: job.id,
       status: finalStatus,
       progress: Math.min(100, Math.max(0, progress)),
       failedReason: job.failedReason || null,
       clipsCount: job.returnvalue?.clipsCount || null,
       seriesId: job.data?.seriesId || null
-    });
+    };
+    
+    console.log(`[GENERATE-STATUS] Retornando:`, response);
+    
+    res.json(response);
   } catch (error) {
     console.error('[GENERATE] Erro ao buscar status:', error);
     res.status(500).json({ error: error.message });
