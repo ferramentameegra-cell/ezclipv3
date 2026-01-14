@@ -353,7 +353,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
       fontStyle: headlineStyle || 'bold'
     };
 
-    const finalClips = [];
+    // finalClips já foi declarado acima (linha 324)
     const compositionProgress = 60; // Começar em 60% (após split)
     const compositionRange = 40; // 40% para composição
 
