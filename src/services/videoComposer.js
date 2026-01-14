@@ -183,10 +183,14 @@ export async function composeFinalVideo({
   const safeZones = getSafeZones(format, platforms, safeMargins);
   
   // Calcular alturas baseadas no formato
+  // LAYOUT VERTICAL 9:16 (1080x1920):
+  // - Vídeo principal: topo (75% da altura)
+  // - Headline: centro vertical
+  // - Vídeo de retenção: parte inferior (12.5% da altura)
   let MAIN_VIDEO_HEIGHT, RETENTION_HEIGHT;
   if (format === '9:16') {
-    MAIN_VIDEO_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.75); // 75% do topo
-    RETENTION_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.125); // 12.5% da parte inferior
+    MAIN_VIDEO_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.75); // 75% do topo = 1440px
+    RETENTION_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.125); // 12.5% da parte inferior = 240px
   } else if (format === '1:1') {
     MAIN_VIDEO_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.75);
     RETENTION_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.125);
@@ -194,6 +198,10 @@ export async function composeFinalVideo({
     MAIN_VIDEO_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.75);
     RETENTION_HEIGHT = Math.round(OUTPUT_HEIGHT * 0.125);
   }
+  
+  console.log(`[COMPOSER] Layout vertical 9:16: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+  console.log(`[COMPOSER] Vídeo principal: ${OUTPUT_WIDTH}x${MAIN_VIDEO_HEIGHT} (topo)`);
+  console.log(`[COMPOSER] Vídeo retenção: ${OUTPUT_WIDTH}x${RETENTION_HEIGHT} (inferior)`);
 
   console.log(`[COMPOSER] Formato: ${format}`);
   console.log(`[COMPOSER] Layout: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
@@ -246,25 +254,32 @@ export async function composeFinalVideo({
 
       // 2. Redimensionar vídeo principal para caber no topo (sem padding)
       // force_original_aspect_ratio=decrease garante que não distorça
+      // Vídeo será redimensionado para caber em 1080x1440 (75% do topo)
       filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
 
-      // 3. Sobrepor vídeo principal no background (topo, centralizado horizontalmente)
+      // 3. Sobrepor vídeo principal no background (TOPO, centralizado horizontalmente)
       // Vídeo fica acima do background (layer 1)
-      // Centralizar horizontalmente: (W-w)/2, verticalmente no topo: 0
+      // Posição: x=(W-w)/2 (centralizado horizontalmente), y=0 (topo)
       // O background aparecerá automaticamente nas áreas vazias (sem tarja preta)
       filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0[composed]`);
       currentLabel = '[composed]';
+      console.log(`[COMPOSER] Vídeo principal posicionado no topo (y=0), centralizado horizontalmente`);
 
-      // 5. Adicionar vídeo de retenção (se houver)
+      // 4. Adicionar vídeo de retenção (se houver) - PARTE INFERIOR
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
       if (retentionVideoPath) {
         // Se background existe, retention é input 2, senão é input 1
         const retentionInputIndex = fixedBackgroundPath ? 2 : 1;
+        // Redimensionar vídeo de retenção para altura definida (12.5% = 240px)
         filterParts.push(`[${retentionInputIndex}:v]scale=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}:force_original_aspect_ratio=increase[retention_scaled]`);
         filterParts.push(`[retention_scaled]crop=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}[retention_cropped]`);
-        filterParts.push(`${currentLabel}[retention_cropped]overlay=0:${OUTPUT_HEIGHT - RETENTION_HEIGHT}[with_retention]`);
+        // Posicionar na parte inferior: y = H - altura_retenção
+        // Centralizar horizontalmente: x = (W-w)/2
+        const retentionY = OUTPUT_HEIGHT - RETENTION_HEIGHT;
+        filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}[with_retention]`);
         currentLabel = '[with_retention]';
+        console.log(`[COMPOSER] Vídeo de retenção posicionado na parte inferior (y=${retentionY}), centralizado horizontalmente`);
       }
 
       // 6. Adicionar legendas (burn-in)
@@ -292,7 +307,7 @@ export async function composeFinalVideo({
         });
       }
 
-      // 7. Adicionar headline (centralizada verticalmente no meio do frame)
+      // 5. Adicionar headline (CENTRO VERTICAL do frame)
       if (headlineText || (headline && headline.text)) {
         const headlineTextValue = headlineText || headline.text;
         const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
@@ -301,13 +316,14 @@ export async function composeFinalVideo({
         const startTime = headline?.startTime || 0;
         const endTime = headline?.endTime || Math.min(5, videoDuration);
 
-        // Posição Y: centro vertical exato - meio do frame
+        // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
         // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
-        // Respeitar safe zones
+        // Centralizar horizontalmente: x=(w-text_w)/2
         const yPos = `(h-text_h)/2`;
 
         filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[final]`);
         currentLabel = '[final]';
+        console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
       } else {
         // Sem headline, apenas copiar para [final]
         filterParts.push(`${currentLabel}copy[final]`);
