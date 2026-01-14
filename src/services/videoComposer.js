@@ -264,11 +264,13 @@ export async function composeFinalVideo({
 
       // 3. Sobrepor vídeo principal no background (TOPO, centralizado horizontalmente)
       // Vídeo fica acima do background (layer 1)
+      // IMPORTANTE: overlay preserva dimensões do primeiro input ([bg_fixed] = 1080x1920)
       // Posição: x=(W-w)/2 (centralizado horizontalmente), y=0 (topo)
       // O background aparecerá automaticamente nas áreas vazias (sem tarja preta)
-      filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0[composed]`);
+      filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0:format=auto[composed]`);
       currentLabel = '[composed]';
       console.log(`[COMPOSER] Vídeo principal posicionado no topo (y=0), centralizado horizontalmente`);
+      console.log(`[COMPOSER] Overlay preserva dimensões do background: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
 
       // 4. Adicionar vídeo de retenção (se houver) - PARTE INFERIOR
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
@@ -280,10 +282,12 @@ export async function composeFinalVideo({
         filterParts.push(`[retention_scaled]crop=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}[retention_cropped]`);
         // Posicionar na parte inferior: y = H - altura_retenção
         // Centralizar horizontalmente: x = (W-w)/2
+        // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
         const retentionY = OUTPUT_HEIGHT - RETENTION_HEIGHT;
-        filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}[with_retention]`);
+        filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}:format=auto[with_retention]`);
         currentLabel = '[with_retention]';
         console.log(`[COMPOSER] Vídeo de retenção posicionado na parte inferior (y=${retentionY}), centralizado horizontalmente`);
+        console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
       }
 
       // 6. Adicionar legendas (burn-in)
