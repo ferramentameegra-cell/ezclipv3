@@ -2474,9 +2474,16 @@ async function monitorProgress(jobId) {
             }
             
             // Verificar se está completo (progresso 100% ou status completed/finished)
-            if (status === 'completed' || status === 'finished' || progress >= 100) {
+            // IMPORTANTE: Verificar múltiplas condições para garantir detecção
+            const isCompleted = status === 'completed' || 
+                               status === 'finished' || 
+                               progress >= 100 ||
+                               (progress >= 99 && status !== 'failed' && status !== 'error'); // Tolerância para 99%
+            
+            if (isCompleted) {
                 clearInterval(interval);
                 console.log('[GENERATE] ✅ Geração concluída! Status:', status, 'Progresso:', progress);
+                console.log('[GENERATE] Dados recebidos:', JSON.stringify(data));
                 
                 // Atualizar UI para 100% antes de mostrar modal
                 if (progressFill) progressFill.style.width = '100%';
@@ -2492,10 +2499,28 @@ async function monitorProgress(jobId) {
                     console.log(`[GENERATE] Atualizado seriesId: ${data.seriesId}`);
                 }
                 
-                // Aguardar um pouco para garantir que o backend finalizou tudo
-                setTimeout(() => {
-                    showSuccessModal(data);
-                }, 500);
+                // Se não temos seriesId ainda, fazer uma última verificação
+                if (!appState.seriesId && !data.seriesId) {
+                    console.warn('[GENERATE] SeriesId não encontrado, fazendo verificação final...');
+                    setTimeout(async () => {
+                        try {
+                            const { data: finalData } = await apiClient.get(`/api/generate/status/${jobId}`);
+                            if (finalData.seriesId) {
+                                appState.seriesId = finalData.seriesId;
+                                console.log(`[GENERATE] SeriesId obtido na verificação final: ${finalData.seriesId}`);
+                            }
+                            showSuccessModal(finalData || data);
+                        } catch (e) {
+                            console.error('[GENERATE] Erro na verificação final:', e);
+                            showSuccessModal(data);
+                        }
+                    }, 1000);
+                } else {
+                    // Aguardar um pouco para garantir que o backend finalizou tudo
+                    setTimeout(() => {
+                        showSuccessModal(data);
+                    }, 500);
+                }
             } else if (status === 'failed' || status === 'error') {
                 clearInterval(interval);
                 console.error('[GENERATE] ❌ Erro na geração:', data.failedReason || data.error);
