@@ -130,7 +130,7 @@ export async function composeFinalVideo({
   retentionVideoId = 'random',
   nicheId = null,
   backgroundColor = '#000000',
-  format = '9:16',
+  format = '9:16', // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical
   platforms = { tiktok: true, reels: true, shorts: true },
   safeMargins = 10,
   onProgress = null
@@ -178,9 +178,13 @@ export async function composeFinalVideo({
     }
   }
   
-  // Obter dimensões baseadas no formato
-  const { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } = getFormatDimensions(format);
-  const safeZones = getSafeZones(format, platforms, safeMargins);
+  // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical para todos os vídeos gerados
+  // Garantir que o formato seja sempre 9:16, independente do parâmetro recebido
+  const finalFormat = '9:16';
+  const { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } = getFormatDimensions(finalFormat);
+  const safeZones = getSafeZones(finalFormat, platforms, safeMargins);
+  
+  console.log(`[COMPOSER] ⚠️ Formato forçado para 9:16 (1080x1920) - formato recebido: ${format} foi ignorado`);
   
   // Calcular alturas baseadas no formato
   // LAYOUT VERTICAL 9:16 (1080x1920):
