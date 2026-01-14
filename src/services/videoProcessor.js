@@ -484,12 +484,24 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // FINALIZAR JOB
     // ===============================
-    // Atualizar progresso usando função do BullMQ
+    // Atualizar progresso usando função do BullMQ - GARANTIR 100%
     if (typeof job.progress === 'function') {
       await job.progress(100);
+      console.log(`[PROCESSING] Progresso atualizado para 100% via função`);
     } else {
       job.progress = 100;
+      console.log(`[PROCESSING] Progresso atualizado para 100% via atributo`);
     }
+    
+    // Garantir que o job está marcado como completed
+    if (job.update) {
+      try {
+        await job.update({ status: 'completed' });
+      } catch (e) {
+        console.warn(`[PROCESSING] Não foi possível atualizar status do job:`, e.message);
+      }
+    }
+    
     job.status = 'completed';
     job.completedAt = new Date();
     job.clips = finalClips;
@@ -498,8 +510,10 @@ export const generateVideoSeries = async (job, jobsMap) => {
     if (jobsMap) jobsMap.set(job.id, job);
 
     console.log(`[PROCESSING] ✅ Série finalizada: ${finalClips.length} clips com layout final aplicado`);
+    console.log(`[PROCESSING] SeriesId: ${seriesId}`);
+    console.log(`[PROCESSING] ClipsCount: ${finalClips.length}`);
 
-    return {
+    const result = {
       seriesId,
       clips: finalClips,
       clipsCount: finalClips.length,
@@ -509,6 +523,10 @@ export const generateVideoSeries = async (job, jobsMap) => {
       captionStyle,
       safeMargins
     };
+    
+    console.log(`[PROCESSING] Retornando resultado:`, JSON.stringify({ ...result, clips: `[${finalClips.length} clips]` }));
+    
+    return result;
 
   } catch (error) {
     console.error('❌ Erro ao gerar série:', error);

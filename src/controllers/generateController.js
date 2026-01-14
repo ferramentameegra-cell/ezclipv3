@@ -128,29 +128,53 @@ export const getSeriesStatus = async (req, res) => {
     const state = typeof job.getState === 'function' ? await job.getState() : job._state || 'unknown';
     const progress = typeof job.progress === 'function' ? (job.progress() || 0) : (job._progress || 0);
     
-    // Log para debug (mais detalhado)
-    console.log(`[GENERATE-STATUS] Job ${job.id}: state=${state}, progress=${progress}, returnvalue=${!!job.returnvalue}, failedReason=${job.failedReason || 'none'}`);
+    // Tentar obter returnvalue (pode estar em diferentes formatos)
+    let returnValue = null;
+    try {
+      returnValue = job.returnvalue || job.returnValue || (await job.finished()) || null;
+    } catch (e) {
+      // Job ainda não terminou, returnvalue não disponível
+    }
     
-    // Se progresso chegou a 100%, garantir que status seja 'completed'
+    // Log para debug (mais detalhado)
+    console.log(`[GENERATE-STATUS] Job ${job.id}: state=${state}, progress=${progress}, returnvalue=${!!returnValue}, failedReason=${job.failedReason || 'none'}`);
+    if (returnValue) {
+      console.log(`[GENERATE-STATUS] ReturnValue:`, JSON.stringify(returnValue));
+    }
+    
+    // PRIORIDADE 1: Se job tem returnvalue (resultado), considerar como completed
     let finalStatus = state;
-    if (progress >= 100 && state !== 'failed' && state !== 'error') {
+    if (returnValue && !job.failedReason) {
+      finalStatus = 'completed';
+      console.log(`[GENERATE-STATUS] Job tem returnvalue, marcando como completed`);
+    }
+    // PRIORIDADE 2: Se progresso chegou a 100%, garantir que status seja 'completed'
+    else if (progress >= 100 && state !== 'failed' && state !== 'error') {
       finalStatus = 'completed';
       console.log(`[GENERATE-STATUS] Progresso 100%, marcando como completed`);
     }
-    
-    // Se job tem returnvalue (resultado), também considerar como completed
-    if (job.returnvalue && !job.failedReason) {
-      finalStatus = 'completed';
-      console.log(`[GENERATE-STATUS] Job tem returnvalue, marcando como completed`);
+    // PRIORIDADE 3: Se estado é 'completed' ou 'finished', usar isso
+    else if (state === 'completed' || state === 'finished') {
+      finalStatus = state;
+      console.log(`[GENERATE-STATUS] Estado já é ${state}`);
     }
     
     // Extrair seriesId e clipsCount de forma mais robusta
     let seriesId = job.data?.seriesId || null;
-    let clipsCount = job.returnvalue?.clipsCount || null;
+    let clipsCount = null;
+    
+    // Tentar obter clipsCount do returnvalue primeiro
+    if (returnValue) {
+      clipsCount = returnValue.clipsCount || returnValue.clips?.length || null;
+      // Se não encontrou clipsCount mas encontrou seriesId no returnvalue
+      if (!seriesId && returnValue.seriesId) {
+        seriesId = returnValue.seriesId;
+      }
+    }
     
     // Se não encontrou no returnvalue, tentar no data
-    if (!clipsCount && job.data?.numberOfCuts) {
-      clipsCount = job.data.numberOfCuts;
+    if (!clipsCount) {
+      clipsCount = job.data?.numberOfCuts || null;
     }
     
     // Se ainda não encontrou seriesId, tentar gerar baseado no jobId ou data
