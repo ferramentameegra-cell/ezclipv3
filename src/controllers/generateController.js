@@ -113,12 +113,14 @@ export const generateSeries = async (req, res) => {
 
 export const getSeriesStatus = async (req, res) => {
   try {
-    const job = await videoProcessQueue.getJob(req.params.jobId);
+    const jobId = req.params.jobId;
+    const job = await videoProcessQueue.getJob(jobId);
 
     if (!job) {
+      console.warn(`[GENERATE-STATUS] Job ${jobId} não encontrado na fila`);
       return res.status(404).json({ 
         error: 'Job não encontrado',
-        jobId: req.params.jobId,
+        jobId: jobId,
         status: 'not_found'
       });
     }
@@ -126,8 +128,8 @@ export const getSeriesStatus = async (req, res) => {
     const state = typeof job.getState === 'function' ? await job.getState() : job._state || 'unknown';
     const progress = typeof job.progress === 'function' ? (job.progress() || 0) : (job._progress || 0);
     
-    // Log para debug
-    console.log(`[GENERATE-STATUS] Job ${job.id}: status=${state}, progress=${progress}, returnvalue=${!!job.returnvalue}`);
+    // Log para debug (mais detalhado)
+    console.log(`[GENERATE-STATUS] Job ${job.id}: state=${state}, progress=${progress}, returnvalue=${!!job.returnvalue}, failedReason=${job.failedReason || 'none'}`);
     
     // Se progresso chegou a 100%, garantir que status seja 'completed'
     let finalStatus = state;
@@ -141,22 +143,42 @@ export const getSeriesStatus = async (req, res) => {
       finalStatus = 'completed';
       console.log(`[GENERATE-STATUS] Job tem returnvalue, marcando como completed`);
     }
+    
+    // Extrair seriesId e clipsCount de forma mais robusta
+    let seriesId = job.data?.seriesId || null;
+    let clipsCount = job.returnvalue?.clipsCount || null;
+    
+    // Se não encontrou no returnvalue, tentar no data
+    if (!clipsCount && job.data?.numberOfCuts) {
+      clipsCount = job.data.numberOfCuts;
+    }
+    
+    // Se ainda não encontrou seriesId, tentar gerar baseado no jobId ou data
+    if (!seriesId && job.data) {
+      // Tentar encontrar seriesId em job.data
+      seriesId = job.data.seriesId || job.data.series_id || null;
+    }
 
     const response = {
       jobId: job.id,
       status: finalStatus,
       progress: Math.min(100, Math.max(0, progress)),
       failedReason: job.failedReason || null,
-      clipsCount: job.returnvalue?.clipsCount || null,
-      seriesId: job.data?.seriesId || null
+      clipsCount: clipsCount,
+      seriesId: seriesId
     };
     
-    console.log(`[GENERATE-STATUS] Retornando:`, response);
+    console.log(`[GENERATE-STATUS] Retornando:`, JSON.stringify(response));
     
     res.json(response);
   } catch (error) {
-    console.error('[GENERATE] Erro ao buscar status:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[GENERATE-STATUS] Erro ao buscar status:', error);
+    console.error('[GENERATE-STATUS] Stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      jobId: req.params.jobId,
+      status: 'error'
+    });
   }
 };
 

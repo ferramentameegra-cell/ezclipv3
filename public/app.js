@@ -2387,31 +2387,41 @@ async function generateSeries() {
         
         console.log('[GENERATE] Resposta do backend:', data);
         
-        if (data) {
+        if (data && data.jobId) {
+            // Salvar dados importantes no appState
             appState.jobId = data.jobId;
-            appState.seriesId = data.seriesId;
-
-        // Mostrar informações de fila se disponíveis
-        if (data.queuePosition) {
-            const queueInfoEl = document.getElementById('queue-info');
-            if (queueInfoEl) {
-                queueInfoEl.classList.remove('hidden');
-                const waitTime = data.estimatedWaitTime || 0;
-                queueInfoEl.innerHTML = `
-                    <div class="queue-status">
-                        <span class="queue-icon">⏳</span>
-                        <span>Posição na fila: ${data.queuePosition}</span>
-                        ${waitTime > 0 ? `<span>• Tempo estimado: ~${waitTime} min</span>` : ''}
-                    </div>
-                `;
+            if (data.seriesId) {
+                appState.seriesId = data.seriesId;
+                console.log(`[GENERATE] SeriesId salvo: ${data.seriesId}`);
             }
-        }
+            if (data.numberOfCuts) {
+                appState.numberOfCuts = data.numberOfCuts;
+            }
+            
+            // Mostrar informações de fila se disponíveis
+            if (data.queuePosition) {
+                const queueInfoEl = document.getElementById('queue-info');
+                if (queueInfoEl) {
+                    queueInfoEl.classList.remove('hidden');
+                    const waitTime = data.estimatedWaitTime || 0;
+                    queueInfoEl.innerHTML = `
+                        <div class="queue-status">
+                            <span class="queue-icon">⏳</span>
+                            <span>Posição na fila: ${data.queuePosition}</span>
+                            ${waitTime > 0 ? `<span>• Tempo estimado: ~${waitTime} min</span>` : ''}
+                        </div>
+                    `;
+                }
+            }
+            
             console.log('[GENERATE] Job criado com sucesso:', data.jobId);
+            console.log('[GENERATE] SeriesId:', data.seriesId);
             console.log('[GENERATE] Iniciando monitoramento de progresso...');
             monitorProgress(data.jobId);
         } else {
             console.error('[GENERATE] Erro ao criar job:', data);
-            alert('Erro ao gerar série: ' + (data.error || 'Erro desconhecido'));
+            const errorMsg = data?.error || 'Erro desconhecido';
+            alert('Erro ao gerar série: ' + errorMsg);
             if (loadingOverlay) loadingOverlay.classList.add('hidden');
         }
     } catch (error) {
@@ -2427,7 +2437,12 @@ async function monitorProgress(jobId) {
     
     let lastProgress = 0;
     let consecutiveErrors = 0;
-    const maxErrors = 5;
+    let lastSuccessfulCheck = Date.now();
+    const maxErrors = 10; // Aumentado de 5 para 10
+    const maxTimeWithoutSuccess = 300000; // 5 minutos sem sucesso antes de alertar
+    const pollInterval = 2000; // Aumentado de 1s para 2s para reduzir carga
+    
+    console.log(`[GENERATE] Iniciando monitoramento do job ${jobId}`);
     
     const interval = setInterval(async () => {
         try {
@@ -2435,14 +2450,17 @@ async function monitorProgress(jobId) {
             
             // Reset contador de erros em caso de sucesso
             consecutiveErrors = 0;
+            lastSuccessfulCheck = Date.now();
             
             // Backend retorna { jobId, status, progress, failedReason }
             const progress = data.progress || 0;
             const status = data.status || 'processing';
             
-            // Log para debug
-            if (progress !== lastProgress) {
-                console.log(`[GENERATE] Progresso atualizado: ${lastProgress}% -> ${progress}% (Status: ${status})`);
+            // Log para debug (mais detalhado)
+            if (progress !== lastProgress || status !== 'processing') {
+                console.log(`[GENERATE] Progresso: ${lastProgress}% -> ${progress}% | Status: ${status} | JobId: ${jobId}`);
+                if (data.clipsCount) console.log(`[GENERATE] Clipes: ${data.clipsCount}`);
+                if (data.seriesId) console.log(`[GENERATE] SeriesId: ${data.seriesId}`);
                 lastProgress = progress;
             }
             
@@ -2464,15 +2482,20 @@ async function monitorProgress(jobId) {
                 if (progressFill) progressFill.style.width = '100%';
                 if (progressText) progressText.textContent = '100%';
                 
-                // Atualizar appState com dados do job
+                // Atualizar appState com dados do job (priorizar dados do backend)
                 if (data.clipsCount) {
                     appState.numberOfCuts = data.clipsCount;
+                    console.log(`[GENERATE] Atualizado numberOfCuts: ${data.clipsCount}`);
                 }
                 if (data.seriesId) {
                     appState.seriesId = data.seriesId;
+                    console.log(`[GENERATE] Atualizado seriesId: ${data.seriesId}`);
                 }
                 
-                showSuccessModal(data);
+                // Aguardar um pouco para garantir que o backend finalizou tudo
+                setTimeout(() => {
+                    showSuccessModal(data);
+                }, 500);
             } else if (status === 'failed' || status === 'error') {
                 clearInterval(interval);
                 console.error('[GENERATE] ❌ Erro na geração:', data.failedReason || data.error);
@@ -2482,22 +2505,63 @@ async function monitorProgress(jobId) {
             }
         } catch (error) {
             consecutiveErrors++;
-            console.error(`[GENERATE] Erro ao verificar progresso (${consecutiveErrors}/${maxErrors}):`, error);
+            const errorMsg = error.message || error.toString();
+            console.error(`[GENERATE] Erro ao verificar progresso (${consecutiveErrors}/${maxErrors}):`, errorMsg);
             
-            // Se muitos erros consecutivos, parar polling
-            if (consecutiveErrors >= maxErrors) {
+            // Se muitos erros consecutivos OU muito tempo sem sucesso, tentar verificar uma última vez
+            const timeSinceLastSuccess = Date.now() - lastSuccessfulCheck;
+            
+            if (consecutiveErrors >= maxErrors || timeSinceLastSuccess >= maxTimeWithoutSuccess) {
+                // Tentar uma última verificação antes de desistir
+                console.log('[GENERATE] Tentando verificação final antes de desistir...');
+                try {
+                    const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
+                    const progress = data.progress || 0;
+                    const status = data.status || 'processing';
+                    
+                    // Se estiver completo, mostrar sucesso
+                    if (status === 'completed' || status === 'finished' || progress >= 100) {
+                        clearInterval(interval);
+                        console.log('[GENERATE] ✅ Geração concluída na verificação final!');
+                        if (data.seriesId) appState.seriesId = data.seriesId;
+                        if (data.clipsCount) appState.numberOfCuts = data.clipsCount;
+                        showSuccessModal(data);
+                        return;
+                    }
+                } catch (finalError) {
+                    console.error('[GENERATE] Erro na verificação final:', finalError);
+                }
+                
+                // Se chegou aqui, realmente falhou
                 clearInterval(interval);
-                console.error('[GENERATE] Muitos erros consecutivos, parando monitoramento');
-                alert('Erro ao verificar progresso da geração. Por favor, recarregue a página.');
-                const loadingOverlay = document.getElementById('loading-overlay');
-                if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                console.error('[GENERATE] Muitos erros consecutivos ou timeout, parando monitoramento');
+                
+                // Verificar se temos seriesId salvo (pode ter sido gerado mesmo com erros de polling)
+                if (appState.seriesId) {
+                    console.log('[GENERATE] SeriesId encontrado no appState, tentando mostrar modal...');
+                    showSuccessModal({ seriesId: appState.seriesId, clipsCount: appState.numberOfCuts });
+                } else {
+                    alert('Erro ao verificar progresso da geração. Verifique os logs do backend ou recarregue a página.');
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                }
             }
         }
-    }, 1000);
+    }, pollInterval);
 }
 
 function showSuccessModal(job) {
     console.log('[MODAL] Exibindo modal de sucesso:', job);
+    
+    // Atualizar appState com dados do job se disponíveis
+    if (job?.seriesId) {
+        appState.seriesId = job.seriesId;
+        console.log(`[MODAL] SeriesId atualizado: ${job.seriesId}`);
+    }
+    if (job?.clipsCount) {
+        appState.numberOfCuts = job.clipsCount;
+        console.log(`[MODAL] ClipsCount atualizado: ${job.clipsCount}`);
+    }
     
     // Esconder overlay de loading
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -2514,8 +2578,14 @@ function showSuccessModal(job) {
         console.error('[MODAL] ❌ Modal não encontrado no DOM!');
         // Fallback: mostrar alerta e permitir download direto
         const clipsCount = appState.numberOfCuts || job?.clipsCount || 1;
-        if (confirm(`Série com ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'} gerada com sucesso! Deseja baixar agora?`)) {
-            downloadSeries();
+        const seriesId = appState.seriesId || job?.seriesId;
+        
+        if (seriesId) {
+            if (confirm(`Série com ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'} gerada com sucesso! Deseja baixar agora?`)) {
+                downloadSeries();
+            }
+        } else {
+            alert(`Série com ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'} gerada com sucesso! Mas o ID da série não foi encontrado. Verifique os logs do backend.`);
         }
         return;
     }
