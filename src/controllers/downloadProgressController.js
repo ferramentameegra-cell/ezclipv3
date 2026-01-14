@@ -58,14 +58,17 @@ async function detectYtDlpCommand() {
     return ytDlpCommandCache;
   }
 
-  // Tentar python3 -m yt_dlp primeiro (mais comum quando instalado via pip)
+  // Priorizar binário yt-dlp diretamente (mais confiável)
+  // Tentar módulo Python apenas como fallback
   const possibleCommands = [
-    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'], useModule: true },
-    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'], useModule: true },
     { cmd: 'yt-dlp', args: ['--version'], useModule: false },
     { cmd: '/usr/local/bin/yt-dlp', args: ['--version'], useModule: false },
     { cmd: '/usr/bin/yt-dlp', args: ['--version'], useModule: false },
-    { cmd: process.env.HOME + '/Library/Python/3.9/bin/yt-dlp', args: ['--version'], useModule: false }
+    { cmd: '/opt/homebrew/bin/yt-dlp', args: ['--version'], useModule: false },
+    { cmd: process.env.HOME + '/Library/Python/3.9/bin/yt-dlp', args: ['--version'], useModule: false },
+    // Fallback para módulo Python (menos confiável)
+    { cmd: 'python3', args: ['-m', 'yt_dlp', '--version'], useModule: true },
+    { cmd: 'python', args: ['-m', 'yt_dlp', '--version'], useModule: true }
   ];
 
   for (const { cmd, args, useModule } of possibleCommands) {

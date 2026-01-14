@@ -1,9 +1,14 @@
 [phases.setup]
-nixPkgs = ["ffmpeg", "python3", "pip"]
+nixPkgs = ["ffmpeg", "python3", "pip", "curl"]
 
 [phases.install]
 cmds = [
-  "pip install yt-dlp",
+  # Instalar yt-dlp como binário diretamente (mais confiável que pip)
+  "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp || curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp",
+  "chmod a+rx /usr/local/bin/yt-dlp 2>/dev/null || chmod a+rx /tmp/yt-dlp 2>/dev/null || true",
+  "mv /tmp/yt-dlp /usr/local/bin/yt-dlp 2>/dev/null || true",
+  # Fallback: instalar via pip se o binário falhar
+  "pip install yt-dlp || true",
   "npm ci"
 ]
 
