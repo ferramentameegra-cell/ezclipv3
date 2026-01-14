@@ -2219,14 +2219,19 @@ function continueToHeadline() {
  * Continua para card de geração após headline (ETAPA 7)
  */
 function continueToGenerate() {
+    console.log('[NAV] Avançando para etapa de geração');
     // Avançar para etapa de geração - ETAPA 7
     updateProgressSteps('generate'); // Etapa 7
     updateGenerateSummary();
     const generateCard = document.getElementById('generate-card');
     if (generateCard) {
         generateCard.style.display = 'block';
+        generateCard.classList.remove('hidden');
         // Fazer scroll para a etapa de geração
         scrollToCard('generate');
+        console.log('[NAV] Card de geração exibido');
+    } else {
+        console.error('[NAV] Card de geração não encontrado!');
     }
 }
 
