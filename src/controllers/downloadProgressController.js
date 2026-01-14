@@ -305,14 +305,8 @@ export async function downloadWithProgress(req, res) {
       const testProc = spawn('yt-dlp', ['--version'], { stdio: 'pipe' });
       testProc.on('close', (code) => resolve(code === 0));
       testProc.on('error', () => {
-        // Se falhar, tentar python3 -m yt_dlp
-        const testProc2 = spawn('python3', ['-m', 'yt_dlp', '--version'], { stdio: 'pipe' });
-        testProc2.on('close', (code) => resolve(code === 0));
-        testProc2.on('error', () => resolve(false));
-        setTimeout(() => {
-          if (!testProc2.killed) testProc2.kill();
-          resolve(false);
-        }, 2000);
+        // Não tentar módulo Python - apenas binário
+        resolve(false);
       });
       setTimeout(() => {
         if (!testProc.killed) testProc.kill();
