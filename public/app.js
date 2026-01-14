@@ -2379,21 +2379,53 @@ async function monitorProgress(jobId) {
     const progressFill = document.getElementById('loading-progress');
     const progressText = document.getElementById('loading-percent');
     
+    let lastProgress = 0;
+    let consecutiveErrors = 0;
+    const maxErrors = 5;
+    
     const interval = setInterval(async () => {
         try {
             const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
+            
+            // Reset contador de erros em caso de sucesso
+            consecutiveErrors = 0;
             
             // Backend retorna { jobId, status, progress, failedReason }
             const progress = data.progress || 0;
             const status = data.status || 'processing';
             
-            if (progressFill) progressFill.style.width = `${progress}%`;
-            if (progressText) progressText.textContent = `${progress}%`;
+            // Log para debug
+            if (progress !== lastProgress) {
+                console.log(`[GENERATE] Progresso atualizado: ${lastProgress}% -> ${progress}% (Status: ${status})`);
+                lastProgress = progress;
+            }
+            
+            // Atualizar UI
+            if (progressFill) {
+                progressFill.style.width = `${progress}%`;
+                progressFill.style.transition = 'width 0.3s ease';
+            }
+            if (progressText) {
+                progressText.textContent = `${progress}%`;
+            }
             
             // Verificar se está completo (progresso 100% ou status completed/finished)
             if (status === 'completed' || status === 'finished' || progress >= 100) {
                 clearInterval(interval);
                 console.log('[GENERATE] ✅ Geração concluída! Status:', status, 'Progresso:', progress);
+                
+                // Atualizar UI para 100% antes de mostrar modal
+                if (progressFill) progressFill.style.width = '100%';
+                if (progressText) progressText.textContent = '100%';
+                
+                // Atualizar appState com dados do job
+                if (data.clipsCount) {
+                    appState.numberOfCuts = data.clipsCount;
+                }
+                if (data.seriesId) {
+                    appState.seriesId = data.seriesId;
+                }
+                
                 showSuccessModal(data);
             } else if (status === 'failed' || status === 'error') {
                 clearInterval(interval);
@@ -2403,7 +2435,17 @@ async function monitorProgress(jobId) {
                 if (loadingOverlay) loadingOverlay.classList.add('hidden');
             }
         } catch (error) {
-            console.error('Erro ao verificar progresso:', error);
+            consecutiveErrors++;
+            console.error(`[GENERATE] Erro ao verificar progresso (${consecutiveErrors}/${maxErrors}):`, error);
+            
+            // Se muitos erros consecutivos, parar polling
+            if (consecutiveErrors >= maxErrors) {
+                clearInterval(interval);
+                console.error('[GENERATE] Muitos erros consecutivos, parando monitoramento');
+                alert('Erro ao verificar progresso da geração. Por favor, recarregue a página.');
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) loadingOverlay.classList.add('hidden');
+            }
         }
     }, 1000);
 }

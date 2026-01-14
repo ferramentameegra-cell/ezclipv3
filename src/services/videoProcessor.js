@@ -35,6 +35,15 @@ export function setVideoStore(store) {
 // ===============================
 export const generateVideoSeries = async (job, jobsMap) => {
   try {
+    // Atualizar progresso inicial (0% -> 1%)
+    console.log('[PROCESSING] Iniciando geração de série...');
+    if (typeof job.progress === 'function') {
+      await job.progress(1);
+    } else {
+      job.progress = 1;
+    }
+    if (jobsMap) jobsMap.set(job.id, job);
+    
     const {
       videoId,
       numberOfCuts,
