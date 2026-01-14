@@ -383,7 +383,8 @@ export async function composeFinalVideo({
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
       // Determinar qual label usar (pode ser [final] ou [final_forced])
-      const finalLabel = filterParts.join(';').includes('[final_forced]') ? '[final_forced]' : '[final]';
+      const filterComplexStr = filterParts.join(';');
+      const finalLabel = filterComplexStr.includes('[final_forced]') ? '[final_forced]' : '[final]';
       
       const outputOptions = [
         '-map', finalLabel,
@@ -393,12 +394,12 @@ export async function composeFinalVideo({
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
-        '-aspect', '9:16', // FORÇAR aspect ratio 9:16
-        '-vf', `scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2` // FORÇAR DUPLO
+        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
+        // NÃO usar -vf aqui pois já temos complexFilter
       ];
       
       console.log(`[COMPOSER] ✅ Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
-      console.log(`[COMPOSER] Usando label: ${finalLabel}`);
+      console.log(`[COMPOSER] Usando label final: ${finalLabel}`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
