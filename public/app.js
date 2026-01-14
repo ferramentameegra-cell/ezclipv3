@@ -2390,11 +2390,14 @@ async function monitorProgress(jobId) {
             if (progressFill) progressFill.style.width = `${progress}%`;
             if (progressText) progressText.textContent = `${progress}%`;
             
-            if (status === 'completed' || status === 'finished') {
+            // Verificar se está completo (progresso 100% ou status completed/finished)
+            if (status === 'completed' || status === 'finished' || progress >= 100) {
                 clearInterval(interval);
+                console.log('[GENERATE] ✅ Geração concluída! Status:', status, 'Progresso:', progress);
                 showSuccessModal(data);
             } else if (status === 'failed' || status === 'error') {
                 clearInterval(interval);
+                console.error('[GENERATE] ❌ Erro na geração:', data.failedReason || data.error);
                 alert('Erro ao gerar série: ' + (data.failedReason || data.error || 'Erro desconhecido'));
                 const loadingOverlay = document.getElementById('loading-overlay');
                 if (loadingOverlay) loadingOverlay.classList.add('hidden');
@@ -2406,25 +2409,93 @@ async function monitorProgress(jobId) {
 }
 
 function showSuccessModal(job) {
-    const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+    console.log('[MODAL] Exibindo modal de sucesso:', job);
     
+    // Esconder overlay de loading
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        loadingOverlay.style.display = 'none';
+    }
+    
+    // Buscar elementos do modal
     const modal = document.getElementById('success-modal');
     const message = document.getElementById('success-message');
     
-    if (modal && message) {
-        message.textContent = `Série com ${appState.numberOfCuts} partes gerada com sucesso!`;
-        modal.classList.remove('hidden');
+    if (!modal) {
+        console.error('[MODAL] ❌ Modal não encontrado no DOM!');
+        // Fallback: mostrar alerta e permitir download direto
+        const clipsCount = appState.numberOfCuts || job?.clipsCount || 1;
+        if (confirm(`Série com ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'} gerada com sucesso! Deseja baixar agora?`)) {
+            downloadSeries();
+        }
+        return;
     }
+    
+    if (!message) {
+        console.error('[MODAL] ❌ Mensagem não encontrada no DOM!');
+    }
+    
+    // Configurar conteúdo
+    const clipsCount = appState.numberOfCuts || job?.clipsCount || 1;
+    if (message) {
+        message.textContent = `Série com ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'} gerada com sucesso!`;
+    }
+    
+    // Garantir que o modal está visível
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+    modal.style.visibility = 'visible';
+    modal.style.opacity = '1';
+    modal.style.zIndex = '10000';
+    
+    console.log('[MODAL] ✅ Modal exibido com sucesso');
+    
+    // Focar no botão de download para melhor UX
+    setTimeout(() => {
+        const downloadBtn = modal.querySelector('button[onclick="downloadSeries()"]');
+        if (downloadBtn) {
+            downloadBtn.focus();
+        }
+    }, 100);
 }
 
 async function downloadSeries() {
     if (!appState.seriesId) {
-        alert('Série não encontrada');
+        console.error('[DOWNLOAD] SeriesId não encontrado no appState');
+        alert('Série não encontrada. Por favor, tente gerar novamente.');
         return;
     }
     
-    window.location.href = `${API_BASE}/api/generate/download/${appState.seriesId}`;
+    console.log('[DOWNLOAD] Iniciando download da série:', appState.seriesId);
+    
+    try {
+        // Fechar modal antes de iniciar download
+        const modal = document.getElementById('success-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+        
+        // Iniciar download
+        const downloadUrl = `${API_BASE}/api/generate/download/${appState.seriesId}`;
+        console.log('[DOWNLOAD] URL:', downloadUrl);
+        
+        // Usar window.location para download direto
+        window.location.href = downloadUrl;
+        
+        // Fallback: criar link temporário se window.location não funcionar
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `ezclips-${appState.seriesId}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }, 500);
+    } catch (error) {
+        console.error('[DOWNLOAD] Erro ao baixar série:', error);
+        alert('Erro ao baixar série. Por favor, tente novamente.');
+    }
 }
 
 function openTikTokStudio() {
