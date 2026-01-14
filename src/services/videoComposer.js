@@ -295,7 +295,10 @@ export async function composeFinalVideo({
 
       // 5. Adicionar headline PRIMEIRO (CENTRO VERTICAL do frame)
       // Headline fica acima de tudo (exceto legendas que ficam na parte inferior)
-      if (headlineText || (headline && headline.text)) {
+      const hasHeadline = headlineText || (headline && headline.text);
+      console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
+      
+      if (hasHeadline) {
         const headlineTextValue = headlineText || headline.text;
         const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
         const fontSize = headlineStyle.fontSize || 72;
@@ -308,9 +311,13 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x=(w-text_w)/2
         const yPos = `(h-text_h)/2`;
 
-        filterParts.push(`${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`);
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
+        console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
+      } else {
+        console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);
       }
 
       // 6. Adicionar legendas (burn-in) - PARTE INFERIOR
