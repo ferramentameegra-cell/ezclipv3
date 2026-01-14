@@ -235,7 +235,7 @@ export async function composeFinalVideo({
 
       // Construir filter_complex como string (formato correto do FFmpeg)
       const filterParts = [];
-      let currentLabel = '[0:v]';
+      let currentLabel = '[0:v]'; // Input do vídeo principal (sempre tem colchetes)
 
       // 1. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
       const fixedBackgroundPath = getFixedBackgroundPath();
@@ -270,7 +270,8 @@ export async function composeFinalVideo({
       // IMPORTANTE: overlay preserva dimensões do primeiro input ([bg_fixed] = 1080x1920)
       // Posição: x=(W-w)/2 (centralizado horizontalmente), y=0 (topo)
       // O background aparecerá automaticamente nas áreas vazias (sem tarja preta)
-      filterParts.push(`[bg_fixed][${currentLabel}]overlay=(W-w)/2:0[composed]`);
+      // CORREÇÃO: currentLabel já tem colchetes, então não adicionar colchetes extras
+      filterParts.push(`[bg_fixed]${currentLabel}overlay=(W-w)/2:0[composed]`);
       currentLabel = '[composed]';
       console.log(`[COMPOSER] Vídeo principal posicionado no topo (y=0), centralizado horizontalmente`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
@@ -287,6 +288,7 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x = (W-w)/2
         // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
         const retentionY = OUTPUT_HEIGHT - RETENTION_HEIGHT;
+        // CORREÇÃO: currentLabel já tem colchetes, então não adicionar colchetes extras
         filterParts.push(`${currentLabel}[retention_cropped]overlay=(W-w)/2:${retentionY}[with_retention]`);
         currentLabel = '[with_retention]';
         console.log(`[COMPOSER] Vídeo de retenção posicionado na parte inferior (y=${retentionY}), centralizado horizontalmente`);
