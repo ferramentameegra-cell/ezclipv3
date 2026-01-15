@@ -330,10 +330,11 @@ export async function composeFinalVideo({
         // - line_spacing: espaçamento entre linhas (10% do tamanho da fonte)
         const lineSpacing = Math.round(fontSize * 0.1);
         
-        // Usar box transparente para forçar quebra de texto
-        // text_align usa flags: primeira letra = vertical (T/M/B), segunda = horizontal (L/C/R)
-        // MC = Middle (vertical) Center (horizontal)
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:text_align=MC:x=(w-text_w)/2:y=${yPos}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // Usar box transparente para forçar quebra de texto automática
+        // box=1 habilita caixa, boxw limita largura (força quebra), boxcolor transparente
+        // x=(w-text_w)/2 centraliza horizontalmente, y=(h-text_h)/2 centraliza verticalmente
+        // Removidas opções que podem não estar disponíveis: text_align, line_spacing, fix_bounds
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
@@ -437,11 +438,16 @@ export async function composeFinalVideo({
         }
       }
       
-      // Log completo do filter (limitado a 800 chars para debug)
-      console.log('[COMPOSER] Filter complex (primeiros 800 chars):', filterComplex.substring(0, 800));
+      // Log completo do filter (limitado a 1000 chars para debug)
+      console.log('[COMPOSER] Filter complex (primeiros 1000 chars):', filterComplex.substring(0, 1000));
       console.log('[COMPOSER] Total de filtros:', filterParts.length);
       console.log('[COMPOSER] Labels definidos:', Array.from(definedLabels));
       console.log('[COMPOSER] Labels usados:', Array.from(usedLabels));
+      
+      // Log completo do filter para debug de erros
+      if (filterComplex.length > 1000) {
+        console.log('[COMPOSER] Filter complex (restante):', filterComplex.substring(1000));
+      }
       
       try {
         command.complexFilter(filterComplex);
