@@ -37,10 +37,19 @@ const WORKER_CONFIG = {
  * Ordem de tentativa: mais específicas primeiro
  */
 // Função auxiliar para criar cookies temporário a partir de variável de ambiente
+// Cache para evitar criar múltiplos arquivos
+let cookiesPathCache = null;
+
 function getCookiesPath() {
+  // Se já foi criado, reutilizar
+  if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+    return cookiesPathCache;
+  }
+  
   // Primeiro, tentar arquivo de cookies configurado
   if (fs.existsSync(WORKER_CONFIG.cookiesPath)) {
-    return WORKER_CONFIG.cookiesPath;
+    cookiesPathCache = WORKER_CONFIG.cookiesPath;
+    return cookiesPathCache;
   }
   
   // Se não, tentar criar a partir de variável de ambiente YTDLP_COOKIES
@@ -51,13 +60,23 @@ function getCookiesPath() {
       const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
       fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
       console.log(`[DOWNLOAD-WORKER] Cookies criados a partir de YTDLP_COOKIES: ${cookiesPath}`);
-      return cookiesPath;
+      cookiesPathCache = cookiesPath;
+      return cookiesPathCache;
     } catch (error) {
       console.error(`[DOWNLOAD-WORKER] Erro ao criar cookies de YTDLP_COOKIES: ${error.message}`);
     }
   }
   
   return null;
+}
+
+// Função para obter argumentos de uma estratégia com cookies dinâmicos
+function getStrategyArgs(strategyBase, cookiesPath) {
+  const baseArgs = [...strategyBase.args];
+  if (cookiesPath) {
+    baseArgs.push('--cookies', cookiesPath);
+  }
+  return baseArgs;
 }
 
 const DOWNLOAD_STRATEGIES = [
@@ -69,9 +88,9 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash',
-      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
-    ]
+      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash'
+    ],
+    useCookies: true
   },
   {
     name: 'android_with_cookies',
@@ -81,9 +100,9 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash',
-      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
-    ]
+      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash'
+    ],
+    useCookies: true
   },
   {
     name: 'desktop_with_cookies',
@@ -93,9 +112,9 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash',
-      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
-    ]
+      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash'
+    ],
+    useCookies: true
   },
   {
     name: 'ios_basic',
@@ -106,7 +125,8 @@ const DOWNLOAD_STRATEGIES = [
       '--geo-bypass',
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash'
-    ]
+    ],
+    useCookies: false
   },
   {
     name: 'android_basic',
@@ -117,7 +137,8 @@ const DOWNLOAD_STRATEGIES = [
       '--geo-bypass',
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=android,youtube:skip=dash'
-    ]
+    ],
+    useCookies: false
   },
   {
     name: 'desktop_basic',
@@ -128,12 +149,14 @@ const DOWNLOAD_STRATEGIES = [
       '--geo-bypass',
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=web,youtube:skip=dash'
-    ]
+    ],
+    useCookies: false
   },
   {
     name: 'default',
     description: 'Estratégia padrão do yt-dlp',
-    args: []
+    args: [],
+    useCookies: false
   }
 ];
 
@@ -247,11 +270,16 @@ function is403Error(stderr, exitCode) {
 async function tryGetInfoWithStrategy(url, strategy, ytDlpCommand) {
   return new Promise((resolve, reject) => {
     let executable, args;
+    
+    // Obter cookies se a estratégia usar
+    const cookiesPath = strategy.useCookies ? getCookiesPath() : null;
+    const strategyArgs = getStrategyArgs(strategy, cookiesPath);
+    
     const baseArgs = [
       '--dump-json',
       '--no-warnings',
       '--no-playlist',
-      ...strategy.args,
+      ...strategyArgs,
       url
     ];
 
@@ -323,12 +351,17 @@ async function tryGetInfoWithStrategy(url, strategy, ytDlpCommand) {
 async function tryDownloadWithStrategy(url, outputPath, strategy, ytDlpCommand, onProgress) {
   return new Promise((resolve, reject) => {
     let executable, args;
+    
+    // Obter cookies se a estratégia usar
+    const cookiesPath = strategy.useCookies ? getCookiesPath() : null;
+    const strategyArgs = getStrategyArgs(strategy, cookiesPath);
+    
     const baseArgs = [
       '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--no-warnings',
-      ...strategy.args,
+      ...strategyArgs,
       '-o', outputPath,
       url
     ];
