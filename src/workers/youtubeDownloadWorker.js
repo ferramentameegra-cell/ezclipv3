@@ -36,6 +36,30 @@ const WORKER_CONFIG = {
  * Estratégias de download com diferentes configurações
  * Ordem de tentativa: mais específicas primeiro
  */
+// Função auxiliar para criar cookies temporário a partir de variável de ambiente
+function getCookiesPath() {
+  // Primeiro, tentar arquivo de cookies configurado
+  if (fs.existsSync(WORKER_CONFIG.cookiesPath)) {
+    return WORKER_CONFIG.cookiesPath;
+  }
+  
+  // Se não, tentar criar a partir de variável de ambiente YTDLP_COOKIES
+  const cookiesContent = process.env.YTDLP_COOKIES;
+  if (cookiesContent && cookiesContent.trim() !== '') {
+    try {
+      const tempDir = os.tmpdir();
+      const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
+      fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
+      console.log(`[DOWNLOAD-WORKER] Cookies criados a partir de YTDLP_COOKIES: ${cookiesPath}`);
+      return cookiesPath;
+    } catch (error) {
+      console.error(`[DOWNLOAD-WORKER] Erro ao criar cookies de YTDLP_COOKIES: ${error.message}`);
+    }
+  }
+  
+  return null;
+}
+
 const DOWNLOAD_STRATEGIES = [
   {
     name: 'ios_with_cookies',
@@ -44,7 +68,9 @@ const DOWNLOAD_STRATEGIES = [
       '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
-      ...(fs.existsSync(WORKER_CONFIG.cookiesPath) ? ['--cookies', WORKER_CONFIG.cookiesPath] : [])
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash',
+      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
     ]
   },
   {
@@ -54,7 +80,9 @@ const DOWNLOAD_STRATEGIES = [
       '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
-      ...(fs.existsSync(WORKER_CONFIG.cookiesPath) ? ['--cookies', WORKER_CONFIG.cookiesPath] : [])
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash',
+      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
     ]
   },
   {
@@ -64,7 +92,9 @@ const DOWNLOAD_STRATEGIES = [
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
-      ...(fs.existsSync(WORKER_CONFIG.cookiesPath) ? ['--cookies', WORKER_CONFIG.cookiesPath] : [])
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash',
+      ...(getCookiesPath() ? ['--cookies', getCookiesPath()] : [])
     ]
   },
   {
@@ -73,7 +103,9 @@ const DOWNLOAD_STRATEGIES = [
     args: [
       '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
       '--referer', 'https://www.youtube.com/',
-      '--geo-bypass'
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash'
     ]
   },
   {
@@ -82,7 +114,9 @@ const DOWNLOAD_STRATEGIES = [
     args: [
       '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
       '--referer', 'https://www.youtube.com/',
-      '--geo-bypass'
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash'
     ]
   },
   {
@@ -91,7 +125,9 @@ const DOWNLOAD_STRATEGIES = [
     args: [
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '--referer', 'https://www.youtube.com/',
-      '--geo-bypass'
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash'
     ]
   },
   {
@@ -184,7 +220,7 @@ function validateYouTubeUrl(url) {
 }
 
 /**
- * Detecta se o erro é um bloqueio 403
+ * Detecta se o erro é um bloqueio 403 ou relacionado a bot/idade
  */
 function is403Error(stderr, exitCode) {
   if (exitCode !== 1) return false;
@@ -194,7 +230,12 @@ function is403Error(stderr, exitCode) {
     errorLower.includes('403') ||
     errorLower.includes('forbidden') ||
     errorLower.includes('http error 403') ||
-    errorLower.includes('sign in to confirm your age') ||
+    errorLower.includes('sign in to confirm') ||
+    errorLower.includes('sign in to confirm you\'re not a bot') ||
+    errorLower.includes('bot') ||
+    errorLower.includes('age-restricted') ||
+    errorLower.includes('age verification') ||
+    errorLower.includes('confirm your age') ||
     errorLower.includes('unable to extract') ||
     errorLower.includes('private video')
   );

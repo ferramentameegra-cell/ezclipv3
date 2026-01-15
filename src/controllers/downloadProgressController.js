@@ -203,8 +203,12 @@ function parseYtDlpError(stderr, exitCode) {
     return 'Este vídeo não está disponível ou é privado. Use um vídeo público.';
   }
   
-  if (errorLower.includes('sign in to confirm') || errorLower.includes('age-restricted')) {
-    return 'Este vídeo requer confirmação de idade. Não é possível baixar automaticamente.';
+  if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot')) {
+    return 'YouTube detectou acesso automatizado. Configure cookies do navegador na variável YTDLP_COOKIES para contornar. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
+  }
+  
+  if (errorLower.includes('age-restricted') || errorLower.includes('age verification') || errorLower.includes('confirm your age')) {
+    return 'Este vídeo requer confirmação de idade. Configure cookies do navegador na variável YTDLP_COOKIES. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
   }
   
   if (errorLower.includes('playlist') && errorLower.includes('not allowed')) {
@@ -419,18 +423,23 @@ export async function downloadWithProgress(req, res) {
       // Preparar argumentos do yt-dlp com a estratégia atual
       // Formato MÁXIMA flexibilidade: usar formato selector que aceita QUALQUER formato
       // Permitir vídeo+áudio mesclados (m3u8) ou separados (webm, mp4)
+      // Combinar extractor-args da estratégia com skip=dash para melhor performance
+      const extractorArgsCombined = `${strategy.extractorArgs},youtube:skip=dash`;
+      
       const downloadArgs = [
         "-f", "bestvideo+bestaudio/best", // Tentar melhor vídeo+áudio, senão melhor formato geral
         "--merge-output-format", "mp4", // Se precisar mergear, usar mp4
         "--no-playlist",
         "--no-warnings",
         "--newline",
-        // Cookies e User-Agent (solução para erro 403)
+        // Cookies e User-Agent (solução para erro 403 e restrição de idade)
         ...(cookiesPath ? ["--cookies", cookiesPath] : []),
         "--user-agent", finalUserAgent,
         "--referer", "https://www.youtube.com/",
-        // Usar cliente específico da estratégia
-        "--extractor-args", strategy.extractorArgs,
+        // Usar cliente específico da estratégia + skip=dash
+        "--extractor-args", extractorArgsCombined,
+        // Flags para contornar detecção de bot e restrição de idade
+        "--no-check-certificate", // Ignorar verificação de certificado (pode ajudar com alguns bloqueios)
         // Opções de robustez
         "--retries", "3",
         "--fragment-retries", "3",
