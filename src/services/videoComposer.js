@@ -333,18 +333,32 @@ export async function composeFinalVideo({
         // Usar box transparente para forçar quebra de texto automática
         // box=1 habilita caixa, boxw limita largura (força quebra), boxcolor transparente
         // x=(w-text_w)/2 centraliza horizontalmente, y=(h-text_h)/2 centraliza verticalmente
-        // IMPORTANTE: boxborderw deve ser >= 0, não pode ser omitido quando box=1
         const boxBorderWidth = 0;
         const boxColor = '0x00000000'; // Transparente
         
+        // Obter caminho da fonte e validar
+        const fontPath = getFontPath(font);
+        const escapedText = escapeText(headlineTextValue);
+        
+        // Validar se a fonte existe (em produção pode não existir)
+        // Se não existir, usar fonte padrão do sistema
+        let finalFontPath = fontPath;
+        if (fs.existsSync && !fs.existsSync(fontPath)) {
+          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada: ${fontPath}, usando fallback`);
+          finalFontPath = isProduction 
+            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+            : '/System/Library/Fonts/Helvetica.ttc';
+        }
+        
         // Construir filter de headline com sintaxe validada
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // IMPORTANTE: boxborderw=0 é necessário quando box=1
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
         console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px (80% de ${OUTPUT_WIDTH}px)`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
-        console.log(`[COMPOSER] Headline filter: ${headlineFilter.substring(0, 200)}...`);
+        console.log(`[COMPOSER] Fonte usada: ${finalFontPath}`);
       } else {
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);
       }
@@ -587,6 +601,26 @@ function escapeText(text) {
 
 function getFontPath(fontName) {
   // Mapear fontes comuns para caminhos do sistema
+  // Em produção (Railway/Linux), usar fontes do sistema Linux
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+  
+  if (isProduction) {
+    // Fontes Linux comuns
+    const linuxFontMap = {
+      'Arial': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      'Inter': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+      'Roboto': '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+      'Montserrat': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    };
+    
+    if (linuxFontMap[fontName]) {
+      return linuxFontMap[fontName];
+    }
+    // Fallback Linux
+    return '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf';
+  }
+  
+  // Desenvolvimento (macOS)
   const fontMap = {
     'Arial': '/System/Library/Fonts/Helvetica.ttc',
     'Inter': '/System/Library/Fonts/Supplemental/Inter.ttc',
