@@ -436,6 +436,145 @@ function logout() {
 // ========== CURSOS - REMOVIDO ==========
 // A aba de estudos foi removida conforme solicitado
 
+// ========== TERMOS DE USO ==========
+let termsAccepted = false;
+
+function checkTermsAcceptance() {
+    const input = document.getElementById('youtube-url');
+    const url = input?.value.trim() || '';
+    const checkboxContainer = document.getElementById('terms-checkbox-container');
+    const checkbox = document.getElementById('terms-checkbox');
+    const btn = document.getElementById('btn-process-youtube');
+    
+    if (!input || !checkboxContainer || !checkbox || !btn) return;
+    
+    // Se há URL do YouTube, mostrar checkbox
+    if (url && isValidYouTubeUrl(url)) {
+        checkboxContainer.style.display = 'block';
+        // Verificar se checkbox está marcado para habilitar botão
+        updateButtonState();
+    } else {
+        checkboxContainer.style.display = 'none';
+        checkbox.checked = false;
+        termsAccepted = false;
+        btn.disabled = true;
+    }
+}
+
+function handleTermsCheckboxChange() {
+    const checkbox = document.getElementById('terms-checkbox');
+    termsAccepted = checkbox?.checked || false;
+    updateButtonState();
+    
+    // Esconder alerta quando termos forem aceitos
+    if (termsAccepted) {
+        const termsAlert = document.getElementById('terms-alert');
+        if (termsAlert) {
+            termsAlert.style.display = 'none';
+        }
+        
+        // Remover borda vermelha do checkbox container
+        const checkboxContainer = document.getElementById('terms-checkbox-container');
+        if (checkboxContainer) {
+            checkboxContainer.style.border = '1px solid var(--border)';
+        }
+        
+        // Registrar aceite no backend
+        registerTermsAcceptance();
+    }
+}
+
+function updateButtonState() {
+    const checkbox = document.getElementById('terms-checkbox');
+    const btn = document.getElementById('btn-process-youtube');
+    
+    if (!checkbox || !btn) return;
+    
+    // Botão só habilitado se checkbox estiver marcado
+    btn.disabled = !checkbox.checked;
+    
+    // Adicionar estilo visual quando desabilitado
+    if (btn.disabled) {
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+    } else {
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    }
+}
+
+function openTermsModal() {
+    const modal = document.getElementById('terms-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeTermsModal() {
+    const modal = document.getElementById('terms-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+function focusTermsCheckbox() {
+    const checkbox = document.getElementById('terms-checkbox');
+    const checkboxContainer = document.getElementById('terms-checkbox-container');
+    
+    // Garantir que o checkbox container está visível
+    if (checkboxContainer) {
+        checkboxContainer.style.display = 'block';
+        // Scroll suave até o checkbox
+        setTimeout(() => {
+            checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+    }
+    
+    // Focar no checkbox
+    if (checkbox) {
+        checkbox.focus();
+        // Destacar visualmente
+        checkboxContainer.style.border = '2px solid var(--primary)';
+        checkboxContainer.style.animation = 'pulse 0.5s';
+        setTimeout(() => {
+            checkboxContainer.style.border = '1px solid var(--border)';
+            checkboxContainer.style.animation = '';
+        }, 500);
+    }
+}
+
+async function registerTermsAcceptance() {
+    try {
+        const clientIP = await fetch('https://api.ipify.org?format=json')
+            .then(res => res.json())
+            .then(data => data.ip)
+            .catch(() => null);
+        
+        const sessionId = localStorage.getItem('ezv2_session_id') || generateSessionId();
+        if (!localStorage.getItem('ezv2_session_id')) {
+            localStorage.setItem('ezv2_session_id', sessionId);
+        }
+        
+        await apiClient.post('/api/terms/accept', {
+            timestamp: new Date().toISOString(),
+            sessionId: sessionId,
+            ipAddress: clientIP,
+            userAgent: navigator.userAgent
+        });
+        
+        console.log('[TERMS] Aceite dos termos registrado com sucesso');
+    } catch (error) {
+        console.error('[TERMS] Erro ao registrar aceite:', error);
+        // Não bloquear o fluxo se o registro falhar
+    }
+}
+
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
 // ========== YOUTUBE & VIDEO PROCESSING ==========
 function setupYouTubeInput() {
     const input = document.getElementById('youtube-url');
