@@ -802,9 +802,19 @@ async function handleYouTubeSubmit() {
     
     // VERIFICAÇÃO OBRIGATÓRIA: Termos de Uso devem estar aceitos
     if (!checkbox || !checkbox.checked) {
-        showStatus('Você deve aceitar os Termos de Uso para continuar', 'error');
+        // Mostrar alerta com botão
+        const termsAlert = document.getElementById('terms-alert');
+        if (termsAlert) {
+            termsAlert.style.display = 'flex';
+            // Scroll suave até o alerta
+            setTimeout(() => {
+                termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
+        
         const checkboxContainer = document.getElementById('terms-checkbox-container');
         if (checkboxContainer) {
+            checkboxContainer.style.display = 'block';
             checkboxContainer.style.border = '2px solid var(--error, #ef4444)';
             checkboxContainer.style.animation = 'shake 0.3s';
             setTimeout(() => {
@@ -813,6 +823,12 @@ async function handleYouTubeSubmit() {
             }, 300);
         }
         return;
+    }
+    
+    // Esconder alerta se termos estiverem aceitos
+    const termsAlert = document.getElementById('terms-alert');
+    if (termsAlert) {
+        termsAlert.style.display = 'none';
     }
     
     // Estado de loading

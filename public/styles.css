@@ -891,6 +891,25 @@ body {
     20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
 
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.terms-alert {
+    animation: slideDown 0.3s ease-out;
+}
+
+.btn-terms-accept:hover {
+    background: #dc2626 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+
+.btn-terms-accept:active {
+    transform: translateY(0);
+}
+
 #terms-modal .modal-content {
     max-height: 90vh;
     overflow-y: auto;
