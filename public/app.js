@@ -2444,6 +2444,34 @@ function continueToHeadline() {
     if (!appState.headlineStyle) {
         appState.headlineStyle = 'bold';
     }
+    if (!appState.headlineSize) {
+        appState.headlineSize = 72;
+    }
+    if (!appState.headlineColor) {
+        appState.headlineColor = '#FFFFFF';
+    }
+    
+    // Inicializar valores nos inputs se existirem
+    const sizeInput = document.getElementById('headline-size-input');
+    const sizeValue = document.getElementById('headline-size-value');
+    const colorInput = document.getElementById('headline-color-input');
+    const colorText = document.getElementById('headline-color-text');
+    
+    if (sizeInput) {
+        sizeInput.value = appState.headlineSize || 72;
+    }
+    if (sizeValue) {
+        sizeValue.textContent = (appState.headlineSize || 72) + 'px';
+    }
+    if (colorInput) {
+        colorInput.value = appState.headlineColor || '#FFFFFF';
+    }
+    if (colorText) {
+        colorText.value = appState.headlineColor || '#FFFFFF';
+    }
+    
+    // Aplicar estilos iniciais no preview
+    applyHeadlinePreviewStyles();
     if (!appState.font) {
         appState.font = 'Inter';
     }
