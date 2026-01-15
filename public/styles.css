@@ -860,6 +860,69 @@ body {
     cursor: not-allowed;
 }
 
+/* ============================================
+   TERMOS DE USO
+   ============================================ */
+
+.terms-checkbox-container {
+    transition: all 0.3s ease;
+}
+
+.terms-checkbox-container input[type="checkbox"] {
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.terms-checkbox-label {
+    user-select: none;
+}
+
+.terms-checkbox-label a {
+    transition: color 0.2s;
+}
+
+.terms-checkbox-label a:hover {
+    color: var(--primary-dark);
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+#terms-modal .modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#terms-modal .modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+#terms-modal .modal-content::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+
+#terms-modal .modal-content::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+#terms-modal .modal-content::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+}
+
+#terms-modal .terms-content ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+}
+
+#terms-modal .terms-content li {
+    margin-bottom: 0.5rem;
+}
+
 .status-message {
     padding: 1rem 1.25rem;
     border-radius: 0.75rem;
