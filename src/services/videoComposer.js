@@ -191,53 +191,147 @@ export async function composeFinalVideo({
   
   // POSIÇÕES FIXAS E VALIDADAS (1080x1920):
   // - Margem superior: 180px (vídeo principal começa aqui)
-  // - Margem inferior: 130px (vídeo de retenção termina aqui)
+  // - Margem inferior livre: 140px (área inferior deve permanecer sempre livre)
   // - Vídeo principal: y=180px (topo fixo)
-  // - Vídeo de retenção: y=1250px (posição fixa), altura=140px, base a 130px da margem inferior
+  // - Vídeo de retenção: base a 140px acima da margem inferior
+  //   O conteúdo será dimensionado para o maior tamanho possível mantendo proporção
   const TOP_MARGIN = 180; // Margem superior fixa
-  const BOTTOM_MARGIN = 130; // Margem inferior fixa
+  const BOTTOM_FREE_SPACE = 140; // Área inferior livre (base do conteúdo de retenção deve ficar aqui)
   
-  // Vídeo de retenção: posição e altura fixas
-  const RETENTION_HEIGHT = 140; // Altura fixa do vídeo de retenção
-  const RETENTION_Y = 1250; // Posição fixa y=1250px
-  
-  // Calcular altura do vídeo principal
-  // Espaço disponível: até o início do vídeo de retenção
-  // y do vídeo principal = TOP_MARGIN (180px)
-  // y do vídeo de retenção = RETENTION_Y (1250px)
-  // Altura disponível = RETENTION_Y - TOP_MARGIN = 1250 - 180 = 1070px
-  const MAIN_VIDEO_HEIGHT = RETENTION_Y - TOP_MARGIN; // 1250 - 180 = 1070px
-  
-  // Validar posição do vídeo de retenção
-  // Base do vídeo de retenção = RETENTION_Y + RETENTION_HEIGHT = 1250 + 140 = 1390px
-  // Margem inferior esperada = OUTPUT_HEIGHT - base = 1920 - 1390 = 530px
-  // Mas BOTTOM_MARGIN = 130px, então há espaço extra (530px > 130px)
-  // Isso está OK, o vídeo de retenção está mais acima do que a margem mínima
-  const retentionBase = RETENTION_Y + RETENTION_HEIGHT; // 1390px
-  const retentionStartY = RETENTION_Y; // 1250px (usar valor fixo especificado)
-  
-  // VALIDAÇÃO: Garantir que não há overflow
-  if (MAIN_VIDEO_HEIGHT <= 0) {
-    throw new Error(`[COMPOSER] ❌ Altura do vídeo principal inválida: ${MAIN_VIDEO_HEIGHT}px. Ajuste as margens.`);
-  }
-  if (retentionStartY + RETENTION_HEIGHT > OUTPUT_HEIGHT) {
-    throw new Error(`[COMPOSER] ❌ Vídeo de retenção ultrapassa limite: y=${retentionStartY}, altura=${RETENTION_HEIGHT}, total=${retentionStartY + RETENTION_HEIGHT}px > ${OUTPUT_HEIGHT}px`);
-  }
-  
-  console.log(`[COMPOSER] Layout vertical 9:16: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
-  console.log(`[COMPOSER] ✅ Posições fixas: Topo=${TOP_MARGIN}px, Base=${BOTTOM_MARGIN}px`);
-  console.log(`[COMPOSER] ✅ Vídeo principal: ${OUTPUT_WIDTH}x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px - topo fixo)`);
-  console.log(`[COMPOSER] ✅ Vídeo retenção: ${OUTPUT_WIDTH}x${RETENTION_HEIGHT} (y=${retentionStartY}px fixo, base a ${OUTPUT_HEIGHT - retentionBase}px da margem inferior)`);
+  // O cálculo da altura e posição do vídeo de retenção será feito dinamicamente
+  // após obter as dimensões originais do vídeo (dentro do ffprobe)
 
   console.log(`[COMPOSER] Formato: ${format}`);
   console.log(`[COMPOSER] Layout: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
   console.log(`[COMPOSER] Safe zones: top=${safeZones.top}px, bottom=${safeZones.bottom}px`);
   console.log(`[COMPOSER] Background: ${backgroundColor}`);
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     console.log(`[COMPOSER] Iniciando composição final ${format}...`);
     console.log(`[COMPOSER] Layout: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
     console.log(`[COMPOSER] Background: ${backgroundColor}`);
+
+    // Obter dimensões do vídeo de retenção ANTES de construir os filtros
+    let retentionOriginalWidth = 1080;
+    let retentionOriginalHeight = 1920;
+    
+    if (retentionVideoPath) {
+      const isRetentionUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
+      
+      if (!isRetentionUrl && fs.existsSync(retentionVideoPath)) {
+        try {
+          const retentionMetadata = await new Promise((retentionResolve, retentionReject) => {
+            ffmpeg.ffprobe(retentionVideoPath, (retentionErr, retentionMetadata) => {
+              if (retentionErr) {
+                console.warn(`[COMPOSER] ⚠️ Erro ao obter metadados do vídeo de retenção: ${retentionErr.message}, usando dimensões padrão`);
+                return retentionResolve(null);
+              }
+              retentionResolve(retentionMetadata);
+            });
+          });
+          
+          if (retentionMetadata?.streams) {
+            const retentionStream = retentionMetadata.streams.find(s => s.codec_type === 'video');
+            if (retentionStream) {
+              retentionOriginalWidth = retentionStream.width || 1080;
+              retentionOriginalHeight = retentionStream.height || 1920;
+              console.log(`[COMPOSER] ✅ Dimensões originais do vídeo de retenção: ${retentionOriginalWidth}x${retentionOriginalHeight}`);
+            }
+          }
+        } catch (retentionError) {
+          console.warn(`[COMPOSER] ⚠️ Erro ao obter dimensões do vídeo de retenção: ${retentionError.message}, usando dimensões padrão`);
+        }
+      }
+    }
+
+    // Calcular dimensões do vídeo de retenção (se houver) para dimensionamento dinâmico
+    // O conteúdo de retenção deve ser dimensionado para o maior tamanho possível
+    // dentro das margens, mantendo proporção original, sem cortes
+    let retentionHeight = 0;
+    let retentionY = 0;
+    let retentionWidth = 0;
+    
+    if (retentionVideoPath) {
+      // Calcular proporção original
+      const retentionAspectRatio = retentionOriginalWidth / retentionOriginalHeight;
+      
+      // Área disponível considerando que a base deve ficar a 140px da margem inferior
+      // Primeiro, assumir que temos todo o espaço disponível até a margem superior
+      // depois ajustaremos se necessário para não ultrapassar o vídeo principal
+      // Altura máxima teórica = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE
+      // Mas vamos começar assumindo que podemos usar até a margem superior
+      const maxAvailableHeight = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE; // 1920 - 180 - 140 = 1600px
+      const maxAvailableWidth = OUTPUT_WIDTH; // 1080px
+      
+      // Calcular dimensões escaladas mantendo proporção (force_original_aspect_ratio=decrease)
+      // Dimensionar para o maior tamanho possível dentro dos limites
+      // Se a largura for o limitador: largura = 1080px, altura = 1080 / aspectRatio
+      // Se a altura for o limitador: altura = 1600px, largura = 1600 * aspectRatio
+      const widthBasedHeight = maxAvailableWidth / retentionAspectRatio;
+      const heightBasedWidth = maxAvailableHeight * retentionAspectRatio;
+      
+      // Escolher a dimensão que mantém a proporção e cabe no espaço disponível
+      if (widthBasedHeight <= maxAvailableHeight) {
+        // Largura é o limitador - usar largura máxima e calcular altura proporcional
+        retentionWidth = maxAvailableWidth;
+        retentionHeight = Math.round(widthBasedHeight);
+      } else {
+        // Altura é o limitador - usar altura máxima e calcular largura proporcional
+        retentionHeight = maxAvailableHeight;
+        retentionWidth = Math.round(heightBasedWidth);
+      }
+      
+      // Calcular posição Y: base a 140px acima da margem inferior
+      // y = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE
+      retentionY = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE;
+      
+      // Validar que não ultrapassa margem superior
+      if (retentionY < TOP_MARGIN) {
+        // Se ultrapassou, reduzir altura para não ultrapassar
+        const maxAllowedHeight = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE;
+        retentionHeight = maxAllowedHeight;
+        retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
+        
+        // Se a largura calculada ultrapassar, ajustar novamente
+        if (retentionWidth > OUTPUT_WIDTH) {
+          retentionWidth = OUTPUT_WIDTH;
+          retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
+        }
+        
+        retentionY = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE;
+      }
+      
+      if (retentionY < TOP_MARGIN) {
+        return reject(new Error(`[COMPOSER] ❌ Não é possível posicionar vídeo de retenção: altura calculada ${retentionHeight}px ultrapassa margem superior`));
+      }
+      
+      if (retentionHeight <= 0 || retentionWidth <= 0) {
+        return reject(new Error(`[COMPOSER] ❌ Dimensões inválidas do vídeo de retenção: ${retentionWidth}x${retentionHeight}`));
+      }
+      
+      console.log(`[COMPOSER] ✅ Vídeo de retenção: dimensões originais ${retentionOriginalWidth}x${retentionOriginalHeight} (aspect ratio: ${retentionAspectRatio.toFixed(2)})`);
+      console.log(`[COMPOSER] ✅ Vídeo de retenção: dimensões calculadas ${retentionWidth}x${retentionHeight} (mantendo proporção original)`);
+      console.log(`[COMPOSER] ✅ Vídeo de retenção: posição y=${retentionY}px`);
+      console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
+    }
+    
+    // Calcular altura do vídeo principal baseada na posição do vídeo de retenção
+    // Se houver vídeo de retenção, o vídeo principal termina onde o vídeo de retenção começa
+    // Se não houver, o vídeo principal ocupa até a área livre inferior
+    const MAIN_VIDEO_HEIGHT = retentionVideoPath 
+      ? retentionY - TOP_MARGIN 
+      : OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE;
+    
+    if (MAIN_VIDEO_HEIGHT <= 0) {
+      return reject(new Error(`[COMPOSER] ❌ Altura do vídeo principal inválida: ${MAIN_VIDEO_HEIGHT}px. O vídeo de retenção pode estar ocupando muito espaço.`));
+    }
+    
+    console.log(`[COMPOSER] Layout vertical 9:16: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+    console.log(`[COMPOSER] ✅ Margem superior: ${TOP_MARGIN}px, Área livre inferior: ${BOTTOM_FREE_SPACE}px`);
+    console.log(`[COMPOSER] ✅ Vídeo principal: ${OUTPUT_WIDTH}x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px)`);
+    if (retentionVideoPath) {
+      console.log(`[COMPOSER] ✅ Vídeo retenção: ${retentionWidth}x${retentionHeight} (y=${retentionY}px, base a ${BOTTOM_FREE_SPACE}px da margem inferior)`);
+    }
 
     // Obter duração do vídeo principal
     ffmpeg.ffprobe(clipPath, (err, metadata) => {
@@ -278,7 +372,7 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Usando background sólido (fallback)`);
       }
 
-      // 2. Redimensionar vídeo principal para altura fixa (sem padding, sem distorção)
+      // 2. Redimensionar vídeo principal para altura calculada (sem padding, sem distorção)
       // force_original_aspect_ratio=decrease garante que não distorça
       // Vídeo será redimensionado para caber exatamente em MAIN_VIDEO_HEIGHT
       filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
@@ -288,39 +382,30 @@ export async function composeFinalVideo({
       // Vídeo fica acima do background (layer 1)
       // IMPORTANTE: overlay preserva dimensões do primeiro input ([bg_fixed] = 1080x1920)
       // Posição FIXA: x=(W-w)/2 (centralizado horizontalmente), y=180px (margem superior fixa)
-      // VALIDAÇÃO: Posição fixa, sem variação automática, sem scaling dinâmico, sem overflow
       const MAIN_VIDEO_Y = TOP_MARGIN; // 180px fixo
       filterParts.push(`[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed]`);
       currentLabel = '[composed]';
-      console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px (posição fixa, sem variação, sem scaling dinâmico)`);
+      console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
 
-      // 4. Adicionar vídeo de retenção (se houver) - POSIÇÃO FIXA INFERIOR
+      // 4. Adicionar vídeo de retenção (se houver) - POSIÇÃO DINÂMICA
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
       if (retentionVideoPath) {
         // Se background existe, retention é input 2, senão é input 1
         const retentionInputIndex = fixedBackgroundPath ? 2 : 1;
         
-        // Redimensionar vídeo de retenção para altura FIXA (140px) SEM CORTES
+        // Redimensionar vídeo de retenção para dimensões calculadas SEM CORTES
         // force_original_aspect_ratio=decrease garante que a imagem completa seja visível
         // Sem crop para evitar cortes - a imagem completa será exibida
         // Pad será aplicado se necessário para centralizar
-        filterParts.push(`[${retentionInputIndex}:v]scale=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}:force_original_aspect_ratio=decrease[retention_scaled]`);
+        filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease[retention_scaled]`);
         // Aplicar pad para garantir dimensões exatas e centralizar (sem cortes)
         // Pad com cor transparente (0x00000000) para manter background visível nas bordas
-        filterParts.push(`[retention_scaled]pad=${OUTPUT_WIDTH}:${RETENTION_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=0x00000000[retention_padded]`);
-        
-        // POSIÇÃO FIXA: y = 1250px (base a 130px da margem inferior)
-        // y = 1250px (posição fixa especificada)
-        // Altura = 140px (altura fixa especificada)
-        // Base = 1250 + 140 = 1390px
-        // Margem inferior = 1920 - 1390 = 530px (maior que BOTTOM_MARGIN=130px, está OK)
-        // VALIDAÇÃO: Garantir que vídeo está 100% visível, SEM CORTES, IMAGEM COMPLETA
-        const retentionY = RETENTION_Y; // 1250px fixo
+        filterParts.push(`[retention_scaled]pad=${retentionWidth}:${retentionHeight}:(ow-iw)/2:(oh-ih)/2:color=0x00000000[retention_padded]`);
         
         // Validar que não ultrapassa limite inferior do frame
-        if (retentionY + RETENTION_HEIGHT > OUTPUT_HEIGHT) {
-          throw new Error(`[COMPOSER] ❌ Vídeo de retenção ultrapassa limite: y=${retentionY}, altura=${RETENTION_HEIGHT}, total=${retentionY + RETENTION_HEIGHT}px > ${OUTPUT_HEIGHT}px`);
+        if (retentionY + retentionHeight > OUTPUT_HEIGHT) {
+          throw new Error(`[COMPOSER] ❌ Vídeo de retenção ultrapassa limite: y=${retentionY}, altura=${retentionHeight}, total=${retentionY + retentionHeight}px > ${OUTPUT_HEIGHT}px`);
         }
         if (retentionY < 0) {
           throw new Error(`[COMPOSER] ❌ Vídeo de retenção com posição inválida: y=${retentionY}px < 0`);
@@ -328,17 +413,17 @@ export async function composeFinalVideo({
         
         // Centralizar horizontalmente: x = (W-w)/2
         // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
-        // Nenhuma parte pode ultrapassar o limite inferior do frame
+        // Base do conteúdo deve ficar exatamente a 140px acima da margem inferior
         filterParts.push(`${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}[with_retention]`);
         currentLabel = '[with_retention]';
-        console.log(`[COMPOSER] ✅ Vídeo de retenção posicionado em y=${retentionY}px (posição fixa)`);
-        console.log(`[COMPOSER] ✅ Vídeo de retenção 100% visível: ${OUTPUT_WIDTH}x${RETENTION_HEIGHT}px, SEM CORTES, IMAGEM COMPLETA`);
-        console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + RETENTION_HEIGHT}px (${OUTPUT_HEIGHT - (retentionY + RETENTION_HEIGHT)}px da margem inferior)`);
-        console.log(`[COMPOSER] ✅ Nenhuma parte ultrapassa o limite inferior do frame`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção posicionado em y=${retentionY}px`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção 100% visível: ${retentionWidth}x${retentionHeight}px, SEM CORTES, mantendo proporção original`);
+        console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
+        console.log(`[COMPOSER] ✅ Centralizado horizontalmente: x=(W-w)/2`);
         console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
       }
 
-      // 5. Adicionar headline PRIMEIRO (CENTRO VERTICAL do frame)
+      // 5. Adicionar headline (CENTRO VERTICAL do frame)
       // Headline fica acima de tudo (exceto legendas que ficam na parte inferior)
       const hasHeadline = headlineText || (headline && headline.text);
       console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
@@ -441,7 +526,7 @@ export async function composeFinalVideo({
         });
       }
       
-      // 7. GARANTIR resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // 7. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
