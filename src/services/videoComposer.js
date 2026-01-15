@@ -312,7 +312,7 @@ export async function composeFinalVideo({
         // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
         // Centralizar horizontalmente: x=(w-text_w)/2
         
-        // QUEBRA DE TEXTO AUTOMÁTICA: Limitar largura máxima do texto
+        // QUEBRA DE TEXTO AUTOMÁTICA: Usar box com largura limitada
         // Margens laterais de 10% (108px de cada lado) = largura máxima de 864px (80% da largura)
         // Isso garante que o texto não ultrapasse as margens do vídeo 1080x1920
         const maxTextWidth = Math.round(OUTPUT_WIDTH * 0.8); // 80% da largura (864px)
@@ -320,14 +320,18 @@ export async function composeFinalVideo({
         
         const yPos = `(h-text_h)/2`;
         
-        // drawtext com quebra de texto automática:
-        // - text_w: largura máxima do texto (quebra automática)
-        // - x: centralizado com margem (w-text_w)/2 garante centralização mesmo com quebra
+        // drawtext com quebra de texto automática usando box:
+        // - box=1: habilita caixa de texto (necessário para quebra automática)
+        // - boxw: largura máxima da caixa (força quebra de texto)
+        // - boxcolor: cor da caixa (transparente para não aparecer)
+        // - text_align: alinhamento do texto dentro da caixa (centro)
+        // - x: centralizado (w-text_w)/2 garante centralização
         // - fix_bounds=1: garante que o texto não ultrapasse os limites
         // - line_spacing: espaçamento entre linhas (10% do tamanho da fonte)
         const lineSpacing = Math.round(fontSize * 0.1);
         
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:text_w=${maxTextWidth}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // Usar box transparente para forçar quebra de texto
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:text_align=center:x=(w-text_w)/2:y=${yPos}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
