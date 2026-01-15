@@ -351,24 +351,15 @@ export async function composeFinalVideo({
             : '/System/Library/Fonts/Helvetica.ttc';
         }
         
-        // Construir filter de headline com sintaxe validada
-        // IMPORTANTE: boxborderw=0 é necessário quando box=1
-        // Se box não funcionar, usar versão simplificada sem quebra automática
-        try {
-          // Tentar com box primeiro (quebra automática)
-          const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
-          filterParts.push(headlineFilter);
-          console.log(`[COMPOSER] ✅ Headline adicionada com box (quebra automática): "${headlineTextValue}"`);
-        } catch (boxError) {
-          // Fallback: sem box (sem quebra automática, mas funciona)
-          console.warn(`[COMPOSER] ⚠️ Box não disponível, usando drawtext sem box`);
-          const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
-          filterParts.push(headlineFilter);
-          console.log(`[COMPOSER] ✅ Headline adicionada sem box: "${headlineTextValue}"`);
-        }
-        
+        // Construir filter de headline
+        // NOTA: boxw pode não estar disponível em todas as versões do FFmpeg
+        // Usar box=1 com boxborderw para criar caixa, mas sem boxw (quebra manual via \n no texto)
+        // Se box não funcionar, FFmpeg retornará erro e podemos ajustar
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
-        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px (80% de ${OUTPUT_WIDTH}px)`);
+        console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
+        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
         console.log(`[COMPOSER] Fonte usada: ${finalFontPath}`);
       } else {
