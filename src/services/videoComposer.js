@@ -343,6 +343,7 @@ export async function composeFinalVideo({
         // Validar se a fonte existe (em produção pode não existir)
         // Se não existir, usar fonte padrão do sistema
         let finalFontPath = fontPath;
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
         if (fs.existsSync && !fs.existsSync(fontPath)) {
           console.warn(`[COMPOSER] ⚠️ Fonte não encontrada: ${fontPath}, usando fallback`);
           finalFontPath = isProduction 
