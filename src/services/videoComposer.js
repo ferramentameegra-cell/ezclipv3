@@ -338,7 +338,10 @@ export async function composeFinalVideo({
         
         // Obter caminho da fonte e validar
         const fontPath = getFontPath(font);
-        const escapedText = escapeText(headlineTextValue);
+        
+        // Quebrar texto automaticamente baseado na largura máxima
+        const wrappedText = wrapText(headlineTextValue, maxTextWidth, fontSize);
+        const escapedText = escapeText(wrappedText);
         
         // Validar se a fonte existe (em produção pode não existir)
         // Se não existir, usar fonte padrão do sistema
@@ -352,14 +355,14 @@ export async function composeFinalVideo({
         }
         
         // Construir filter de headline
-        // NOTA: boxw pode não estar disponível em todas as versões do FFmpeg
-        // Usar box=1 com boxborderw para criar caixa, mas sem boxw (quebra manual via \n no texto)
-        // Se box não funcionar, FFmpeg retornará erro e podemos ajustar
+        // NOTA: boxw só disponível no FFmpeg 6.x, então usamos quebra manual via wrapText
+        // box=1 com boxcolor transparente para melhor renderização (opcional)
         const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
-        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}`);
+        console.log(`[COMPOSER] Headline quebrada automaticamente: "${wrappedText}"`);
+        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
         console.log(`[COMPOSER] Fonte usada: ${finalFontPath}`);
       } else {
@@ -601,6 +604,51 @@ function escapeText(text) {
     .replace(/\[/g, '\\[')
     .replace(/\]/g, '\\]')
     .replace(/\n/g, '\\n');
+}
+
+/**
+ * Quebrar texto automaticamente baseado na largura máxima
+ * Estima quantos caracteres cabem na largura e adiciona quebras de linha
+ */
+function wrapText(text, maxWidth, fontSize) {
+  if (!text || !maxWidth || !fontSize) return text;
+  
+  // Estimar largura média de um caractere (aproximação: 0.6 * fontSize)
+  const avgCharWidth = fontSize * 0.6;
+  const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
+  
+  if (maxCharsPerLine <= 0 || text.length <= maxCharsPerLine) {
+    return text; // Texto cabe em uma linha
+  }
+  
+  // Quebrar texto em palavras
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    
+    // Se a linha com a nova palavra exceder o limite, quebrar
+    if (testLine.length > maxCharsPerLine) {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Palavra muito longa, quebrar no meio
+        lines.push(word.substring(0, maxCharsPerLine));
+        currentLine = word.substring(maxCharsPerLine);
+      }
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  return lines.join('\\n');
 }
 
 function getFontPath(fontName) {
