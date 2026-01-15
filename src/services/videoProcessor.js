@@ -418,10 +418,11 @@ export const generateVideoSeries = async (job, jobsMap) => {
         }));
 
         // Headline para este clip (se houver)
+        // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
         const clipHeadline = headlineText ? {
           text: headlineText,
           startTime: 0,
-          endTime: Math.min(5, finalCutDuration)
+          endTime: finalCutDuration // Até o final do clip, não apenas 5 segundos
         } : null;
 
         // Aplicar composição final

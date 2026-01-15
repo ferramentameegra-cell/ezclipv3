@@ -305,8 +305,10 @@ export async function composeFinalVideo({
         const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
         const fontSize = headlineStyle.fontSize || 72;
         const color = headlineStyle.color || '#FFFFFF';
-        const startTime = headline?.startTime || 0;
-        const endTime = headline?.endTime || Math.min(5, videoDuration);
+        // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
+        // Removido startTime e endTime - headline permanece visível sempre
+        const startTime = 0;
+        const endTime = videoDuration; // Até o final do vídeo
 
         // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
         // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
@@ -357,7 +359,9 @@ export async function composeFinalVideo({
         // Construir filter de headline
         // NOTA: boxw só disponível no FFmpeg 6.x, então usamos quebra manual via wrapText
         // box=1 com boxcolor transparente para melhor renderização (opcional)
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // HEADLINE SEMPRE VISÍVEL: Removido enable para aparecer em todos os frames
+        // Se necessário, usar enable='gte(t,0)' para garantir do início ao fim
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
