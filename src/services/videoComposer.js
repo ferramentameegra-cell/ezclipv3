@@ -331,7 +331,9 @@ export async function composeFinalVideo({
         const lineSpacing = Math.round(fontSize * 0.1);
         
         // Usar box transparente para forçar quebra de texto
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:text_align=center:x=(w-text_w)/2:y=${yPos}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // text_align usa flags: primeira letra = vertical (T/M/B), segunda = horizontal (L/C/R)
+        // MC = Middle (vertical) Center (horizontal)
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:text_align=MC:x=(w-text_w)/2:y=${yPos}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
