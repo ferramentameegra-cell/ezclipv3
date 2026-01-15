@@ -333,13 +333,18 @@ export async function composeFinalVideo({
         // Usar box transparente para forçar quebra de texto automática
         // box=1 habilita caixa, boxw limita largura (força quebra), boxcolor transparente
         // x=(w-text_w)/2 centraliza horizontalmente, y=(h-text_h)/2 centraliza verticalmente
-        // Removidas opções que podem não estar disponíveis: text_align, line_spacing, fix_bounds
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=0x00000000:boxborderw=0:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        // IMPORTANTE: boxborderw deve ser >= 0, não pode ser omitido quando box=1
+        const boxBorderWidth = 0;
+        const boxColor = '0x00000000'; // Transparente
+        
+        // Construir filter de headline com sintaxe validada
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxw=${maxTextWidth}:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
         console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px (80% de ${OUTPUT_WIDTH}px)`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
+        console.log(`[COMPOSER] Headline filter: ${headlineFilter.substring(0, 200)}...`);
       } else {
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);
       }
