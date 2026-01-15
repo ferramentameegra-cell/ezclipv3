@@ -318,9 +318,25 @@
                                         class="input-large" 
                                         placeholder="Cole aqui o link do YouTube..."
                                         autocomplete="off"
+                                        oninput="checkTermsAcceptance()"
                                     >
                                 </div>
-                                <button class="btn-process-large" id="btn-process-youtube" onclick="handleYouTubeSubmit()">
+                                <!-- Checkbox de Termos de Uso -->
+                                <div class="terms-checkbox-container" id="terms-checkbox-container" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                                    <label class="terms-checkbox-label" style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer; line-height: 1.5;">
+                                        <input 
+                                            type="checkbox" 
+                                            id="terms-checkbox" 
+                                            onchange="handleTermsCheckboxChange()"
+                                            style="margin-top: 0.25rem; min-width: 18px; min-height: 18px; cursor: pointer;"
+                                        >
+                                        <span style="flex: 1; font-size: 0.875rem; color: var(--text-primary);">
+                                            Declaro que sou titular dos direitos autorais ou possuo autorização legal para utilizar este conteúdo do YouTube e concordo com os 
+                                            <a href="#" onclick="event.preventDefault(); openTermsModal();" style="color: var(--primary); text-decoration: underline; font-weight: 500;">Termos de Uso</a>.
+                                        </span>
+                                    </label>
+                                </div>
+                                <button class="btn-process-large" id="btn-process-youtube" onclick="handleYouTubeSubmit()" disabled>
                                     <span id="btn-text-youtube">Processar</span>
                                     <span id="btn-loader-youtube" class="hidden">
                                         <svg class="spinner" width="20" height="20" viewBox="0 0 24 24">
@@ -872,6 +888,89 @@
             <div class="modal-actions">
                 <button class="btn-modal primary" onclick="downloadSeries()">Download ZIP</button>
                 <button class="btn-modal secondary" onclick="openTikTokStudio()">Abrir TikTok Studio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms of Use Modal -->
+    <div id="terms-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Termos de Uso – Conteúdos de Terceiros (YouTube)</h2>
+                <button onclick="closeTermsModal()" style="background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--text-secondary);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="terms-content" style="line-height: 1.8; color: var(--text-primary);">
+                <p style="margin-bottom: 1.5rem; font-size: 0.95rem;">
+                    Ao utilizar a plataforma EZClip, o usuário declara, reconhece e concorda expressamente que:
+                </p>
+                
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">1. Responsabilidade sobre o conteúdo</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        Todo e qualquer conteúdo fornecido pelo usuário por meio de links do YouTube ou upload de arquivos é de inteira responsabilidade do próprio usuário.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">2. Titularidade e autorização</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        O usuário declara que:
+                    </p>
+                    <ul style="margin-left: 1.5rem; margin-bottom: 1rem; font-size: 0.95rem;">
+                        <li style="margin-bottom: 0.5rem;">É o titular dos direitos autorais do conteúdo informado, ou</li>
+                        <li>Possui autorização legal, licença ou permissão expressa do titular dos direitos para utilizar, editar, reproduzir, adaptar e gerar cortes a partir desse conteúdo.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">3. Isenção de responsabilidade da plataforma</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        A EZClip não detém, não reivindica e não assume qualquer direito autoral sobre os conteúdos processados na plataforma.
+                    </p>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        A EZClip não se responsabiliza por:
+                    </p>
+                    <ul style="margin-left: 1.5rem; margin-bottom: 1rem; font-size: 0.95rem;">
+                        <li style="margin-bottom: 0.5rem;">Violações de direitos autorais;</li>
+                        <li style="margin-bottom: 0.5rem;">Uso indevido de imagem, voz ou propriedade intelectual de terceiros;</li>
+                        <li>Reivindicações, strikes, bloqueios ou penalizações aplicadas por plataformas como YouTube, Instagram, TikTok ou similares.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">4. Natureza da plataforma</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        A EZClip atua exclusivamente como uma ferramenta tecnológica automatizada de edição, operando sob instruções diretas do usuário, sem curadoria, seleção ou interferência editorial no conteúdo processado.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">5. Indenização</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        O usuário concorda em indenizar, defender e isentar a EZClip, seus sócios, colaboradores e parceiros de quaisquer reclamações, danos, perdas, custos ou despesas, incluindo honorários advocatícios, decorrentes do uso indevido de conteúdos protegidos por direitos autorais.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">6. Conformidade com os Termos do YouTube</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        O usuário declara estar ciente e em conformidade com os Termos de Serviço do YouTube, assumindo total responsabilidade pelo uso de links e conteúdos provenientes da plataforma.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary);">7. Aceitação dos termos</h3>
+                    <p style="margin-bottom: 1rem; font-size: 0.95rem;">
+                        Ao prosseguir com o uso da plataforma, o usuário declara que leu, compreendeu e concorda integralmente com estes Termos de Uso.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                <button class="btn-modal primary" onclick="closeTermsModal()" style="width: 100%;">Fechar</button>
             </div>
         </div>
     </div>

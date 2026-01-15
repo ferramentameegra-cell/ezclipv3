@@ -18,6 +18,7 @@ import generateRoutes from "./routes/generate.js";
 import nichesRoutes from "./routes/niches.js";
 import retentionRoutes from "./routes/retention.js";
 import captionsRoutes from "./routes/captions.js";
+import termsRoutes from "./routes/terms.js";
 
 // Configurar ffmpeg antes de importar workers
 import { configureFfmpeg } from "./utils/ffmpegDetector.js";
@@ -69,6 +70,7 @@ app.use("/api/generate", generateRoutes);
 app.use("/api/niches", nichesRoutes);
 app.use("/api/retention", retentionRoutes);
 app.use("/api/captions", captionsRoutes);
+app.use("/api/terms", termsRoutes);
 
 // =====================
 // FRONTEND ESTÁTICO

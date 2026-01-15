@@ -453,9 +453,15 @@ function setupYouTubeInput() {
     let previewTimeout = null;
     input.addEventListener('input', () => {
         const url = input.value.trim();
+        
+        // Verificar termos de uso quando URL válida
+        checkTermsAcceptance();
+        
         if (btn) {
             if (isValidYouTubeUrl(url)) {
-                btn.disabled = false;
+                // Botão só habilitado se termos aceitos
+                const checkbox = document.getElementById('terms-checkbox');
+                btn.disabled = !checkbox || !checkbox.checked;
                 
                 // Buscar preview após 1 segundo de inatividade
                 clearTimeout(previewTimeout);
@@ -469,6 +475,9 @@ function setupYouTubeInput() {
             }
         }
     });
+    
+    // Inicializar estado do botão
+    updateButtonState();
 }
 
 function isValidYouTubeUrl(url) {
@@ -779,6 +788,7 @@ async function handleYouTubeSubmit() {
     const btnText = document.getElementById('btn-text-youtube');
     const btnLoader = document.getElementById('btn-loader-youtube');
     const statusMsg = document.getElementById('youtube-status');
+    const checkbox = document.getElementById('terms-checkbox');
     
     if (!url) {
         showStatus('Por favor, insira uma URL do YouTube', 'error');
@@ -787,6 +797,21 @@ async function handleYouTubeSubmit() {
     
     if (!isValidYouTubeUrl(url)) {
         showStatus('URL do YouTube inválida. Use formato: https://youtube.com/watch?v=VIDEO_ID', 'error');
+        return;
+    }
+    
+    // VERIFICAÇÃO OBRIGATÓRIA: Termos de Uso devem estar aceitos
+    if (!checkbox || !checkbox.checked) {
+        showStatus('Você deve aceitar os Termos de Uso para continuar', 'error');
+        const checkboxContainer = document.getElementById('terms-checkbox-container');
+        if (checkboxContainer) {
+            checkboxContainer.style.border = '2px solid var(--error, #ef4444)';
+            checkboxContainer.style.animation = 'shake 0.3s';
+            setTimeout(() => {
+                checkboxContainer.style.border = '1px solid var(--border)';
+                checkboxContainer.style.animation = '';
+            }, 300);
+        }
         return;
     }
     
