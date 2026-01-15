@@ -58,6 +58,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
       retentionVideoId = 'random',
       headlineStyle = 'bold',
       headlineText = null,
+      headlineSize = 72,
+      headlineColor = '#FFFFFF',
       font = 'Inter',
       backgroundColor = '#000000',
       // CONFIGURAÇÕES DE VÍDEO
@@ -381,8 +383,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // Estilo da headline
     const headlineStyleObj = {
       font: font || 'Inter',
-      fontSize: 72,
-      color: '#FFFFFF',
+      fontSize: headlineSize || 72,
+      color: headlineColor || '#FFFFFF',
       fontStyle: headlineStyle || 'bold'
     };
 

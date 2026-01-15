@@ -674,13 +674,54 @@
                             <div class="preview-controls">
                                 <div class="control-field">
                                     <label>Texto da Headline</label>
-                                    <input 
-                                        type="text" 
+                                    <textarea 
                                         id="headline-text-input" 
                                         class="input-field" 
                                         placeholder="Digite o texto da headline..."
                                         oninput="updateHeadlineText()"
-                                    >
+                                        rows="3"
+                                        style="resize: vertical; min-height: 80px;"
+                                    ></textarea>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                        O texto será quebrado automaticamente para caber na largura do vídeo
+                                    </p>
+                                </div>
+                                <div class="control-field">
+                                    <label>Tamanho da Fonte</label>
+                                    <div style="display: flex; gap: 1rem; align-items: center;">
+                                        <input 
+                                            type="range" 
+                                            id="headline-size-input" 
+                                            min="24" 
+                                            max="120" 
+                                            value="72" 
+                                            class="input-field" 
+                                            style="flex: 1;"
+                                            oninput="updateHeadlineSize(); updatePreviewStyle();"
+                                        >
+                                        <span id="headline-size-value" style="min-width: 50px; font-weight: 600; text-align: right;">72px</span>
+                                    </div>
+                                </div>
+                                <div class="control-field">
+                                    <label>Cor da Fonte</label>
+                                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                        <input 
+                                            type="color" 
+                                            id="headline-color-input" 
+                                            value="#FFFFFF" 
+                                            style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;"
+                                            onchange="updateHeadlineColor(); updatePreviewStyle();"
+                                        >
+                                        <input 
+                                            type="text" 
+                                            id="headline-color-text" 
+                                            value="#FFFFFF" 
+                                            class="input-field" 
+                                            style="flex: 1; font-family: monospace;"
+                                            placeholder="#FFFFFF"
+                                            onchange="updateHeadlineColorFromText(); updatePreviewStyle();"
+                                        >
+                                    </div>
                                 </div>
                                 <div class="control-field">
                                     <label>Fonte</label>
@@ -688,6 +729,7 @@
                                         <option value="Inter">Inter</option>
                                         <option value="Roboto">Roboto</option>
                                         <option value="Montserrat">Montserrat</option>
+                                        <option value="Arial">Arial</option>
                                     </select>
                                 </div>
                                 <div class="control-field">

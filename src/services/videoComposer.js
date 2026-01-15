@@ -311,12 +311,27 @@ export async function composeFinalVideo({
         // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
         // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
         // Centralizar horizontalmente: x=(w-text_w)/2
+        
+        // QUEBRA DE TEXTO AUTOMÁTICA: Limitar largura máxima do texto
+        // Margens laterais de 10% (108px de cada lado) = largura máxima de 864px (80% da largura)
+        // Isso garante que o texto não ultrapasse as margens do vídeo 1080x1920
+        const maxTextWidth = Math.round(OUTPUT_WIDTH * 0.8); // 80% da largura (864px)
+        const marginX = Math.round((OUTPUT_WIDTH - maxTextWidth) / 2); // Margem lateral (108px)
+        
         const yPos = `(h-text_h)/2`;
-
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${startTime},${endTime})'[with_headline]`;
+        
+        // drawtext com quebra de texto automática:
+        // - text_w: largura máxima do texto (quebra automática)
+        // - x: centralizado com margem (w-text_w)/2 garante centralização mesmo com quebra
+        // - fix_bounds=1: garante que o texto não ultrapasse os limites
+        // - line_spacing: espaçamento entre linhas (10% do tamanho da fonte)
+        const lineSpacing = Math.round(fontSize * 0.1);
+        
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(headlineTextValue)}':fontsize=${fontSize}:fontcolor=${color}:x=(w-text_w)/2:y=${yPos}:text_w=${maxTextWidth}:fix_bounds=1:line_spacing=${lineSpacing}:enable='between(t,${startTime},${endTime})'[with_headline]`;
         filterParts.push(headlineFilter);
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
+        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px (80% de ${OUTPUT_WIDTH}px)`);
         console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
       } else {
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);

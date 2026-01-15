@@ -12,6 +12,8 @@ const appState = {
     nicheId: null,
     retentionVideoId: 'random',
     headlineStyle: 'bold',
+    headlineSize: 72,
+    headlineColor: '#FFFFFF',
     font: 'Inter',
     backgroundColor: '#000000',
     jobId: null,
@@ -2247,8 +2249,70 @@ function updateHeadlineText() {
     appState.headlineText = text;
     headline.textContent = text;
     
+    // Aplicar quebra de linha automática no preview (simulação)
+    applyHeadlinePreviewStyles();
+    
     // Atualizar resumo
     updateGenerateSummary();
+}
+
+function updateHeadlineSize() {
+    const sizeInput = document.getElementById('headline-size-input');
+    const sizeValue = document.getElementById('headline-size-value');
+    
+    if (!sizeInput || !sizeValue) return;
+    
+    const size = parseInt(sizeInput.value) || 72;
+    appState.headlineSize = size;
+    sizeValue.textContent = size + 'px';
+    
+    applyHeadlinePreviewStyles();
+}
+
+function updateHeadlineColor() {
+    const colorInput = document.getElementById('headline-color-input');
+    const colorText = document.getElementById('headline-color-text');
+    
+    if (!colorInput || !colorText) return;
+    
+    const color = colorInput.value;
+    appState.headlineColor = color;
+    colorText.value = color;
+    
+    applyHeadlinePreviewStyles();
+}
+
+function updateHeadlineColorFromText() {
+    const colorText = document.getElementById('headline-color-text');
+    const colorInput = document.getElementById('headline-color-input');
+    
+    if (!colorText || !colorInput) return;
+    
+    const color = colorText.value.trim();
+    // Validar formato hex
+    if (/^#[0-9A-F]{6}$/i.test(color)) {
+        appState.headlineColor = color;
+        colorInput.value = color;
+        applyHeadlinePreviewStyles();
+    } else {
+        // Se inválido, restaurar valor anterior
+        colorText.value = appState.headlineColor || '#FFFFFF';
+    }
+}
+
+function applyHeadlinePreviewStyles() {
+    const headline = document.getElementById('preview-headline');
+    if (!headline) return;
+    
+    // Aplicar estilos do preview
+    headline.style.fontSize = (appState.headlineSize || 72) + 'px';
+    headline.style.color = appState.headlineColor || '#FFFFFF';
+    
+    // Aplicar quebra de linha automática no preview (80% da largura)
+    headline.style.maxWidth = '80%';
+    headline.style.wordWrap = 'break-word';
+    headline.style.textAlign = 'center';
+    headline.style.lineHeight = '1.2';
 }
 
 /**
@@ -2497,17 +2561,24 @@ function updatePreviewStyle() {
     appState.font = font;
     appState.headlineStyle = style;
     
+    // Aplicar todos os estilos no preview
+    applyHeadlinePreviewStyles();
+    
+    // Aplicar fonte
     headline.style.fontFamily = font;
     
+    // Aplicar estilo (bold, impact, modern)
     if (style === 'bold') {
-        headline.style.fontWeight = '800';
+        headline.style.fontWeight = '700';
         headline.style.textTransform = 'none';
     } else if (style === 'impact') {
         headline.style.fontWeight = '900';
         headline.style.textTransform = 'uppercase';
-    } else {
+        headline.style.letterSpacing = '0.05em';
+    } else if (style === 'modern') {
         headline.style.fontWeight = '600';
         headline.style.textTransform = 'none';
+        headline.style.letterSpacing = '0.02em';
     }
     
     // Atualizar resumo
@@ -2546,6 +2617,8 @@ async function generateSeries() {
             numberOfCuts: appState.numberOfCuts || 1,
             headlineStyle: appState.headlineStyle || 'bold',
             headlineText: appState.headlineText || 'Headline',
+            headlineSize: appState.headlineSize || 72,
+            headlineColor: appState.headlineColor || '#FFFFFF',
             font: appState.font || 'Inter',
             trimStart: appState.trimStart || 0,
             trimEnd: appState.trimEnd || appState.videoDuration || null,
