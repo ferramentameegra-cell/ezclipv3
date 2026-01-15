@@ -394,13 +394,12 @@ export async function composeFinalVideo({
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
       // O currentLabel já tem 1080x1920 (do background via overlay), mas garantimos com scale+pad
-      // FORÇAR escala exata sem preservar aspect ratio para garantir 1080x1920
-      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}[final_scaled]`);
-      // Pad para garantir dimensões exatas (mesmo que já esteja correto)
+      // Usar scale com force_original_aspect_ratio=decrease para não distorcer, depois pad para garantir dimensões
+      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
+      // Pad para garantir dimensões exatas 1080x1920 (mesmo que já esteja correto)
       const padColor = backgroundColor.replace('#', '');
       filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
       console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
-      console.log(`[COMPOSER] Scale sem force_original_aspect_ratio para garantir dimensões exatas`);
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
       // O background já tem as dimensões corretas, então o overlay deve manter isso
