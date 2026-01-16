@@ -119,6 +119,8 @@ function getSafeZones(format, platforms, safeMarginsPercent) {
  * @param {string} options.retentionVideoId - ID do vídeo de retenção ('random', 'none' ou ID específico)
  * @param {string} options.nicheId - ID do nicho (para randomizar retenção)
  * @param {string} options.backgroundColor - Cor de fundo (hex, ex: '#000000')
+ * @param {number} options.clipNumber - Número do clipe atual (1-based)
+ * @param {number} options.totalClips - Total de clipes gerados
  * @param {Function} options.onProgress - Callback de progresso (percent)
  * @returns {Promise<string>} - Caminho do arquivo final
  */
@@ -136,6 +138,8 @@ export async function composeFinalVideo({
   format = '9:16', // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical
   platforms = { tiktok: true, reels: true, shorts: true },
   safeMargins = 10,
+  clipNumber = null,
+  totalClips = null,
   onProgress = null
 }) {
   // Validações
@@ -504,7 +508,51 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);
       }
 
-      // 6. Adicionar legendas (burn-in) - PARTE INFERIOR
+      // 6. Adicionar numeração "Parte X/Y" - CANTO SUPERIOR DIREITO
+      // Numeração obrigatória e sempre visível durante todo o vídeo
+      if (clipNumber !== null && clipNumber !== undefined && totalClips !== null && totalClips !== undefined) {
+        const partText = `Parte ${clipNumber}/${totalClips}`;
+        const partFontSize = 48; // Tamanho legível mas não intrusivo
+        const partColor = '#FFFFFF'; // Branco para boa visibilidade
+        const partStrokeColor = '#000000'; // Contorno preto para legibilidade em fundos claros
+        const partStrokeWidth = 3; // Contorno espesso para garantir legibilidade
+        
+        // Posição: canto superior direito, respeitando margens de segurança de 80px
+        // x = (w - text_w - 80) (80px da margem direita)
+        // y = 80 (80px da margem superior)
+        const PART_MARGIN = 80; // Margem de segurança conforme especificação
+        const partX = `(w-text_w-${PART_MARGIN})`; // Parênteses para garantir avaliação correta da expressão
+        const partY = PART_MARGIN;
+        
+        // Obter caminho da fonte (usar fonte da headline ou fallback)
+        const partFont = headlineStyle.font || headlineStyle.fontFamily || 'Inter';
+        const partFontPath = getFontPath(partFont);
+        
+        // Validar se a fonte existe
+        let finalPartFontPath = partFontPath;
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+        if (fs.existsSync && !fs.existsSync(partFontPath)) {
+          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada para numeração: ${partFontPath}, usando fallback`);
+          finalPartFontPath = isProduction 
+            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+            : '/System/Library/Fonts/Helvetica.ttc';
+        }
+        
+        // Numeração SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
+        // Sem enable= para aparecer em todos os frames, ou usar enable='gte(t,0)' para garantir
+        const partTextEscaped = escapeText(partText);
+        const partFilter = `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number]`;
+        filterParts.push(partFilter);
+        currentLabel = '[with_part_number]';
+        console.log(`[COMPOSER] ✅ Numeração adicionada: "${partText}"`);
+        console.log(`[COMPOSER] Numeração posicionada no canto superior direito (x=${partX}, y=${partY}px)`);
+        console.log(`[COMPOSER] Numeração sempre visível durante todo o vídeo (sem fade-out)`);
+        console.log(`[COMPOSER] Fonte usada para numeração: ${finalPartFontPath}`);
+      } else {
+        console.log(`[COMPOSER] ⚠️ Numeração não será adicionada (clipNumber=${clipNumber}, totalClips=${totalClips})`);
+      }
+
+      // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
       if (captions && captions.length > 0) {
         console.log(`[COMPOSER] ✅ Adicionando ${captions.length} legendas ao vídeo`);
         console.log(`[COMPOSER] Estilo de legendas: font=${captionStyle.font || 'Arial'}, fontSize=${captionStyle.fontSize || 48}, color=${captionStyle.color || '#FFFFFF'}`);
@@ -557,7 +605,7 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ⚠️ Nenhuma legenda para adicionar (captions=${captions?.length || 0})`);
       }
       
-      // 7. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // 8. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual

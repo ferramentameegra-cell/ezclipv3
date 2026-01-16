@@ -493,6 +493,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
           format: '9:16', // FORÇAR formato vertical 9:16 (1080x1920)
           platforms: { tiktok: true, reels: true, shorts: true },
           safeMargins: 10,
+          clipNumber: clipIndex, // Número do clipe atual (1-based)
+          totalClips: finalClips.length, // Total de clipes gerados
           onProgress: async (percent) => {
             // Progresso individual do clip
             // Garantir que percent está entre 0 e 100
