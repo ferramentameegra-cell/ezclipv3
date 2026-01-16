@@ -2788,145 +2788,185 @@ async function generateSeries() {
 async function monitorProgress(jobId) {
     const progressFill = document.getElementById('loading-progress');
     const progressText = document.getElementById('loading-percent');
+    const progressMessage = document.getElementById('loading-message');
     
-    let lastProgress = 0;
-    let consecutiveErrors = 0;
-    let lastSuccessfulCheck = Date.now();
-    const maxErrors = 10; // Aumentado de 5 para 10
-    const maxTimeWithoutSuccess = 300000; // 5 minutos sem sucesso antes de alertar
-    const pollInterval = 2000; // Aumentado de 1s para 2s para reduzir carga
+    console.log(`[GENERATE] Iniciando monitoramento via SSE do job ${jobId}`);
     
-    console.log(`[GENERATE] Iniciando monitoramento do job ${jobId}`);
+    // Fallback para polling se SSE não estiver disponível
+    let useFallback = false;
+    let fallbackInterval = null;
     
-    const interval = setInterval(async () => {
-        try {
-            const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
-            
-            // Reset contador de erros em caso de sucesso
-            consecutiveErrors = 0;
-            lastSuccessfulCheck = Date.now();
-            
-            // Backend retorna { jobId, status, progress, failedReason }
-            const progress = data.progress || 0;
-            const status = data.status || 'processing';
-            
-            // Log para debug (mais detalhado)
-            if (progress !== lastProgress || status !== 'processing') {
-                console.log(`[GENERATE] Progresso: ${lastProgress}% -> ${progress}% | Status: ${status} | JobId: ${jobId}`);
-                if (data.clipsCount) console.log(`[GENERATE] Clipes: ${data.clipsCount}`);
-                if (data.seriesId) console.log(`[GENERATE] SeriesId: ${data.seriesId}`);
-                lastProgress = progress;
-            }
-            
-            // Atualizar UI
-            if (progressFill) {
-                progressFill.style.width = `${progress}%`;
-                progressFill.style.transition = 'width 0.3s ease';
-            }
-            if (progressText) {
-                progressText.textContent = `${progress}%`;
-            }
-            
-            // Verificar se está completo (progresso 100% ou status completed/finished)
-            // IMPORTANTE: Verificar múltiplas condições para garantir detecção
-            const isCompleted = status === 'completed' || 
-                               status === 'finished' || 
-                               progress >= 100 ||
-                               (progress >= 99 && status !== 'failed' && status !== 'error'); // Tolerância para 99%
-            
-            if (isCompleted) {
-                clearInterval(interval);
-                console.log('[GENERATE] ✅ Geração concluída! Status:', status, 'Progresso:', progress);
-                console.log('[GENERATE] Dados recebidos:', JSON.stringify(data));
+    // Tentar usar Server-Sent Events (SSE) para progresso em tempo real
+    try {
+        const eventSource = new EventSource(`${API_BASE}/api/generate/progress/${jobId}`);
+        
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log(`[GENERATE-SSE] Evento recebido:`, data);
                 
-                // Atualizar UI para 100% antes de mostrar modal
-                if (progressFill) progressFill.style.width = '100%';
-                if (progressText) progressText.textContent = '100%';
+                const {
+                    status,
+                    progress = 0,
+                    totalClips = 0,
+                    currentClip = 0,
+                    message = '',
+                    seriesId,
+                    error
+                } = data;
                 
-                // Atualizar appState com dados do job (priorizar dados do backend)
-                if (data.clipsCount) {
-                    appState.numberOfCuts = data.clipsCount;
-                    console.log(`[GENERATE] Atualizado numberOfCuts: ${data.clipsCount}`);
-                }
-                if (data.seriesId) {
-                    appState.seriesId = data.seriesId;
-                    console.log(`[GENERATE] Atualizado seriesId: ${data.seriesId}`);
+                // Atualizar progresso percentual
+                const progressPercent = Math.min(100, Math.max(0, progress));
+                
+                if (progressFill) {
+                    progressFill.style.width = `${progressPercent}%`;
+                    progressFill.style.transition = 'width 0.3s ease';
                 }
                 
-                // Se não temos seriesId ainda, fazer uma última verificação
-                if (!appState.seriesId && !data.seriesId) {
-                    console.warn('[GENERATE] SeriesId não encontrado, fazendo verificação final...');
-                    setTimeout(async () => {
-                        try {
-                            const { data: finalData } = await apiClient.get(`/api/generate/status/${jobId}`);
-                            if (finalData.seriesId) {
-                                appState.seriesId = finalData.seriesId;
-                                console.log(`[GENERATE] SeriesId obtido na verificação final: ${finalData.seriesId}`);
-                            }
-                            showSuccessModal(finalData || data);
-                        } catch (e) {
-                            console.error('[GENERATE] Erro na verificação final:', e);
-                            showSuccessModal(data);
-                        }
-                    }, 1000);
-                } else {
+                if (progressText) {
+                    progressText.textContent = `${progressPercent}%`;
+                }
+                
+                // Atualizar mensagem de status
+                if (progressMessage) {
+                    if (totalClips > 0 && currentClip > 0) {
+                        // Mensagem detalhada: "Gerando clipe X de Y"
+                        progressMessage.textContent = message || `Gerando clipe ${currentClip} de ${totalClips}`;
+                    } else if (message) {
+                        progressMessage.textContent = message;
+                    } else {
+                        progressMessage.textContent = 'Processando...';
+                    }
+                }
+                
+                // Atualizar appState
+                if (seriesId) {
+                    appState.seriesId = seriesId;
+                }
+                if (totalClips > 0) {
+                    appState.numberOfCuts = totalClips;
+                }
+                
+                // Verificar se concluído
+                if (status === 'completed' || (status === 'processing' && progressPercent >= 100)) {
+                    eventSource.close();
+                    console.log('[GENERATE] ✅ Geração concluída via SSE!');
+                    
+                    if (progressFill) progressFill.style.width = '100%';
+                    if (progressText) progressText.textContent = '100%';
+                    
                     // Aguardar um pouco para garantir que o backend finalizou tudo
                     setTimeout(() => {
-                        showSuccessModal(data);
+                        showSuccessModal({
+                            seriesId: seriesId || appState.seriesId,
+                            clipsCount: totalClips || appState.numberOfCuts,
+                            status: 'completed',
+                            progress: 100
+                        });
                     }, 500);
-                }
-            } else if (status === 'failed' || status === 'error') {
-                clearInterval(interval);
-                console.error('[GENERATE] ❌ Erro na geração:', data.failedReason || data.error);
-                alert('Erro ao gerar série: ' + (data.failedReason || data.error || 'Erro desconhecido'));
-                const loadingOverlay = document.getElementById('loading-overlay');
-                if (loadingOverlay) loadingOverlay.classList.add('hidden');
-            }
-        } catch (error) {
-            consecutiveErrors++;
-            const errorMsg = error.message || error.toString();
-            console.error(`[GENERATE] Erro ao verificar progresso (${consecutiveErrors}/${maxErrors}):`, errorMsg);
-            
-            // Se muitos erros consecutivos OU muito tempo sem sucesso, tentar verificar uma última vez
-            const timeSinceLastSuccess = Date.now() - lastSuccessfulCheck;
-            
-            if (consecutiveErrors >= maxErrors || timeSinceLastSuccess >= maxTimeWithoutSuccess) {
-                // Tentar uma última verificação antes de desistir
-                console.log('[GENERATE] Tentando verificação final antes de desistir...');
-                try {
-                    const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
-                    const progress = data.progress || 0;
-                    const status = data.status || 'processing';
-                    
-                    // Se estiver completo, mostrar sucesso
-                    if (status === 'completed' || status === 'finished' || progress >= 100) {
-                        clearInterval(interval);
-                        console.log('[GENERATE] ✅ Geração concluída na verificação final!');
-                        if (data.seriesId) appState.seriesId = data.seriesId;
-                        if (data.clipsCount) appState.numberOfCuts = data.clipsCount;
-                        showSuccessModal(data);
-                        return;
-                    }
-                } catch (finalError) {
-                    console.error('[GENERATE] Erro na verificação final:', finalError);
-                }
-                
-                // Se chegou aqui, realmente falhou
-                clearInterval(interval);
-                console.error('[GENERATE] Muitos erros consecutivos ou timeout, parando monitoramento');
-                
-                // Verificar se temos seriesId salvo (pode ter sido gerado mesmo com erros de polling)
-                if (appState.seriesId) {
-                    console.log('[GENERATE] SeriesId encontrado no appState, tentando mostrar modal...');
-                    showSuccessModal({ seriesId: appState.seriesId, clipsCount: appState.numberOfCuts });
-                } else {
-                    alert('Erro ao verificar progresso da geração. Verifique os logs do backend ou recarregue a página.');
+                } else if (status === 'error') {
+                    eventSource.close();
+                    console.error('[GENERATE] ❌ Erro na geração via SSE:', error || message);
+                    alert('Erro ao gerar série: ' + (error || message || 'Erro desconhecido'));
                     const loadingOverlay = document.getElementById('loading-overlay');
                     if (loadingOverlay) loadingOverlay.classList.add('hidden');
                 }
+            } catch (parseError) {
+                console.error('[GENERATE-SSE] Erro ao processar evento:', parseError, event.data);
             }
-        }
-    }, pollInterval);
+        };
+        
+        eventSource.onerror = (error) => {
+            console.error('[GENERATE-SSE] Erro na conexão SSE:', error);
+            
+            // Se conexão foi fechada pelo servidor (provavelmente erro), usar fallback
+            if (eventSource.readyState === EventSource.CLOSED) {
+                eventSource.close();
+                console.log('[GENERATE] Conexão SSE fechada, usando fallback para polling');
+                useFallback = true;
+                startFallbackPolling(jobId);
+            }
+        };
+        
+        // Timeout de segurança: se não receber eventos em 60 segundos, usar fallback
+        let sseTimeout = setTimeout(() => {
+            if (eventSource.readyState === EventSource.OPEN) {
+                console.warn('[GENERATE] SSE sem eventos por 60s, usando fallback');
+                eventSource.close();
+                useFallback = true;
+                startFallbackPolling(jobId);
+            }
+        }, 60000);
+        
+        // Guardar handler original e limpar timeout no primeiro evento
+        const originalOnMessage = eventSource.onmessage;
+        eventSource.onmessage = (event) => {
+            clearTimeout(sseTimeout);
+            if (originalOnMessage) {
+                originalOnMessage.call(eventSource, event);
+            }
+        };
+        
+    } catch (sseError) {
+        console.warn('[GENERATE] SSE não disponível, usando fallback para polling:', sseError);
+        useFallback = true;
+        startFallbackPolling(jobId);
+    }
+    
+    // Função de fallback (polling)
+    function startFallbackPolling(jobId) {
+        if (fallbackInterval) return; // Já está rodando
+        
+        let lastProgress = 0;
+        const pollInterval = 2000;
+        
+        fallbackInterval = setInterval(async () => {
+            try {
+                const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
+                
+                const progress = data.progress || 0;
+                const status = data.status || 'processing';
+                
+                if (progress !== lastProgress || status !== 'processing') {
+                    console.log(`[GENERATE-POLL] Progresso: ${lastProgress}% -> ${progress}% | Status: ${status}`);
+                    lastProgress = progress;
+                }
+                
+                // Atualizar UI
+                if (progressFill) {
+                    progressFill.style.width = `${progress}%`;
+                    progressFill.style.transition = 'width 0.3s ease';
+                }
+                if (progressText) {
+                    progressText.textContent = `${progress}%`;
+                }
+                
+                // Mensagem genérica quando usando fallback
+                if (progressMessage && !progressMessage.textContent) {
+                    progressMessage.textContent = 'Processando...';
+                }
+                
+                // Verificar conclusão
+                if (status === 'completed' || status === 'finished' || progress >= 100) {
+                    clearInterval(fallbackInterval);
+                    
+                    if (data.seriesId) appState.seriesId = data.seriesId;
+                    if (data.clipsCount) appState.numberOfCuts = data.clipsCount;
+                    
+                    setTimeout(() => {
+                        showSuccessModal(data);
+                    }, 500);
+                } else if (status === 'failed' || status === 'error') {
+                    clearInterval(fallbackInterval);
+                    alert('Erro ao gerar série: ' + (data.failedReason || data.error || 'Erro desconhecido'));
+                    const loadingOverlay = document.getElementById('loading-overlay');
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('[GENERATE-POLL] Erro ao verificar progresso:', error);
+            }
+        }, pollInterval);
+    }
 }
 
 function showSuccessModal(job) {

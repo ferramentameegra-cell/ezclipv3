@@ -5,6 +5,7 @@ import { splitVideoIntoClips, trimVideo } from './videoTrimmer.js';
 import { getVideoState, VIDEO_STATES } from './videoStateManager.js';
 import { validateVideoWithFfprobe } from './videoValidator.js';
 import { composeFinalVideo } from './videoComposer.js';
+import { updateProgressEvent } from '../controllers/progressEvents.js';
 
 // ===============================
 // CONFIGURAÇÃO RAILWAY (OBRIGATÓRIA)
@@ -436,12 +437,30 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // finalClips já foi declarado acima (linha 324)
     const compositionProgress = 60; // Começar em 60% (após split)
     const compositionRange = 40; // 40% para composição
+    
+    // Inicializar evento de progresso
+    updateProgressEvent(job.id, {
+      status: 'processing',
+      totalClips: finalClips.length,
+      currentClip: 0,
+      progress: compositionProgress,
+      message: `Iniciando composição de ${finalClips.length} clipes...`
+    });
 
     for (let i = 0; i < finalClips.length; i++) {
       const clipPath = finalClips[i];
       const clipIndex = i + 1;
 
       console.log(`[PROCESSING] Compondo clip ${clipIndex}/${finalClips.length}...`);
+      
+      // Emitir evento: iniciando clipe
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        totalClips: finalClips.length,
+        currentClip: clipIndex,
+        progress: Math.round(compositionProgress + (compositionRange * (i / finalClips.length))),
+        message: `Gerando clipe ${clipIndex} de ${finalClips.length}`
+      });
 
       // Criar caminho para clip final composto
       const finalClipPath = path.join(
@@ -525,6 +544,16 @@ export const generateVideoSeries = async (job, jobsMap) => {
         }
 
         console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
+        
+        // Emitir evento: clipe concluído
+        const clipProgress = Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length)));
+        updateProgressEvent(job.id, {
+          status: 'processing',
+          totalClips: finalClips.length,
+          currentClip: clipIndex,
+          progress: clipProgress,
+          message: `Clipe ${clipIndex} de ${finalClips.length} concluído`
+        });
 
       } catch (compositionError) {
         console.error(`[PROCESSING] Erro ao compor clip ${clipIndex}:`, compositionError);
@@ -545,6 +574,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
     }
 
     console.log(`[PROCESSING] ✅ Composição final concluída: ${finalClips.length} clips finais`);
+    
+    // Emitir evento: finalizando
+    updateProgressEvent(job.id, {
+      status: 'processing',
+      totalClips: finalClips.length,
+      currentClip: finalClips.length,
+      progress: 99,
+      message: 'Finalizando arquivos para download...'
+    });
 
     // ===============================
     // FINALIZAR JOB
@@ -573,6 +611,16 @@ export const generateVideoSeries = async (job, jobsMap) => {
     job.clipsCount = finalClips.length;
 
     if (jobsMap) jobsMap.set(job.id, job);
+    
+    // Emitir evento: concluído
+    updateProgressEvent(job.id, {
+      status: 'completed',
+      totalClips: finalClips.length,
+      currentClip: finalClips.length,
+      progress: 100,
+      message: 'Todos os clipes foram gerados com sucesso!',
+      seriesId: seriesId
+    });
 
     console.log(`[PROCESSING] ✅ Série finalizada: ${finalClips.length} clips com layout final aplicado`);
     console.log(`[PROCESSING] SeriesId: ${seriesId}`);
@@ -600,6 +648,17 @@ export const generateVideoSeries = async (job, jobsMap) => {
     job.error = error.message;
 
     if (jobsMap) jobsMap.set(job.id, job);
+    
+    // Emitir evento: erro
+    updateProgressEvent(job.id, {
+      status: 'error',
+      totalClips: 0,
+      currentClip: 0,
+      progress: 0,
+      message: `Erro na geração: ${error.message}`,
+      error: error.message
+    });
+    
     throw error;
   }
 };
