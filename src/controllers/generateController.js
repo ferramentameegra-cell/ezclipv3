@@ -3,25 +3,19 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
-import { UserQuotaService } from '../services/userQuotaService.js';
+import { checkCreditsBeforeGeneration, consumeCreditsForClips } from '../services/creditService.js';
 
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
 export const generateSeries = async (req, res) => {
   try {
-    // Verificar quota do usuário (se autenticado)
-    if (req.user) {
-      const plan = req.user.plan || 'free';
-      const quotaCheck = await UserQuotaService.checkVideoProcessingQuota(req.user.id, plan);
-      
-      if (!quotaCheck.allowed) {
-        return res.status(429).json({
-          error: quotaCheck.reason,
-          quota: quotaCheck,
-          retryAfter: 3600 // 1 hora
-        });
-      }
+    // Autenticação obrigatória - req.user deve estar presente (middleware requireAuth)
+    if (!req.user || !req.userId) {
+      return res.status(401).json({
+        error: 'Autenticação obrigatória. Faça login para continuar.',
+        code: 'NOT_AUTHENTICATED'
+      });
     }
 
     const {
@@ -53,6 +47,20 @@ export const generateSeries = async (req, res) => {
       });
     }
 
+    // Calcular quantidade de clipes que serão gerados
+    const finalClipsCount = clipsQuantity || numberOfCuts;
+
+    // Verificar créditos ANTES de iniciar processamento
+    const creditsCheck = checkCreditsBeforeGeneration(req.userId, finalClipsCount);
+    if (!creditsCheck.allowed) {
+      return res.status(402).json({
+        error: creditsCheck.reason,
+        code: 'INSUFFICIENT_CREDITS',
+        availableCredits: creditsCheck.availableCredits,
+        requiredCredits: creditsCheck.requiredCredits
+      });
+    }
+
     const videoPath = path.join(BASE_TMP_DIR, `${videoId}.mp4`);
 
     if (!fs.existsSync(videoPath)) {
@@ -62,6 +70,22 @@ export const generateSeries = async (req, res) => {
     }
 
     const seriesId = uuidv4();
+
+    // DEBITAR CRÉDITOS ANTES de adicionar à fila
+    // Se a geração falhar depois, será necessário fazer reembolso manualmente
+    let creditsDebited = false;
+    try {
+      const debitResult = await consumeCreditsForClips(req.userId, finalClipsCount, seriesId);
+      creditsDebited = true;
+      console.log(`[GENERATE] Créditos debitados: ${debitResult.totalDebited} (${debitResult.freeTrialUsed} free trial + ${debitResult.paidCreditsUsed} pagos)`);
+    } catch (creditError) {
+      console.error('[GENERATE] Erro ao debitar créditos:', creditError);
+      // Se falhar ao debitar, não permitir geração
+      return res.status(402).json({
+        error: creditError.message || 'Erro ao processar créditos',
+        code: 'CREDIT_DEBIT_ERROR'
+      });
+    }
 
     // Obter posição na fila antes de adicionar
     const waitingCount = await videoProcessQueue.getWaitingCount ? await videoProcessQueue.getWaitingCount() : 0;
@@ -91,12 +115,13 @@ export const generateSeries = async (req, res) => {
         captionStyle,
         clipsQuantity,
         safeMargins,
-        userId: req.user?.id || null
+        userId: req.userId, // Obrigatório agora
+        creditsDebited: true // Flag para indicar que créditos foram debitados
       },
       {
         removeOnComplete: false,
         removeOnFail: false,
-        priority: req.user?.plan === 'premium' ? 1 : 5 // Premium tem prioridade
+        priority: 5
       }
     );
 

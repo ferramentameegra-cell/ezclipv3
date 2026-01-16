@@ -19,6 +19,8 @@ import nichesRoutes from "./routes/niches.js";
 import retentionRoutes from "./routes/retention.js";
 import captionsRoutes from "./routes/captions.js";
 import termsRoutes from "./routes/terms.js";
+import creditsRoutes from "./routes/credits.js";
+import { requireAuth } from "./middleware/authMiddleware.js";
 
 // Configurar ffmpeg antes de importar workers
 import { configureFfmpeg } from "./utils/ffmpegDetector.js";
@@ -64,13 +66,14 @@ app.use('/api/captions/generate', heavyOperationLimiter);
 // =====================
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/download", downloadRoutes);
-app.use("/api/trim", trimRoutes);
-app.use("/api/generate", generateRoutes);
-app.use("/api/niches", nichesRoutes);
-app.use("/api/retention", retentionRoutes);
-app.use("/api/captions", captionsRoutes);
-app.use("/api/terms", termsRoutes);
+app.use("/api/credits", creditsRoutes);
+app.use("/api/download", requireAuth, downloadRoutes); // Proteger upload/download
+app.use("/api/trim", requireAuth, trimRoutes); // Proteger trim
+app.use("/api/generate", generateRoutes); // Já protegido individualmente
+app.use("/api/niches", nichesRoutes); // Público (lista de nichos)
+app.use("/api/retention", retentionRoutes); // Público (lista de retenção)
+app.use("/api/captions", requireAuth, captionsRoutes); // Proteger legendas
+app.use("/api/terms", termsRoutes); // Público (termos)
 
 // =====================
 // FRONTEND ESTÁTICO
