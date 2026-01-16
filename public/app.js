@@ -2800,7 +2800,20 @@ async function monitorProgress(jobId) {
     try {
         const eventSource = new EventSource(`${API_BASE}/api/generate/progress/${jobId}`);
         
+        // Timeout de segurança: se não receber eventos em 60 segundos, usar fallback
+        let sseTimeout = setTimeout(() => {
+            if (eventSource.readyState === EventSource.OPEN) {
+                console.warn('[GENERATE] SSE sem eventos por 60s, usando fallback');
+                eventSource.close();
+                useFallback = true;
+                startFallbackPolling(jobId);
+            }
+        }, 60000);
+        
         eventSource.onmessage = (event) => {
+            // Limpar timeout no primeiro evento
+            clearTimeout(sseTimeout);
+            
             try {
                 const data = JSON.parse(event.data);
                 console.log(`[GENERATE-SSE] Evento recebido:`, data);
@@ -2881,29 +2894,11 @@ async function monitorProgress(jobId) {
             
             // Se conexão foi fechada pelo servidor (provavelmente erro), usar fallback
             if (eventSource.readyState === EventSource.CLOSED) {
+                clearTimeout(sseTimeout);
                 eventSource.close();
                 console.log('[GENERATE] Conexão SSE fechada, usando fallback para polling');
                 useFallback = true;
                 startFallbackPolling(jobId);
-            }
-        };
-        
-        // Timeout de segurança: se não receber eventos em 60 segundos, usar fallback
-        let sseTimeout = setTimeout(() => {
-            if (eventSource.readyState === EventSource.OPEN) {
-                console.warn('[GENERATE] SSE sem eventos por 60s, usando fallback');
-                eventSource.close();
-                useFallback = true;
-                startFallbackPolling(jobId);
-            }
-        }, 60000);
-        
-        // Guardar handler original e limpar timeout no primeiro evento
-        const originalOnMessage = eventSource.onmessage;
-        eventSource.onmessage = (event) => {
-            clearTimeout(sseTimeout);
-            if (originalOnMessage) {
-                originalOnMessage.call(eventSource, event);
             }
         };
         
