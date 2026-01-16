@@ -1,239 +1,296 @@
-# 📹 Como Adicionar Vídeos de Retenção
+# 📹 Guia Completo: Como Adicionar Vídeos de Retenção
 
-Este guia explica as **3 formas** de adicionar vídeos de retenção ao sistema.
+## 📍 Localização das Pastas
+
+### Desenvolvimento Local
+```
+/Users/josyasborba/Desktop/ezv2/retention-library/
+```
+
+### Produção (Railway)
+```
+/tmp/retention-library/
+```
 
 ---
 
-## 📋 **Forma 1: Upload via API (Recomendado para produção)**
+## 📋 Passo a Passo
 
-### Passo 1: Adicionar o metadado do vídeo
+### PASSO 1: Verificar os IDs Disponíveis
 
-Edite o arquivo `src/models/niches.js` e adicione o novo vídeo em `RETENTION_VIDEOS`:
+Primeiro, veja quais vídeos estão cadastrados no sistema. Abra o arquivo:
+```
+src/models/niches.js
+```
+
+Procure pela seção `RETENTION_VIDEOS` (linha 86). Você verá uma lista como:
+
+```javascript
+export const RETENTION_VIDEOS = {
+  'hydraulic-press': {
+    id: 'hydraulic-press',
+    name: 'Prensa Hidráulica',
+    ...
+  },
+  'satisfying-loops': {
+    id: 'satisfying-loops',
+    name: 'Loops Satisfatórios',
+    ...
+  },
+  // ... mais vídeos
+};
+```
+
+**Anote o ID** do vídeo que você quer adicionar (ex: `hydraulic-press`, `satisfying-loops`).
+
+---
+
+### PASSO 2: Preparar o Vídeo
+
+**Requisitos do vídeo:**
+- ✅ Formato: `.mp4`, `.webm` ou `.mov` (recomendado: `.mp4`)
+- ✅ Resolução recomendada: **1080x1920** (formato vertical 9:16)
+- ✅ Sem áudio ou áudio baixo (vídeos de retenção são silenciosos)
+- ✅ Looping perfeito (sem cortes bruscos)
+- ✅ Duração: 10-30 segundos (idealmente)
+
+---
+
+### PASSO 3: Nomear o Arquivo
+
+O nome do arquivo **DEVE** corresponder exatamente ao ID do vídeo:
+
+**Formato do nome:**
+```
+{ID-DO-VIDEO}.mp4
+```
+
+**Exemplos:**
+- ID: `hydraulic-press` → Nome: `hydraulic-press.mp4`
+- ID: `satisfying-loops` → Nome: `satisfying-loops.mp4`
+- ID: `sand-kinetic` → Nome: `sand-kinetic.mp4`
+- ID: `hydraulic-press-1` → Nome: `hydraulic-press-1.mp4`
+
+⚠️ **IMPORTANTE:** 
+- Use apenas letras minúsculas
+- Use hífen (`-`) para separar palavras
+- Não use espaços ou caracteres especiais
+- A extensão deve ser `.mp4` (preferencialmente)
+
+---
+
+### PASSO 4: Criar a Pasta (se não existir)
+
+**No desenvolvimento local:**
+```bash
+cd /Users/josyasborba/Desktop/ezv2
+mkdir -p retention-library
+```
+
+**No Railway (produção):**
+A pasta será criada automaticamente, mas você pode criar manualmente:
+```bash
+mkdir -p /tmp/retention-library
+```
+
+---
+
+### PASSO 5: Copiar o Vídeo para a Pasta
+
+**No desenvolvimento local:**
+```bash
+# Exemplo: copiar vídeo de retenção
+cp ~/Downloads/hydraulic-press.mp4 /Users/josyasborba/Desktop/ezv2/retention-library/
+```
+
+Ou arraste e solte o arquivo manualmente:
+1. Abra a pasta `retention-library/` no Finder
+2. Arraste o vídeo para dentro da pasta
+3. Renomeie o arquivo para corresponder ao ID (se necessário)
+
+**Estrutura final deve ficar:**
+```
+ezv2/
+  ├── retention-library/
+  │   ├── hydraulic-press.mp4
+  │   ├── satisfying-loops.mp4
+  │   ├── sand-kinetic.mp4
+  │   └── ... outros vídeos
+```
+
+---
+
+### PASSO 6: Verificar se Funcionou
+
+Após adicionar o vídeo, você pode verificar de duas formas:
+
+#### Opção A: Via Código
+Verifique os logs do servidor quando iniciar. Você deve ver:
+```
+[RETENTION] Vídeo encontrado: /caminho/retention-library/hydraulic-press.mp4
+```
+
+#### Opção B: Via API
+Faça uma requisição GET para:
+```
+http://localhost:3000/api/retention/videos
+```
+
+Você verá uma lista de vídeos com `exists: true` para os que foram encontrados.
+
+---
+
+## 🆕 Adicionando um Novo Vídeo (não cadastrado)
+
+Se você quer adicionar um vídeo que **não está** na lista de `RETENTION_VIDEOS`:
+
+### PASSO 1: Adicionar Metadado
+
+Edite o arquivo `src/models/niches.js` e adicione na seção `RETENTION_VIDEOS`:
 
 ```javascript
 export const RETENTION_VIDEOS = {
   // ... vídeos existentes ...
   
-  'meu-novo-video': {
+  'meu-novo-video': {  // ← ID único (sem espaços, em minúsculas)
     id: 'meu-novo-video',
     name: 'Meu Novo Vídeo',
     tags: ['Alta retenção', 'Hipnótico'],
-    description: 'Descrição do meu novo vídeo de retenção'
+    description: 'Descrição do meu vídeo de retenção'
   }
 };
 ```
 
-### Passo 2: Associar ao nicho (opcional)
+### PASSO 2: Adicionar ao Nicho (opcional)
 
-Se quiser que o vídeo apareça em um nicho específico, adicione o ID na lista `retentionVideos` do nicho:
+Se quiser que o vídeo apareça em um nicho específico, edite a seção `NICHES`:
 
 ```javascript
 export const NICHES = {
   podcast: {
-    id: 'podcast',
-    name: 'Podcast',
     // ...
     retentionVideos: [
       'hydraulic-press',
-      'meu-novo-video',  // ← Adicione aqui
+      'meu-novo-video',  // ← Adicione o ID aqui
       // ...
     ]
   }
 };
 ```
 
-### Passo 3: Fazer upload do arquivo
+### PASSO 3: Adicionar o Arquivo
 
-**Via cURL:**
-```bash
-curl -X POST http://localhost:8080/api/retention/upload \
-  -F "video=@/caminho/para/meu-video.mp4" \
-  -F "retentionVideoId=meu-novo-video"
-```
+Siga os passos 3-5 acima, usando o ID que você criou.
 
-**Via Postman/Insomnia:**
-- Method: `POST`
-- URL: `http://localhost:8080/api/retention/upload`
-- Body: `form-data`
-  - Campo 1: `video` (type: file) → selecione o arquivo .mp4
-  - Campo 2: `retentionVideoId` (type: text) → `meu-novo-video`
-
-### ✅ Verificar se foi adicionado
-
-```bash
-curl http://localhost:8080/api/retention/video/meu-novo-video
-```
-
-Resposta esperada:
-```json
-{
-  "id": "meu-novo-video",
-  "path": "/tmp/retention-library/meu-novo-video.mp4",
-  "name": "Meu Novo Vídeo",
-  "exists": true
-}
-```
+**Nome do arquivo:** `meu-novo-video.mp4`
 
 ---
 
-## 📁 **Forma 2: Adicionar manualmente (Mais rápido para desenvolvimento)**
+## 📝 Lista Completa de Vídeos Cadastrados
 
-### Passo 1: Adicionar o metadado
-
-Mesmo processo da **Forma 1 - Passo 1**.
-
-### Passo 2: Copiar arquivo para o diretório
-
-**Em desenvolvimento:**
-```bash
-# Diretório na raiz do projeto
-cp meu-video.mp4 retention-library/meu-novo-video.mp4
-```
-
-**Em produção (Railway):**
-```bash
-# Os arquivos serão salvos em /tmp/retention-library/
-# Nota: Arquivos em /tmp são temporários e serão perdidos ao reiniciar
-# Para produção, use upload via API ou configure armazenamento persistente
-```
-
-### ✅ Verificar
-
-```bash
-ls retention-library/meu-novo-video.mp4
-```
+| ID | Nome | Nome do Arquivo |
+|---|---|---|
+| `hydraulic-press` | Prensa Hidráulica | `hydraulic-press.mp4` |
+| `hydraulic-press-1` | Prensa Hidráulica #1 | `hydraulic-press-1.mp4` |
+| `hydraulic-press-2` | Prensa Hidráulica #2 | `hydraulic-press-2.mp4` |
+| `hydraulic-press-3` | Prensa Hidráulica #3 | `hydraulic-press-3.mp4` |
+| `satisfying-loops` | Loops Satisfatórios | `satisfying-loops.mp4` |
+| `sand-kinetic` | Areia Cinética | `sand-kinetic.mp4` |
+| `slime` | Slime | `slime.mp4` |
+| `timelapse-abstract` | Timelapse Abstrato | `timelapse-abstract.mp4` |
+| `mechanical-loop` | Loop Mecânico | `mechanical-loop.mp4` |
+| `timelapse-nature` | Timelapse Natureza | `timelapse-nature.mp4` |
+| `sunset-timelapse` | Pôr do Sol | `sunset-timelapse.mp4` |
+| `ocean-waves` | Ondas do Mar | `ocean-waves.mp4` |
+| `abstract-flow` | Fluxo Abstrato | `abstract-flow.mp4` |
+| `circuit-animation` | Animação de Circuitos | `circuit-animation.mp4` |
+| `code-rain` | Chuva de Código | `code-rain.mp4` |
+| `abstract-tech` | Abstrato Tech | `abstract-tech.mp4` |
+| `gold-particles` | Partículas Douradas | `gold-particles.mp4` |
+| `timelapse-city` | Timelapse Urbano | `timelapse-city.mp4` |
+| `abstract-numbers` | Números Abstratos | `abstract-numbers.mp4` |
 
 ---
 
-## 🔄 **Forma 3: Via Interface Web (Futuro)**
+## 🚀 Para Produção (Railway)
 
-Uma interface de administração será criada no futuro para facilitar o upload de vídeos de retenção diretamente pelo navegador.
+### Via Railway CLI
 
----
-
-## 📊 **Verificar todos os vídeos disponíveis**
-
+1. Conecte-se ao Railway:
 ```bash
-curl http://localhost:8080/api/retention/
+railway login
+railway link
 ```
 
-Retorna todos os vídeos de retenção com status de disponibilidade:
-```json
-{
-  "videos": [
-    {
-      "id": "hydraulic-press",
-      "name": "Prensa Hidráulica",
-      "tags": ["Alta retenção", "Hipnótico", "Seguro para TikTok"],
-      "description": "Loop de prensa hidráulica comprimindo objetos",
-      "path": "/tmp/retention-library/hydraulic-press.mp4",
-      "exists": true  // ← true se o arquivo existe
-    },
-    {
-      "id": "satisfying-loops",
-      "name": "Loops Satisfatórios",
-      // ...
-      "exists": false  // ← false se o arquivo não foi adicionado ainda
-    }
-  ]
-}
-```
-
----
-
-## 🎯 **Boas Práticas**
-
-### Requisitos dos vídeos:
-- ✅ **Formato**: MP4, WebM ou MOV
-- ✅ **Tamanho máximo**: 100MB (via API) ou ilimitado (manual)
-- ✅ **Resolução recomendada**: 1080x1920 (9:16 vertical)
-- ✅ **Duração**: Loops curtos (5-30 segundos)
-- ✅ **Áudio**: Preferencialmente sem áudio (ou loopável)
-- ✅ **Qualidade**: Alta qualidade para não perder qualidade ao redimensionar
-
-### Nomes de arquivo:
-- ✅ Use o mesmo ID do metadado: `meu-novo-video.mp4`
-- ✅ Sempre use minúsculas e hífens: `meu-video-retention.mp4`
-- ❌ Evite espaços: `meu video.mp4` (errado)
-
-### Organização:
-- ✅ Mantenha um backup dos vídeos fora do projeto
-- ✅ Documente a fonte/origem de cada vídeo
-- ✅ Teste os vídeos antes de adicionar à produção
-
----
-
-## 🔍 **Resolução de Problemas**
-
-### Erro: "Vídeo de retenção não encontrado no modelo"
-**Solução**: Adicione o metadado primeiro em `src/models/niches.js` antes de fazer upload.
-
-### Erro: "Arquivo não encontrado"
-**Solução**: Verifique se o nome do arquivo corresponde ao ID:
-- ID: `hydraulic-press`
-- Arquivo: `hydraulic-press.mp4` ✅
-- Arquivo: `HydraulicPress.mp4` ❌
-
-### Vídeo não aparece na lista do nicho
-**Solução**: Adicione o ID do vídeo na lista `retentionVideos` do nicho em `src/models/niches.js`.
-
-### Arquivo não persiste em produção (Railway)
-**Solução**: Em produção, use armazenamento persistente (Cloudflare R2, S3) ou configure o Railway com volumes persistentes. Por enquanto, use upload via API a cada deploy.
-
----
-
-## 📚 **Exemplo Completo**
-
-### Adicionar vídeo "fogo-abstrato" ao nicho "motivacional"
-
-1. **Editar `src/models/niches.js`:**
-
-```javascript
-export const RETENTION_VIDEOS = {
-  // ... existentes ...
-  'fogo-abstrato': {
-    id: 'fogo-abstrato',
-    name: 'Fogo Abstrato',
-    tags: ['Hipnótico', 'Alta retenção', 'Visual'],
-    description: 'Chamas abstratas em loop'
-  }
-};
-
-export const NICHES = {
-  motivacional: {
-    id: 'motivacional',
-    name: 'Motivacional',
-    // ...
-    retentionVideos: [
-      'sunset-timelapse',
-      'ocean-waves',
-      'fogo-abstrato',  // ← Adicionar aqui
-      'satisfying-loops',
-      'abstract-flow'
-    ]
-  }
-};
-```
-
-2. **Fazer upload:**
+2. Faça upload do arquivo:
 ```bash
-curl -X POST http://localhost:8080/api/retention/upload \
-  -F "video=@fogo-abstrato.mp4" \
-  -F "retentionVideoId=fogo-abstrato"
+railway run cp meu-video.mp4 /tmp/retention-library/
 ```
 
-3. **Verificar:**
+### Via SSH (se disponível)
+
+1. Conecte via SSH ao Railway
+2. Crie a pasta (se não existir):
 ```bash
-curl http://localhost:8080/api/retention/niche/motivacional | jq '.videos[] | select(.id == "fogo-abstrato")'
+mkdir -p /tmp/retention-library
 ```
+
+3. Faça upload via SCP:
+```bash
+scp hydraulic-press.mp4 user@railway:/tmp/retention-library/
+```
+
+### Via Variável de Ambiente (Alternativa)
+
+Você pode configurar `RETENTION_LIBRARY_DIR` no Railway para usar outro diretório:
+
+```
+RETENTION_LIBRARY_DIR=/app/retention-library
+```
+
+⚠️ **Nota:** Arquivos em `/tmp/` são **voláteis** e serão perdidos após restart do container. Para persistência, use um diretório dentro de `/app/`.
 
 ---
 
-## 🚀 **Próximos Passos**
+## ✅ Checklist Final
 
-Após adicionar os vídeos de retenção, eles serão automaticamente:
-- ✅ Disponibilizados na API
-- ✅ Listados por nicho
-- ✅ Usados pelo sistema de geração de séries (quando implementado)
+Antes de considerar concluído, verifique:
 
-**Nota**: O overlay de vídeo de retenção nos clips ainda está em desenvolvimento. Os vídeos serão aplicados automaticamente quando essa funcionalidade for finalizada.
+- [ ] O arquivo tem exatamente o mesmo nome do ID (case-sensitive)
+- [ ] O arquivo está na pasta correta (`retention-library/` ou `/tmp/retention-library/`)
+- [ ] O formato é `.mp4` (ou `.webm`/`.mov`)
+- [ ] O vídeo está em formato vertical (9:16, 1080x1920)
+- [ ] O ID está cadastrado em `src/models/niches.js` (se for novo)
+- [ ] O servidor foi reiniciado após adicionar (se necessário)
+
+---
+
+## 🐛 Solução de Problemas
+
+### Vídeo não aparece na lista
+
+1. Verifique se o nome do arquivo está **exatamente** igual ao ID
+2. Verifique se o arquivo está na pasta correta
+3. Verifique os logs do servidor para erros
+4. Reinicie o servidor
+
+### Erro "Vídeo não encontrado"
+
+1. Verifique o caminho: `retention-library/{ID}.mp4`
+2. Verifique permissões do arquivo (deve ser legível)
+3. Verifique se o ID existe em `RETENTION_VIDEOS`
+
+### Vídeo aparece mas não carrega
+
+1. Verifique se o formato é suportado (`.mp4`, `.webm`, `.mov`)
+2. Verifique se o arquivo não está corrompido
+3. Verifique o tamanho do arquivo (muito grande pode causar problemas)
+
+---
+
+## 📞 Suporte
+
+Se tiver problemas, verifique:
+- Logs do servidor (`console.log` com prefixo `[RETENTION]`)
+- Caminho do arquivo no código (`src/services/retentionVideoManager.js`)
+- Metadados no modelo (`src/models/niches.js`)

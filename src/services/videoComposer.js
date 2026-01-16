@@ -397,11 +397,11 @@ export async function composeFinalVideo({
         // Redimensionar vídeo de retenção para dimensões calculadas SEM CORTES
         // force_original_aspect_ratio=decrease garante que a imagem completa seja visível
         // Sem crop para evitar cortes - a imagem completa será exibida
-        // Pad será aplicado se necessário para centralizar
         filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease[retention_scaled]`);
+        
         // Aplicar pad para garantir dimensões exatas e centralizar (sem cortes)
-        // Pad com cor transparente (0x00000000) para manter background visível nas bordas
-        filterParts.push(`[retention_scaled]pad=${retentionWidth}:${retentionHeight}:(ow-iw)/2:(oh-ih)/2:color=0x00000000[retention_padded]`);
+        // Usar cor preta (0x000000) que será transparente no overlay
+        filterParts.push(`[retention_scaled]pad=${retentionWidth}:${retentionHeight}:(ow-iw)/2:(oh-ih)/2:color=0x000000[retention_padded]`);
         
         // Validar que não ultrapassa limite inferior do frame
         if (retentionY + retentionHeight > OUTPUT_HEIGHT) {
@@ -414,12 +414,14 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x = (W-w)/2
         // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
         // Base do conteúdo deve ficar exatamente a 140px acima da margem inferior
+        // O overlay usará o vídeo de retenção sobre o vídeo composto
         filterParts.push(`${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}[with_retention]`);
         currentLabel = '[with_retention]';
-        console.log(`[COMPOSER] ✅ Vídeo de retenção posicionado em y=${retentionY}px`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px`);
         console.log(`[COMPOSER] ✅ Vídeo de retenção 100% visível: ${retentionWidth}x${retentionHeight}px, SEM CORTES, mantendo proporção original`);
         console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
         console.log(`[COMPOSER] ✅ Centralizado horizontalmente: x=(W-w)/2`);
+        console.log(`[COMPOSER] ✅ Overlay configurado para exibir vídeo de retenção sobre o vídeo composto`);
         console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
       }
 
@@ -641,9 +643,12 @@ export async function composeFinalVideo({
         outputOptions.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
       }
 
-      // Shortest para garantir que termine quando o vídeo mais curto terminar
+      // Se houver vídeo de retenção, garantir que o vídeo final tenha a duração do vídeo principal
+      // O vídeo de retenção será repetido automaticamente pelo FFmpeg se for mais curto
       if (retentionVideoPath) {
-        outputOptions.push('-shortest');
+        // Usar shortest=0 no output para garantir que use a duração do primeiro input (vídeo principal)
+        // Mas na verdade não precisamos, pois o overlay já cuida disso
+        // Removido -shortest para permitir que ambos os vídeos sejam processados completamente
       }
 
       command.outputOptions(outputOptions);
