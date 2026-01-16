@@ -31,6 +31,7 @@
                 <button class="nav-item active" data-tab="home" onclick="switchTab('home')">Início</button>
                 <button class="nav-item" data-tab="login" onclick="switchTab('login')" id="nav-login-btn">Entrar</button>
                 <div class="user-menu hidden" id="user-menu">
+                    <div id="user-credits" class="credits-badge" style="margin-right: 1rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 0.875rem; font-weight: 600;">0 créditos</div>
                     <div class="user-avatar" id="user-avatar">
                         <span id="user-initial">U</span>
                     </div>
@@ -38,13 +39,93 @@
                         <div class="user-info">
                             <div class="user-name" id="user-name-dropdown"></div>
                             <div class="user-email" id="user-email-dropdown"></div>
+                            <div id="user-credits-dropdown" class="user-credits" style="margin-top: 0.5rem; font-size: 0.875rem; color: #999;"></div>
                         </div>
+                        <button class="dropdown-btn" onclick="showCreditsPurchaseModal()" style="margin-bottom: 0.5rem;">Comprar Créditos</button>
                         <button class="dropdown-btn" onclick="logout()">Sair</button>
                     </div>
                 </div>
             </div>
         </div>
     </nav>
+
+    <!-- Authentication Required Section (Obrigatória quando não logado) -->
+    <div id="auth-section" class="auth-section" style="display: none; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem;">
+        <div class="auth-container" style="max-width: 400px; margin: 0 auto; padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: #1a1a1a; margin-bottom: 0.5rem;">EZ Clips AI</h1>
+                <p style="color: #666;">Login obrigatório para continuar</p>
+            </div>
+            
+            <!-- Login Card -->
+            <div class="login-card" id="login-card">
+                <h2 class="login-title">Entrar</h2>
+                <p class="login-subtitle">Acesse sua conta para continuar</p>
+                <form id="login-form" class="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-field">
+                        <label>Email</label>
+                        <input type="email" id="login-email" class="form-input" placeholder="seu@email.com" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Senha</label>
+                        <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-login">
+                        <span id="login-btn-text">Entrar</span>
+                        <span id="login-btn-spinner" class="hidden">
+                            <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                </circle>
+                            </svg>
+                        </span>
+                    </button>
+                </form>
+                <div class="login-divider">
+                    <span>ou</span>
+                </div>
+                <button class="btn-register" onclick="showRegister()">Criar conta</button>
+                <div id="login-status" class="status-message hidden"></div>
+            </div>
+            
+            <!-- Register Card -->
+            <div class="register-card hidden" id="register-card">
+                <h2 class="login-title">Criar Conta</h2>
+                <p class="login-subtitle">Cadastre-se e ganhe 5 créditos grátis!</p>
+                <form id="register-form" class="login-form" onsubmit="handleRegister(event)">
+                    <div class="form-field">
+                        <label>Nome Completo</label>
+                        <input type="text" id="register-name" class="form-input" placeholder="Seu nome" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Email</label>
+                        <input type="email" id="register-email" class="form-input" placeholder="seu@email.com" required>
+                    </div>
+                    <div class="form-field">
+                        <label>Senha</label>
+                        <input type="password" id="register-password" class="form-input" placeholder="Mínimo 6 caracteres" minlength="6" required>
+                    </div>
+                    <button type="submit" class="btn-login">
+                        <span id="register-btn-text">Criar Conta</span>
+                        <span id="register-btn-spinner" class="hidden">
+                            <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                </circle>
+                            </svg>
+                        </span>
+                    </button>
+                </form>
+                <div class="login-divider">
+                    <span>ou</span>
+                </div>
+                <button class="btn-register" onclick="showLogin()">Já tenho conta</button>
+                <div id="register-status" class="status-message hidden"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main class="main-wrapper">

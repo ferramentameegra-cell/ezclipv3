@@ -19,6 +19,8 @@ const appState = {
     jobId: null,
     seriesId: null,
     currentUser: null,
+    userToken: null,
+    userCredits: null, // { free_trial_credits, credits_balance, total_credits, plan_id }
     currentTab: 'home',
     configurations: {
         format: '9:16',
@@ -59,6 +61,33 @@ class ApiClient {
         }
       });
 
+      // Tratar erros de autenticação
+      if (response.status === 401 || response.status === 403) {
+        // Token expirado ou inválido - limpar autenticação e redirecionar para login
+        console.warn('[API] Token inválido ou expirado, redirecionando para login...');
+        appState.currentUser = null;
+        appState.userToken = null;
+        appState.userCredits = null;
+        localStorage.removeItem('ezv2_user');
+        localStorage.removeItem('ezv2_token');
+        
+        // Se estiver tentando fazer algo que requer login, mostrar tela de login
+        if (typeof showAuthRequired === 'function') {
+          showAuthRequired();
+        } else {
+          window.location.reload();
+        }
+        
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Autenticação obrigatória. Faça login para continuar.');
+      }
+      
+      // Tratar erros de créditos insuficientes
+      if (response.status === 402) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Créditos insuficientes');
+      }
+
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
         if (retries > 0) {
@@ -95,16 +124,30 @@ class ApiClient {
     }
   }
 
+  getAuthHeaders() {
+    const token = localStorage.getItem('ezv2_token');
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
+
   async get(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    return this.fetchWithRetry(url, { ...options, method: 'GET' });
+    const headers = { ...this.getAuthHeaders(), ...options.headers };
+    return this.fetchWithRetry(url, { ...options, method: 'GET', headers });
   }
 
   async post(endpoint, body, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const headers = { ...this.getAuthHeaders(), ...options.headers };
     return this.fetchWithRetry(url, {
       ...options,
       method: 'POST',
+      headers,
       body: JSON.stringify(body)
     });
   }
@@ -117,12 +160,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
 });
 
-function initializeApp() {
+async function initializeApp() {
+    // AUTENTICAÇÃO OBRIGATÓRIA - Verificar primeiro
+    const isAuthenticated = await checkAuth();
+    
+    if (!isAuthenticated) {
+        // Login obrigatório - não continuar inicialização
+        return;
+    }
+    
+    // Se autenticado, inicializar funcionalidades
     setupYouTubeInput();
     setupUploadDragDrop();
     setupTrimControls();
     loadNiches();
-    checkAuth();
+    
     // Inicializar com primeiro step (etapa 1)
     currentStepIndex = 0;
     
@@ -278,11 +330,140 @@ function scrollToTool() {
 }
 
 // ========== AUTHENTICATION ==========
-function checkAuth() {
+/**
+ * Verificar autenticação obrigatória
+ * Se não houver token, redirecionar para login
+ */
+async function checkAuth() {
+    const token = localStorage.getItem('ezv2_token');
     const user = localStorage.getItem('ezv2_user');
-    if (user) {
-        appState.currentUser = JSON.parse(user);
-        updateUserUI();
+    
+    if (token && user) {
+        try {
+            // Verificar token válido no backend
+            const { data } = await apiClient.get('/api/auth/me');
+            if (data && data.user) {
+                appState.currentUser = data.user;
+                appState.userToken = token;
+                localStorage.setItem('ezv2_user', JSON.stringify(data.user));
+                updateUserUI();
+                showMainContent(); // Mostrar conteúdo principal
+                await loadUserCredits(); // Carregar créditos
+                return true;
+            }
+        } catch (error) {
+            console.error('[AUTH] Erro ao verificar token:', error);
+            // Token inválido, limpar e mostrar login
+            clearAuth();
+        }
+    }
+    
+    // Sem token ou token inválido - mostrar login obrigatório
+    showAuthRequired();
+    return false;
+}
+
+/**
+ * Limpar autenticação
+ */
+function clearAuth() {
+    appState.currentUser = null;
+    appState.userToken = null;
+    appState.userCredits = null;
+    localStorage.removeItem('ezv2_user');
+    localStorage.removeItem('ezv2_token');
+    updateUserUI();
+}
+
+/**
+ * Mostrar tela de login obrigatória
+ */
+function showAuthRequired() {
+    const mainContent = document.querySelector('main');
+    const authSection = document.getElementById('auth-section');
+    
+    if (mainContent) mainContent.style.display = 'none';
+    if (authSection) {
+        authSection.style.display = 'flex';
+        authSection.classList.remove('hidden');
+    }
+    
+    // Garantir que login está visível
+    const loginCard = document.getElementById('login-card');
+    const registerCard = document.getElementById('register-card');
+    if (loginCard) loginCard.classList.remove('hidden');
+    if (registerCard) registerCard.classList.add('hidden');
+}
+
+/**
+ * Mostrar conteúdo principal (após login)
+ */
+function showMainContent() {
+    const mainContent = document.querySelector('main');
+    const authSection = document.getElementById('auth-section');
+    
+    if (authSection) {
+        authSection.style.display = 'none';
+        authSection.classList.add('hidden');
+    }
+    if (mainContent) mainContent.style.display = 'block';
+}
+
+/**
+ * Carregar créditos do usuário
+ */
+async function loadUserCredits() {
+    if (!appState.currentUser) return;
+    
+    try {
+        const { data } = await apiClient.get('/api/credits/balance');
+        if (data) {
+            appState.userCredits = {
+                free_trial_credits: data.free_trial_credits || 0,
+                credits_balance: data.credits_balance || 0,
+                total_credits: data.total_credits || 0,
+                plan_id: data.plan_id || null
+            };
+            updateCreditsUI();
+            console.log('[CREDITS] Créditos carregados:', appState.userCredits);
+        }
+    } catch (error) {
+        console.error('[CREDITS] Erro ao carregar créditos:', error);
+    }
+}
+
+/**
+ * Atualizar UI de créditos
+ */
+function updateCreditsUI() {
+    const creditsElement = document.getElementById('user-credits');
+    const creditsDropdown = document.getElementById('user-credits-dropdown');
+    
+    if (appState.userCredits) {
+        const total = appState.userCredits.total_credits || 0;
+        const freeTrial = appState.userCredits.free_trial_credits || 0;
+        const paid = appState.userCredits.credits_balance || 0;
+        
+        // Badge na navbar
+        if (creditsElement) {
+            creditsElement.innerHTML = `
+                ${total} créditos
+                ${freeTrial > 0 ? ` <span style="color: #10b981; font-size: 0.75rem;">(${freeTrial} grátis)</span>` : ''}
+            `;
+        }
+        
+        // Informações no dropdown
+        if (creditsDropdown) {
+            creditsDropdown.innerHTML = `
+                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div>Total: <strong>${total} créditos</strong></div>
+                    ${freeTrial > 0 ? `<div style="color: #10b981; font-size: 0.75rem;">${freeTrial} gratuitos</div>` : ''}
+                    ${paid > 0 ? `<div style="color: #999; font-size: 0.75rem;">${paid} pagos</div>` : ''}
+                </div>
+            `;
+        }
+    } else if (creditsElement) {
+        creditsElement.textContent = '0 créditos';
     }
 }
 
@@ -305,6 +486,99 @@ function updateUserUI() {
     } else {
         if (navLoginBtn) navLoginBtn.classList.remove('hidden');
         if (userMenu) userMenu.classList.add('hidden');
+    }
+    
+    // Atualizar créditos na UI
+    updateCreditsUI();
+}
+
+/**
+ * Mostrar modal de compra de créditos
+ */
+async function showCreditsPurchaseModal() {
+    try {
+        // Buscar planos disponíveis
+        const { data } = await apiClient.get('/api/credits/plans');
+        const plans = data.plans || [];
+        
+        // Criar modal com planos
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.id = 'credits-modal';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h2>Comprar Créditos</h2>
+                    <button onclick="closeCreditsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 1.5rem;">Cada crédito = 1 clipe gerado. Escolha um plano:</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        ${plans.map(plan => `
+                            <div class="plan-card" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s;" 
+                                 onmouseover="this.style.borderColor='#667eea'" 
+                                 onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
+                                 onclick="purchasePlan('${plan.id}')">
+                                <h3 style="margin: 0 0 0.5rem 0;">${plan.name}</h3>
+                                <div style="font-size: 2rem; font-weight: bold; margin: 1rem 0;">${plan.credits}</div>
+                                <div style="color: #999; font-size: 0.875rem; margin-bottom: 1rem;">${plan.description}</div>
+                                <div style="font-size: 1.25rem; font-weight: 600; color: #667eea;">R$ ${plan.price.toFixed(2)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.875rem; color: #999;">
+                        💡 Você pode comprar o mesmo plano múltiplas vezes. Créditos não expiram.
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Fechar ao clicar fora
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeCreditsModal();
+            }
+        });
+    } catch (error) {
+        console.error('[CREDITS] Erro ao carregar planos:', error);
+        alert('Erro ao carregar planos de créditos. Tente novamente.');
+    }
+}
+
+/**
+ * Fechar modal de créditos
+ */
+function closeCreditsModal() {
+    const modal = document.getElementById('credits-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Comprar plano
+ */
+async function purchasePlan(planId) {
+    if (!confirm('Deseja realmente comprar este plano? (Por enquanto, esta é uma compra mockada - sem cobrança real)')) {
+        return;
+    }
+    
+    try {
+        const { data } = await apiClient.post('/api/credits/purchase', { planId });
+        
+        alert(`Plano comprado com sucesso! Você recebeu ${data.plan.credits} créditos.`);
+        
+        // Recarregar créditos
+        await loadUserCredits();
+        
+        // Fechar modal
+        closeCreditsModal();
+    } catch (error) {
+        console.error('[CREDITS] Erro ao comprar plano:', error);
+        const errorMsg = error.response?.data?.error || error.message || 'Erro ao processar compra';
+        alert(`Erro ao comprar plano: ${errorMsg}`);
     }
 }
 
@@ -330,8 +604,9 @@ async function handleLogin(event) {
         
         const data = await response.json();
         
-        if (response.ok) {
+        if (response.ok && data.user && data.token) {
             appState.currentUser = data.user;
+            appState.userToken = data.token;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
             localStorage.setItem('ezv2_token', data.token);
             
@@ -343,9 +618,14 @@ async function handleLogin(event) {
             
             updateUserUI();
             
+            // Carregar créditos
+            await loadUserCredits();
+            
+            // Mostrar conteúdo principal
             setTimeout(() => {
+                showMainContent();
                 switchTab('home');
-            }, 1500);
+            }, 1000);
         } else {
             if (statusMsg) {
                 statusMsg.textContent = data.error || 'Erro ao fazer login';
@@ -389,14 +669,26 @@ async function handleRegister(event) {
         
         const data = await response.json();
         
-        if (response.ok) {
-            statusMsg.textContent = 'Conta criada com sucesso! Faça login para continuar.';
+        if (response.ok && data.user && data.token) {
+            appState.currentUser = data.user;
+            appState.userToken = data.token;
+            localStorage.setItem('ezv2_user', JSON.stringify(data.user));
+            localStorage.setItem('ezv2_token', data.token);
+            
+            statusMsg.textContent = `Conta criada com sucesso! Você ganhou ${data.user.free_trial_credits || 5} clipes gratuitos!`;
             statusMsg.className = 'login-status success';
             statusMsg.classList.remove('hidden');
             
+            updateUserUI();
+            
+            // Carregar créditos
+            await loadUserCredits();
+            
+            // Mostrar conteúdo principal após registro
             setTimeout(() => {
-                showLogin();
-            }, 2000);
+                showMainContent();
+                switchTab('home');
+            }, 1500);
         } else {
             statusMsg.textContent = data.error || 'Erro ao criar conta';
             statusMsg.className = 'login-status error';
@@ -428,11 +720,13 @@ function showLogin() {
 }
 
 function logout() {
-    appState.currentUser = null;
-    localStorage.removeItem('ezv2_user');
-    localStorage.removeItem('ezv2_token');
-    updateUserUI();
-    switchTab('home');
+    clearAuth();
+    showAuthRequired();
+    // Limpar formulários
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    if (emailInput) emailInput.value = '';
+    if (passwordInput) passwordInput.value = '';
 }
 
 // ========== CURSOS - REMOVIDO ==========
@@ -796,6 +1090,12 @@ async function handleUploadSubmit() {
         const data = await response.json();
         
         if (!response.ok) {
+            // Tratar erros de autenticação
+            if (response.status === 401 || response.status === 403) {
+                alert('Você precisa estar logado para fazer upload de vídeos. Por favor, faça login primeiro.');
+                showAuthRequired();
+                return;
+            }
             throw new Error(data.error || 'Erro ao enviar vídeo');
         }
         
@@ -2561,6 +2861,13 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
+    // AUTENTICAÇÃO OBRIGATÓRIA
+    if (!appState.currentUser || !appState.userToken) {
+        alert('Você precisa estar logado para gerar clipes. Por favor, faça login primeiro.');
+        showAuthRequired();
+        return;
+    }
+    
     console.log('[GENERATE] Iniciando processo de geração...');
     console.log('[GENERATE] Estado atual:', {
         videoId: appState.videoId,
@@ -2568,12 +2875,9 @@ function proceedToGenerate() {
         numberOfCuts: appState.numberOfCuts,
         trimStart: appState.trimStart,
         trimEnd: appState.trimEnd,
-        cutDuration: appState.cutDuration
+        cutDuration: appState.cutDuration,
+        totalCredits: appState.userCredits?.total_credits || 0
     });
-    
-    // Atualizar progresso para step de geração
-    updateProgressSteps('generate');
-    updateGenerateSummary();
     
     // Verificar dados mínimos necessários
     if (!appState.videoId) {
@@ -2603,16 +2907,32 @@ function proceedToGenerate() {
         }
     }
     
-    // Confirmar antes de gerar
-    const clipsCount = appState.numberOfCuts || 1;
-    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nDeseja continuar?`;
-    if (confirm(confirmMessage)) {
-        console.log('[GENERATE] Usuário confirmou. Iniciando geração...');
-        // Gerar clipes diretamente
-        generateSeries();
-    } else {
-        console.log('[GENERATE] Usuário cancelou a geração.');
+    // Verificar créditos ANTES de continuar
+    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
+    const totalCredits = appState.userCredits?.total_credits || 0;
+    
+    if (totalCredits < clipsCount) {
+        const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
+        if (confirm(message)) {
+            showCreditsPurchaseModal();
+        }
+        return;
     }
+    
+    // Confirmar antes de gerar (mostrar quantos créditos serão consumidos)
+    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
+    if (!confirm(confirmMessage)) {
+        console.log('[GENERATE] Usuário cancelou a geração.');
+        return;
+    }
+    
+    // Atualizar progresso para step de geração
+    updateProgressSteps('generate');
+    updateGenerateSummary();
+    
+    console.log('[GENERATE] Usuário confirmou. Iniciando geração...');
+    // Gerar clipes diretamente
+    generateSeries();
 }
 
 /**
@@ -2687,6 +3007,32 @@ function updatePreviewStyle() {
 }
 
 async function generateSeries() {
+    // AUTENTICAÇÃO OBRIGATÓRIA
+    if (!appState.currentUser || !appState.userToken) {
+        alert('Você precisa estar logado para gerar clipes. Por favor, faça login primeiro.');
+        showAuthRequired();
+        return;
+    }
+    
+    // Verificar créditos disponíveis ANTES de gerar
+    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
+    const totalCredits = appState.userCredits?.total_credits || 0;
+    
+    if (totalCredits < clipsCount) {
+        const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
+        if (confirm(message)) {
+            // Abrir modal de compra de créditos (será implementado)
+            showCreditsPurchaseModal();
+        }
+        return;
+    }
+    
+    // Confirmar antes de gerar (mostrar quantos créditos serão consumidos)
+    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
     // Sem validação bloqueante - tentar gerar mesmo se faltar dados (backend validará)
     if (!appState.videoId || !appState.nicheId || !appState.numberOfCuts) {
         console.warn('[GENERATE] Alguns dados podem estar faltando, mas tentando gerar mesmo assim');
@@ -2744,13 +3090,16 @@ async function generateSeries() {
         if (data && data.jobId) {
             // Salvar dados importantes no appState
             appState.jobId = data.jobId;
-            if (data.seriesId) {
-                appState.seriesId = data.seriesId;
-                console.log(`[GENERATE] SeriesId salvo: ${data.seriesId}`);
-            }
-            if (data.numberOfCuts) {
-                appState.numberOfCuts = data.numberOfCuts;
-            }
+                if (data.seriesId) {
+                    appState.seriesId = data.seriesId;
+                    console.log(`[GENERATE] SeriesId salvo: ${data.seriesId}`);
+                }
+                if (data.numberOfCuts) {
+                    appState.numberOfCuts = data.numberOfCuts;
+                }
+                
+                // Recarregar créditos após iniciar geração (créditos já foram debitados)
+                await loadUserCredits();
             
             // Mostrar informações de fila se disponíveis
             if (data.queuePosition) {
