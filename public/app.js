@@ -1090,10 +1090,12 @@ async function handleUploadSubmit() {
         const data = await response.json();
         
         if (!response.ok) {
-            // Tratar erros de autenticação
+            // Tratar erros de autenticação (já tratados no apiClient, mas garantindo aqui também)
             if (response.status === 401 || response.status === 403) {
                 alert('Você precisa estar logado para fazer upload de vídeos. Por favor, faça login primeiro.');
-                showAuthRequired();
+                if (typeof showAuthRequired === 'function') {
+                    showAuthRequired();
+                }
                 return;
             }
             throw new Error(data.error || 'Erro ao enviar vídeo');
