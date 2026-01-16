@@ -443,10 +443,11 @@ export async function composeFinalVideo({
         // Centralizar horizontalmente: x=(w-text_w)/2
         
         // QUEBRA DE TEXTO AUTOMÁTICA: Usar box com largura limitada
-        // Margens laterais de 10% (108px de cada lado) = largura máxima de 864px (80% da largura)
-        // Isso garante que o texto não ultrapasse as margens do vídeo 1080x1920
-        const maxTextWidth = Math.round(OUTPUT_WIDTH * 0.8); // 80% da largura (864px)
-        const marginX = Math.round((OUTPUT_WIDTH - maxTextWidth) / 2); // Margem lateral (108px)
+        // Margens laterais de 80px de cada lado (conforme especificação)
+        // Largura máxima = 1080 - 80 - 80 = 920px
+        const HEADLINE_SAFE_MARGIN = 80; // Margens de segurança de 80px
+        const maxTextWidth = OUTPUT_WIDTH - (HEADLINE_SAFE_MARGIN * 2); // 1080 - 160 = 920px
+        const marginX = HEADLINE_SAFE_MARGIN; // 80px de cada lado
         
         const yPos = `(h-text_h)/2`;
         

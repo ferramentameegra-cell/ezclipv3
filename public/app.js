@@ -2247,9 +2247,8 @@ function updateHeadlineText() {
     
     const text = textInput.value.trim() || 'Headline';
     appState.headlineText = text;
-    headline.textContent = text;
     
-    // Aplicar quebra de linha automática no preview (simulação)
+    // Aplicar estilos completos (inclui quebra de linha que corresponde ao vídeo final)
     applyHeadlinePreviewStyles();
     
     // Atualizar resumo
@@ -2257,14 +2256,21 @@ function updateHeadlineText() {
 }
 
 function updateHeadlineSize() {
-    const sizeInput = document.getElementById('headline-size-input');
-    const sizeValue = document.getElementById('headline-size-value');
+    const sizeSelect = document.getElementById('headline-size-select');
     
-    if (!sizeInput || !sizeValue) return;
+    if (!sizeSelect) return;
     
-    const size = parseInt(sizeInput.value) || 72;
+    // Obter tamanho nominal (XS, S, M, L, XL, XXL)
+    const sizeName = sizeSelect.value;
+    const config = window.HeadlineConfig || {};
+    const sizes = config.SIZES || { XS: 36, S: 48, M: 60, L: 72, XL: 96, XXL: 120 };
+    
+    // Obter tamanho em pixels
+    const size = config.getFontSize ? config.getFontSize(sizeName) : (sizes[sizeName] || 72);
+    
+    // Armazenar tanto o nome quanto o tamanho em pixels
+    appState.headlineSizeName = sizeName;
     appState.headlineSize = size;
-    sizeValue.textContent = size + 'px';
     
     applyHeadlinePreviewStyles();
 }
@@ -2304,15 +2310,42 @@ function applyHeadlinePreviewStyles() {
     const headline = document.getElementById('preview-headline');
     if (!headline) return;
     
-    // Aplicar estilos do preview
-    headline.style.fontSize = (appState.headlineSize || 72) + 'px';
-    headline.style.color = appState.headlineColor || '#FFFFFF';
+    const config = window.HeadlineConfig || {};
+    const fontWeights = config.FONT_WEIGHTS || { bold: 700, impact: 900, modern: 600 };
+    const lineHeightRatio = config.LINE_HEIGHT_RATIO || 1.2;
+    const maxTextWidth = config.MAX_TEXT_WIDTH || 920; // 1080 - 160 (80px cada lado)
+    const canvasWidth = config.CANVAS_WIDTH || 1080;
     
-    // Aplicar quebra de linha automática no preview (80% da largura)
-    headline.style.maxWidth = '80%';
-    headline.style.wordWrap = 'break-word';
+    // Obter configurações atuais
+    const fontSize = appState.headlineSize || 72;
+    const fontFamily = appState.font || 'Inter';
+    const fontStyle = appState.headlineStyle || 'bold';
+    const color = appState.headlineColor || '#FFFFFF';
+    const headlineText = appState.headlineText || 'Headline';
+    
+    // Aplicar estilos EXATOS que serão usados no vídeo final
+    headline.style.fontSize = fontSize + 'px';
+    headline.style.fontFamily = fontFamily + ', Arial, sans-serif';
+    headline.style.fontWeight = config.getFontWeight ? config.getFontWeight(fontStyle) : (fontWeights[fontStyle] || 700);
+    headline.style.color = color;
     headline.style.textAlign = 'center';
-    headline.style.lineHeight = '1.2';
+    headline.style.lineHeight = lineHeightRatio;
+    headline.style.wordWrap = 'break-word';
+    headline.style.whiteSpace = 'pre-wrap';
+    
+    // Calcular largura máxima respeitando margens de 80px
+    // O preview-frame tem 270px de largura (proporção 270/1080 = 0.25)
+    // Margens de 80px em escala = 80 * 0.25 = 20px
+    const previewScale = 270 / canvasWidth;
+    const previewMarginPx = 80 * previewScale;
+    const previewMaxWidth = (270 - 40 - (previewMarginPx * 2)) + 'px'; // 40px = padding do frame
+    
+    headline.style.maxWidth = previewMaxWidth;
+    headline.style.margin = '0 auto';
+    
+    // Aplicar quebra de linha manual (simulando o que o FFmpeg fará)
+    // Isso garante que o preview mostre exatamente como ficará no vídeo final
+    applyHeadlineTextWrapping(headline, headlineText, maxTextWidth, fontSize);
 }
 
 /**
@@ -2444,24 +2477,30 @@ function continueToHeadline() {
     if (!appState.headlineStyle) {
         appState.headlineStyle = 'bold';
     }
+    // Inicializar com tamanho L (72px) como padrão
     if (!appState.headlineSize) {
         appState.headlineSize = 72;
+        appState.headlineSizeName = 'L';
     }
     if (!appState.headlineColor) {
         appState.headlineColor = '#FFFFFF';
     }
     
     // Inicializar valores nos inputs se existirem
-    const sizeInput = document.getElementById('headline-size-input');
-    const sizeValue = document.getElementById('headline-size-value');
+    const sizeSelect = document.getElementById('headline-size-select');
     const colorInput = document.getElementById('headline-color-input');
     const colorText = document.getElementById('headline-color-text');
     
-    if (sizeInput) {
-        sizeInput.value = appState.headlineSize || 72;
-    }
-    if (sizeValue) {
-        sizeValue.textContent = (appState.headlineSize || 72) + 'px';
+    if (sizeSelect) {
+        // Usar tamanho nominal se disponível, senão converter pixel para nominal
+        const config = window.HeadlineConfig || {};
+        const sizeName = appState.headlineSizeName || 
+                        (config.getSizeName ? config.getSizeName(appState.headlineSize || 72) : 'L');
+        sizeSelect.value = sizeName;
+        // Garantir que o tamanho em pixels está sincronizado
+        if (config.getFontSize) {
+            appState.headlineSize = config.getFontSize(sizeName);
+        }
     }
     if (colorInput) {
         colorInput.value = appState.headlineColor || '#FFFFFF';
@@ -2576,6 +2615,57 @@ function proceedToGenerate() {
     }
 }
 
+/**
+ * Aplicar quebra de texto no preview (mesma lógica do FFmpeg)
+ */
+function applyHeadlineTextWrapping(headlineElement, text, maxWidth, fontSize) {
+    if (!text || !maxWidth || !fontSize) {
+        headlineElement.textContent = text || 'Headline';
+        return;
+    }
+    
+    // Estimar largura média de um caractere (aproximação: 0.6 * fontSize)
+    // Mesma lógica usada no videoComposer.js
+    const avgCharWidth = fontSize * 0.6;
+    const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
+    
+    if (maxCharsPerLine <= 0 || text.length <= maxCharsPerLine) {
+        headlineElement.textContent = text; // Texto cabe em uma linha
+        return;
+    }
+    
+    // Quebrar texto em palavras
+    const words = text.split(/\s+/);
+    const lines = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        
+        // Se a linha com a nova palavra exceder o limite, quebrar
+        if (testLine.length > maxCharsPerLine) {
+            if (currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+            } else {
+                // Palavra muito longa, quebrar no meio
+                lines.push(word.substring(0, maxCharsPerLine));
+                currentLine = word.substring(maxCharsPerLine);
+            }
+        } else {
+            currentLine = testLine;
+        }
+    }
+    
+    if (currentLine) {
+        lines.push(currentLine);
+    }
+    
+    // Aplicar quebra de linha no elemento
+    headlineElement.textContent = lines.join('\n');
+    headlineElement.style.whiteSpace = 'pre-line'; // Respeitar \n
+}
+
 function updatePreviewStyle() {
     const headline = document.getElementById('preview-headline');
     const fontSelect = document.getElementById('headline-font-select');
@@ -2589,25 +2679,8 @@ function updatePreviewStyle() {
     appState.font = font;
     appState.headlineStyle = style;
     
-    // Aplicar todos os estilos no preview
+    // Aplicar todos os estilos no preview (inclui fonte e estilo)
     applyHeadlinePreviewStyles();
-    
-    // Aplicar fonte
-    headline.style.fontFamily = font;
-    
-    // Aplicar estilo (bold, impact, modern)
-    if (style === 'bold') {
-        headline.style.fontWeight = '700';
-        headline.style.textTransform = 'none';
-    } else if (style === 'impact') {
-        headline.style.fontWeight = '900';
-        headline.style.textTransform = 'uppercase';
-        headline.style.letterSpacing = '0.05em';
-    } else if (style === 'modern') {
-        headline.style.fontWeight = '600';
-        headline.style.textTransform = 'none';
-        headline.style.letterSpacing = '0.02em';
-    }
     
     // Atualizar resumo
     updateGenerateSummary();
