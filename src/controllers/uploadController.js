@@ -49,16 +49,45 @@ export const uploadVideo = async (req, res) => {
     }
 
     // Mover arquivo para /tmp/uploads com nome UUID
-    const finalPath = path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`);
+    // Preservar extensão original ou usar .mp4 como padrão
+    const originalExt = path.extname(uploadedFile.originalname).toLowerCase() || '.mp4';
+    const finalPath = path.join(TMP_UPLOADS_DIR, `${videoId}${originalExt}`);
     
-    // Se o arquivo já está no local correto, apenas renomear
-    if (uploadedFile.path !== finalPath) {
-      // Copiar para garantir que está no lugar certo
-      fs.copyFileSync(uploadedFile.path, finalPath);
-      // Remover arquivo temporário original
-      if (fs.existsSync(uploadedFile.path)) {
-        fs.unlinkSync(uploadedFile.path);
+    // Mover arquivo para o local final
+    try {
+      // Se o arquivo já está no local correto, apenas renomear se necessário
+      if (uploadedFile.path !== finalPath) {
+        // Usar renameSync para mover (mais eficiente que copy+delete)
+        // Se o destino estiver em outro filesystem, usar copyFileSync
+        try {
+          fs.renameSync(uploadedFile.path, finalPath);
+          console.log(`[UPLOAD] Arquivo movido: ${uploadedFile.path} -> ${finalPath}`);
+        } catch (renameError) {
+          // Se rename falhar (cross-device), usar copy+delete
+          console.log(`[UPLOAD] Rename falhou, usando copy: ${renameError.message}`);
+          fs.copyFileSync(uploadedFile.path, finalPath);
+          // Remover arquivo temporário original
+          if (fs.existsSync(uploadedFile.path)) {
+            fs.unlinkSync(uploadedFile.path);
+          }
+          console.log(`[UPLOAD] Arquivo copiado: ${uploadedFile.path} -> ${finalPath}`);
+        }
+      } else {
+        console.log(`[UPLOAD] Arquivo já está no local correto: ${finalPath}`);
       }
+    } catch (moveError) {
+      console.error(`[UPLOAD] Erro ao mover arquivo: ${moveError.message}`);
+      // Limpar arquivo temporário em caso de erro
+      if (fs.existsSync(uploadedFile.path)) {
+        try {
+          fs.unlinkSync(uploadedFile.path);
+        } catch (cleanupError) {
+          console.error(`[UPLOAD] Erro ao limpar arquivo temporário: ${cleanupError.message}`);
+        }
+      }
+      return res.status(500).json({ 
+        error: `Erro ao mover arquivo: ${moveError.message}` 
+      });
     }
 
     // Validar arquivo com ffprobe para obter duração e metadados
@@ -135,12 +164,33 @@ export const uploadVideo = async (req, res) => {
   } catch (error) {
     console.error('[UPLOAD] Erro ao processar upload:', error);
     
-    // Limpar arquivo em caso de erro
-    if (req.file && fs.existsSync(req.file.path)) {
+    // Limpar arquivos em caso de erro
+    if (req.file) {
+      // Limpar arquivo temporário original
+      if (fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (unlinkError) {
+          console.error('[UPLOAD] Erro ao limpar arquivo temporário:', unlinkError.message);
+        }
+      }
+      
+      // Limpar arquivo final se foi criado
       try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkError) {
-        console.error('[UPLOAD] Erro ao limpar arquivo:', unlinkError.message);
+        const videoId = req.file.path.match(/\/([a-f0-9-]+)\.[^.]+$/)?.[1];
+        if (videoId) {
+          const possiblePaths = [
+            path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`),
+            path.join(TMP_UPLOADS_DIR, `${videoId}${path.extname(req.file.originalname)}`)
+          ];
+          for (const filePath of possiblePaths) {
+            if (fs.existsSync(filePath) && filePath !== req.file.path) {
+              fs.unlinkSync(filePath);
+            }
+          }
+        }
+      } catch (cleanupError) {
+        console.error('[UPLOAD] Erro ao limpar arquivo final:', cleanupError.message);
       }
     }
     
