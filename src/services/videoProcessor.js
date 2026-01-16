@@ -368,7 +368,52 @@ export const generateVideoSeries = async (job, jobsMap) => {
     console.log(`[PROCESSING] Aplicando composição final em ${finalClips.length} clips...`);
 
     // Obter legendas do vídeo (se houver)
-    const captions = video.captions?.edited || video.captions?.raw || [];
+    let captions = video.captions?.edited || video.captions?.raw || [];
+    
+    console.log(`[PROCESSING] Legendas encontradas no vídeo: ${captions.length} (edited: ${video.captions?.edited?.length || 0}, raw: ${video.captions?.raw?.length || 0})`);
+    
+    if (captions.length === 0) {
+      console.warn(`[PROCESSING] ⚠️ Nenhuma legenda encontrada para o vídeo ${videoId}. O vídeo será gerado sem legendas.`);
+    } else {
+      console.log(`[PROCESSING] ✅ Legendas disponíveis: ${captions.length} blocos de legenda`);
+      // Log das primeiras legendas para debug
+      if (captions.length > 0) {
+        const firstCaption = captions[0];
+        const lastCaption = captions[captions.length - 1];
+        console.log(`[PROCESSING] Primeira legenda: "${firstCaption.text || firstCaption.lines?.join(' ')}" [${firstCaption.start}s - ${firstCaption.end}s]`);
+        console.log(`[PROCESSING] Última legenda: "${lastCaption.text || lastCaption.lines?.join(' ')}" [${lastCaption.start}s - ${lastCaption.end}s]`);
+      }
+    }
+    
+    // IMPORTANTE: Ajustar timestamps das legendas se houver trim
+    // As legendas vêm com timestamps do vídeo original, precisamos ajustar para o vídeo trimado
+    if (startTime > 0 && captions.length > 0) {
+      const originalCount = captions.length;
+      console.log(`[PROCESSING] Ajustando timestamps das legendas: subtraindo ${startTime}s (trimStart)`);
+      
+      captions = captions.map(cap => ({
+        ...cap,
+        start: Math.max(0, cap.start - startTime), // Subtrair trimStart e garantir >= 0
+        end: Math.max(0, cap.end - startTime) // Subtrair trimStart e garantir >= 0
+      })).filter(cap => cap.end > 0); // Remover legendas que ficaram com end <= 0
+      
+      // Também remover legendas que estão completamente fora do intervalo trimado
+      const trimmedDuration = actualEndTime - actualStartTime;
+      captions = captions.filter(cap => cap.start < trimmedDuration);
+      
+      // Ajustar end para não ultrapassar a duração do vídeo trimado
+      captions = captions.map(cap => ({
+        ...cap,
+        end: Math.min(cap.end, trimmedDuration)
+      }));
+      
+      const removedCount = originalCount - captions.length;
+      if (removedCount > 0) {
+        console.log(`[PROCESSING] ${removedCount} legendas removidas (fora do intervalo trimado)`);
+      }
+      
+      console.log(`[PROCESSING] ✅ Legendas ajustadas: ${captions.length} legendas dentro do intervalo trimado (${actualStartTime}s - ${actualEndTime}s)`);
+    }
     
     // Aplicar estilo de legendas baseado na configuração
     const captionStyleConfig = getCaptionStyleConfig(captionStyle, font);
@@ -406,16 +451,23 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
       try {
         // Filtrar legendas para este clip específico
-        // Assumindo que cada clip tem duração finalCutDuration
+        // IMPORTANTE: Usar overlap ao invés de "contém completamente"
+        // Uma legenda deve aparecer se há qualquer overlap com o intervalo do clip
         const clipStartTime = i * finalCutDuration;
         const clipEndTime = (i + 1) * finalCutDuration;
+        
+        // Filtrar legendas que têm overlap com o intervalo do clip
+        // Overlap ocorre quando: cap.start < clipEndTime && cap.end > clipStartTime
         const clipCaptions = captions.filter(
-          cap => cap.start >= clipStartTime && cap.end <= clipEndTime
+          cap => cap.start < clipEndTime && cap.end > clipStartTime
         ).map(cap => ({
           ...cap,
-          start: cap.start - clipStartTime, // Ajustar para tempo relativo do clip
-          end: cap.end - clipStartTime
-        }));
+          // Ajustar timestamps para serem relativos ao início do clip (0-based)
+          start: Math.max(0, cap.start - clipStartTime), // Não permitir negativo
+          end: Math.min(finalCutDuration, cap.end - clipStartTime) // Não ultrapassar duração do clip
+        })).filter(cap => cap.end > cap.start); // Remover legendas inválidas (end <= start)
+        
+        console.log(`[PROCESSING] Clip ${clipIndex}: ${clipCaptions.length} legendas no intervalo [${clipStartTime}s - ${clipEndTime}s]`);
 
         // Headline para este clip (se houver)
         // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
@@ -431,7 +483,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           clipPath,
           outputPath: finalClipPath,
           captions: clipCaptions,
-          captionStyle,
+          captionStyle: captionStyleObj, // Usar objeto de estilo ao invés de string
           headline: clipHeadline,
           headlineStyle: headlineStyleObj,
           headlineText: headlineText,

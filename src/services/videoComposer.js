@@ -506,16 +506,38 @@ export async function composeFinalVideo({
 
       // 6. Adicionar legendas (burn-in) - PARTE INFERIOR
       if (captions && captions.length > 0) {
+        console.log(`[COMPOSER] ✅ Adicionando ${captions.length} legendas ao vídeo`);
+        console.log(`[COMPOSER] Estilo de legendas: font=${captionStyle.font || 'Arial'}, fontSize=${captionStyle.fontSize || 48}, color=${captionStyle.color || '#FFFFFF'}`);
+        
         captions.forEach((caption, index) => {
           const text = (caption.lines && caption.lines.length > 0) 
             ? caption.lines.join('\\n') 
             : (caption.text || '');
+          
+          if (!text || text.trim() === '') {
+            console.warn(`[COMPOSER] ⚠️ Legenda ${index} está vazia, pulando...`);
+            return; // Pular legendas vazias
+          }
           
           const font = captionStyle.font || 'Arial';
           const fontSize = captionStyle.fontSize || 48;
           const color = captionStyle.color || '#FFFFFF';
           const strokeColor = captionStyle.strokeColor || '#000000';
           const strokeWidth = captionStyle.strokeWidth || 2;
+          
+          // Validar timestamps
+          if (!caption.start && caption.start !== 0) {
+            console.warn(`[COMPOSER] ⚠️ Legenda ${index} sem timestamp start, pulando...`);
+            return;
+          }
+          if (!caption.end && caption.end !== 0) {
+            console.warn(`[COMPOSER] ⚠️ Legenda ${index} sem timestamp end, pulando...`);
+            return;
+          }
+          if (caption.end <= caption.start) {
+            console.warn(`[COMPOSER] ⚠️ Legenda ${index} com end <= start (${caption.start}s - ${caption.end}s), pulando...`);
+            return;
+          }
           
           // Posição Y: acima da safe zone inferior (respeitando margens configuradas)
           const yPos = OUTPUT_HEIGHT - safeZones.bottom;
@@ -526,7 +548,13 @@ export async function composeFinalVideo({
           filterParts.push(`${inputLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(text)}':fontsize=${fontSize}:fontcolor=${color}:borderw=${strokeWidth}:bordercolor=${strokeColor}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${caption.start},${caption.end})'${outputLabel}`);
           
           currentLabel = outputLabel;
+          
+          console.log(`[COMPOSER] ✅ Legenda ${index + 1}/${captions.length}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" [${caption.start}s - ${caption.end}s]`);
         });
+        
+        console.log(`[COMPOSER] ✅ Todas as legendas adicionadas ao filter_complex`);
+      } else {
+        console.log(`[COMPOSER] ⚠️ Nenhuma legenda para adicionar (captions=${captions?.length || 0})`);
       }
       
       // 7. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
