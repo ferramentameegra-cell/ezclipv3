@@ -1100,18 +1100,9 @@ function closeLoginRequiredModal() {
  */
 function openLoginFromModal() {
     closeLoginRequiredModal();
-    // Mostrar seção de auth mas manter conteúdo principal acessível
-    const authSection = document.getElementById('auth-section');
-    const mainContent = document.querySelector('main');
-    
-    if (authSection) {
-        authSection.style.display = 'flex';
-        authSection.style.pointerEvents = 'auto';
-        authSection.style.zIndex = '1000';
-        authSection.classList.remove('hidden');
-    }
-    
-    // Não esconder conteúdo principal completamente - apenas sobrepor
+    // Abrir aba de login na nova estrutura
+    switchTab('login');
+    switchAuthView('login');
     if (mainContent) {
         mainContent.style.pointerEvents = 'none'; // Bloquear cliques no conteúdo enquanto auth está aberto
     }
