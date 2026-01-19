@@ -527,9 +527,9 @@ export async function composeFinalVideo({
         // Redimensionar vídeo de retenção para dimensões calculadas SEM CORTES
         // force_original_aspect_ratio=decrease garante que a imagem completa seja visível
         // Sem crop para evitar cortes - a imagem completa será exibida
-        // IMPORTANTE: Loopar vídeo de retenção para garantir que cubra toda a duração
-        // Usar loop filter para repetir o vídeo se necessário
-        filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease,loop=loop=-1:size=1:start=0[retention_scaled]`);
+        // IMPORTANTE: O vídeo de retenção será loopado automaticamente pelo FFmpeg no overlay
+        // se for mais curto que o vídeo principal (usando shortest=0 no overlay)
+        filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease[retention_scaled]`);
         
         // Aplicar pad para garantir dimensões exatas e centralizar (sem cortes)
         // Usar cor preta (0x000000) que será transparente no overlay
@@ -792,8 +792,14 @@ export async function composeFinalVideo({
           return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}`));
         }
         
-        command.input(retentionVideoPath);
-        console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
+        // Adicionar input do vídeo de retenção
+        // O vídeo será loopado automaticamente pelo FFmpeg no overlay se for mais curto
+        // usando shortest=0 no overlay (já configurado abaixo)
+        const retentionInput = command.input(retentionVideoPath);
+        // Configurar loop infinito para o input de retenção
+        retentionInput.inputOptions(['-stream_loop', '-1']);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1} com loop infinito: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente durante toda a duração do vídeo principal`);
       } else if (retentionVideoId && retentionVideoId !== 'none') {
         // Se retentionVideoId foi especificado mas não há caminho, falhar
         return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}`));
