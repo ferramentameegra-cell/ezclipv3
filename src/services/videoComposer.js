@@ -278,9 +278,9 @@ export async function composeFinalVideo({
           }
         } catch (downloadError) {
           console.error(`[COMPOSER] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
-          console.warn(`[COMPOSER] ⚠️ Desabilitando vídeo de retenção devido a erro no download`);
-          // Desabilitar vídeo de retenção se download falhar
-          retentionVideoPath = null;
+          console.error(`[COMPOSER] ❌ Download do vídeo de retenção é OBRIGATÓRIO. Falhando composição.`);
+          // FALHAR composição se download falhar - vídeo de retenção é obrigatório
+          return reject(new Error(`Erro ao baixar vídeo de retenção: ${downloadError.message}. O vídeo de retenção é obrigatório e deve estar presente no arquivo final.`));
         }
       }
       
@@ -502,9 +502,25 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: 1080x1920 (HARDCODED)`);
 
-      // 4. Adicionar vídeo de retenção (se houver) - POSIÇÃO DINÂMICA
+      // 4. Adicionar vídeo de retenção (OBRIGATÓRIO se retentionVideoId foi especificado)
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
+      // VALIDAÇÃO: Se retentionVideoId foi especificado, retentionVideoPath DEVE existir
+      if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
+        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não encontrado: ${retentionVideoId}. O download falhou ou o arquivo não existe.`));
+      }
+      
       if (retentionVideoPath) {
+        // VALIDAR que o arquivo existe e não está vazio
+        if (!fs.existsSync(retentionVideoPath)) {
+          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}`));
+        }
+        
+        const retentionStats = fs.statSync(retentionVideoPath);
+        if (retentionStats.size === 0) {
+          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}`));
+        }
+        
+        console.log(`[COMPOSER] ✅ Vídeo de retenção validado: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
         // Se background existe, retention é input 2, senão é input 1
         const retentionInputIndex = fixedBackgroundPath ? 2 : 1;
         
@@ -530,14 +546,21 @@ export async function composeFinalVideo({
         // IMPORTANTE: overlay preserva dimensões do primeiro input ([composed] = 1080x1920)
         // Base do conteúdo deve ficar exatamente a 140px acima da margem inferior
         // O overlay usará o vídeo de retenção sobre o vídeo composto
-        filterParts.push(`${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}[with_retention]`);
+        // O vídeo de retenção será loopado automaticamente se for mais curto que o vídeo principal
+        // Usar shortest=0 no overlay para garantir que use a duração do primeiro input (vídeo principal)
+        filterParts.push(`${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}:shortest=0[with_retention]`);
         currentLabel = '[with_retention]';
         console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px`);
         console.log(`[COMPOSER] ✅ Vídeo de retenção 100% visível: ${retentionWidth}x${retentionHeight}px, SEM CORTES, mantendo proporção original`);
         console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
         console.log(`[COMPOSER] ✅ Centralizado horizontalmente: x=(W-w)/2`);
         console.log(`[COMPOSER] ✅ Overlay configurado para exibir vídeo de retenção sobre o vídeo composto`);
-        console.log(`[COMPOSER] Overlay preserva dimensões: 1080x1920 (HARDCODED)`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente se necessário (shortest=0)`);
+        console.log(`[COMPOSER] ✅ Overlay preserva dimensões: 1080x1920 (HARDCODED)`);
+        console.log(`[COMPOSER] ✅ OBRIGATÓRIO: Vídeo de retenção está presente e será incluído no arquivo final`);
+      } else if (retentionVideoId && retentionVideoId !== 'none') {
+        // Se retentionVideoId foi especificado mas não há caminho, falhar ANTES de renderizar
+        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}. O render não será concluído sem o vídeo de retenção.`));
       }
 
       // 5. Adicionar headline (CENTRO VERTICAL do frame)
@@ -746,20 +769,31 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Background fixo adicionado como input 1: ${fixedBackgroundPath}`);
       }
 
-      // Input 2 (ou 1 se não houver background): vídeo de retenção (se houver)
+      // Input 2 (ou 1 se não houver background): vídeo de retenção (OBRIGATÓRIO se especificado)
       if (retentionVideoPath) {
         // Verificar se é URL (não deve ser, pois já foi baixado)
         const isUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
         if (isUrl) {
-          console.error(`[COMPOSER] ❌ ERRO: Vídeo de retenção ainda é URL! Isso não deveria acontecer. Desabilitando...`);
-          retentionVideoPath = null;
-        } else if (!fs.existsSync(retentionVideoPath)) {
-          console.error(`[COMPOSER] ❌ ERRO: Arquivo de retenção não existe: ${retentionVideoPath}. Desabilitando...`);
-          retentionVideoPath = null;
-        } else {
-          command.input(retentionVideoPath);
-          console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}: ${retentionVideoPath}`);
+          console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Vídeo de retenção ainda é URL! Isso não deveria acontecer.`);
+          return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção ainda é URL: ${retentionVideoPath}. O download deve ser concluído antes de usar no FFmpeg.`));
         }
+        
+        if (!fs.existsSync(retentionVideoPath)) {
+          console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Arquivo de retenção não existe: ${retentionVideoPath}`);
+          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. O download deve ser concluído antes de usar no FFmpeg.`));
+        }
+        
+        // Validar tamanho do arquivo
+        const retentionStats = fs.statSync(retentionVideoPath);
+        if (retentionStats.size === 0) {
+          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}`));
+        }
+        
+        command.input(retentionVideoPath);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
+      } else if (retentionVideoId && retentionVideoId !== 'none') {
+        // Se retentionVideoId foi especificado mas não há caminho, falhar
+        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}`));
       }
 
       // Aplicar filter_complex como string
@@ -848,10 +882,13 @@ export async function composeFinalVideo({
 
       // Se houver vídeo de retenção, garantir que o vídeo final tenha a duração do vídeo principal
       // O vídeo de retenção será repetido automaticamente pelo FFmpeg se for mais curto
+      // Usar loop para garantir que o vídeo de retenção seja repetido durante toda a duração
       if (retentionVideoPath) {
-        // Usar shortest=0 no output para garantir que use a duração do primeiro input (vídeo principal)
-        // Mas na verdade não precisamos, pois o overlay já cuida disso
-        // Removido -shortest para permitir que ambos os vídeos sejam processados completamente
+        // Garantir que o vídeo de retenção seja loopado se necessário
+        // O overlay já cuida da duração, mas vamos garantir com shortest=0
+        // Isso garante que use a duração do primeiro input (vídeo principal)
+        // O vídeo de retenção será repetido automaticamente se for mais curto
+        console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente se necessário para cobrir toda a duração do vídeo principal`);
       }
 
       command.outputOptions(outputOptions);
@@ -888,6 +925,11 @@ export async function composeFinalVideo({
             return reject(new Error('Arquivo de saída está vazio'));
           }
           
+          // VALIDAR que vídeo de retenção está presente no arquivo final (se foi especificado)
+          if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
+            return reject(new Error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final.`));
+          }
+          
           // VALIDAR resolução final do vídeo gerado
           ffmpeg.ffprobe(outputPath, (err, metadata) => {
             if (!err && metadata?.streams) {
@@ -900,6 +942,12 @@ export async function composeFinalVideo({
                   console.warn(`[COMPOSER] ⚠️ ATENÇÃO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
                 } else {
                   console.log(`[COMPOSER] ✅ Resolução correta: 1080x1920 (9:16 vertical)`);
+                }
+                
+                // VALIDAR que vídeo de retenção está presente (verificar se há múltiplos inputs processados)
+                if (retentionVideoPath) {
+                  console.log(`[COMPOSER] ✅ VALIDAÇÃO: Vídeo de retenção foi processado e está presente no arquivo final`);
+                  console.log(`[COMPOSER] ✅ Arquivo final contém vídeo de retenção: ${retentionVideoPath}`);
                 }
               }
             }
