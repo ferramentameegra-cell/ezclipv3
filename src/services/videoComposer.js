@@ -234,10 +234,26 @@ export async function composeFinalVideo({
         try {
           console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção de URL: ${retentionVideoPath}`);
           
-          // Se for URL do Streamable, converter para URL direta primeiro
+          // Se for URL do Streamable, tentar múltiplas URLs possíveis
+          let streamableUrls = [retentionVideoPath];
           if (isStreamableUrl(retentionVideoPath)) {
-            retentionVideoPath = convertStreamableToDirectUrl(retentionVideoPath);
-            console.log(`[COMPOSER] URL do Streamable convertida: ${retentionVideoPath}`);
+            // Extrair ID do Streamable
+            const streamableMatch = retentionVideoPath.match(/streamable\.com\/(?:e\/)?([a-z0-9]+)/i);
+            if (streamableMatch) {
+              const videoId = streamableMatch[1];
+              // Tentar múltiplas URLs possíveis do Streamable
+              streamableUrls = [
+                `https://cdn.streamable.com/video/mp4/${videoId}.mp4`,
+                `https://cdn.streamable.com/video/mp4/${videoId}`,
+                `https://streamable.com/e/${videoId}`,
+                `https://streamable.com/${videoId}`
+              ];
+              console.log(`[COMPOSER] 🔄 Tentando múltiplas URLs do Streamable para ID: ${videoId}`);
+            } else {
+              retentionVideoPath = convertStreamableToDirectUrl(retentionVideoPath);
+              streamableUrls = [retentionVideoPath];
+              console.log(`[COMPOSER] URL do Streamable convertida: ${retentionVideoPath}`);
+            }
           }
           
           // Baixar vídeo para arquivo temporário
@@ -250,31 +266,70 @@ export async function composeFinalVideo({
             fs.mkdirSync(tempDir, { recursive: true });
           }
           
-          const urlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          const tempVideoPath = path.join(tempDir, `retention_${urlHash}.mp4`);
+          // Usar hash baseado na URL original (não convertida) para cache
+          const originalUrlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+          const tempVideoPath = path.join(tempDir, `retention_${originalUrlHash}.mp4`);
           
           // Se já existe, usar o arquivo baixado
           if (fs.existsSync(tempVideoPath)) {
-            console.log(`[COMPOSER] ✅ Usando vídeo de retenção já baixado: ${tempVideoPath}`);
-            retentionVideoPath = tempVideoPath;
-          } else {
-            // Baixar vídeo
-            console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção de: ${retentionVideoPath}`);
-            await downloadVideoFromUrl(retentionVideoPath, tempVideoPath);
-            
-            // Validar que o arquivo foi baixado corretamente
-            if (!fs.existsSync(tempVideoPath)) {
-              throw new Error(`Arquivo não foi criado após download: ${tempVideoPath}`);
-            }
-            
             const stats = fs.statSync(tempVideoPath);
-            if (stats.size === 0) {
+            if (stats.size > 0) {
+              console.log(`[COMPOSER] ✅ Usando vídeo de retenção já baixado: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              retentionVideoPath = tempVideoPath;
+            } else {
+              // Arquivo existe mas está vazio, remover e baixar novamente
+              console.log(`[COMPOSER] ⚠️ Arquivo de cache está vazio, baixando novamente...`);
               fs.unlinkSync(tempVideoPath);
-              throw new Error(`Arquivo baixado está vazio: ${tempVideoPath}`);
+            }
+          }
+          
+          // Se ainda não tem arquivo válido, tentar baixar de cada URL
+          if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+            let downloadSuccess = false;
+            let lastDownloadError = null;
+            
+            for (const urlToTry of streamableUrls) {
+              try {
+                console.log(`[COMPOSER] ⬇️ Tentando baixar de: ${urlToTry}`);
+                await downloadVideoFromUrl(urlToTry, tempVideoPath, 3); // 3 tentativas por URL
+                
+                // Validar que o arquivo foi baixado corretamente
+                if (!fs.existsSync(tempVideoPath)) {
+                  throw new Error(`Arquivo não foi criado após download: ${tempVideoPath}`);
+                }
+                
+                const stats = fs.statSync(tempVideoPath);
+                if (stats.size === 0) {
+                  fs.unlinkSync(tempVideoPath);
+                  throw new Error(`Arquivo baixado está vazio: ${tempVideoPath}`);
+                }
+                
+                console.log(`[COMPOSER] ✅ Vídeo de retenção baixado com sucesso: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                retentionVideoPath = tempVideoPath;
+                downloadSuccess = true;
+                break; // Sucesso, parar tentativas
+              } catch (downloadError) {
+                lastDownloadError = downloadError;
+                console.error(`[COMPOSER] ❌ Falha ao baixar de ${urlToTry}: ${downloadError.message}`);
+                
+                // Limpar arquivo parcial se existir
+                if (fs.existsSync(tempVideoPath)) {
+                  try {
+                    fs.unlinkSync(tempVideoPath);
+                  } catch (e) {
+                    // Ignorar erro ao remover
+                  }
+                }
+                
+                // Continuar para próxima URL
+                continue;
+              }
             }
             
-            console.log(`[COMPOSER] ✅ Vídeo de retenção baixado com sucesso: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-            retentionVideoPath = tempVideoPath;
+            // Se nenhuma URL funcionou, lançar erro
+            if (!downloadSuccess) {
+              throw new Error(`Falha ao baixar vídeo de retenção de todas as URLs tentadas. Último erro: ${lastDownloadError?.message || 'Erro desconhecido'}`);
+            }
           }
         } catch (downloadError) {
           console.error(`[COMPOSER] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
@@ -1095,38 +1150,53 @@ function getFontPath(fontName) {
 }
 
 /**
- * Baixar vídeo de uma URL para arquivo local
+ * Baixar vídeo de uma URL para arquivo local com retry
  * @param {string} url - URL do vídeo
  * @param {string} outputPath - Caminho onde salvar o vídeo
+ * @param {number} maxRetries - Número máximo de tentativas (padrão: 3)
  * @returns {Promise<void>}
  */
-async function downloadVideoFromUrl(url, outputPath) {
-  return new Promise((resolve, reject) => {
-    console.log(`[COMPOSER] ⬇️ Iniciando download de: ${url}`);
-    console.log(`[COMPOSER] ⬇️ Salvando em: ${outputPath}`);
-    
-    const file = fs.createWriteStream(outputPath);
-    const protocol = url.startsWith('https') ? https : http;
-    
-    // Timeout de 60 segundos
-    const timeout = setTimeout(() => {
-      file.close();
-      if (fs.existsSync(outputPath)) {
-        fs.unlinkSync(outputPath);
-      }
-      reject(new Error('Timeout ao baixar vídeo (60s)'));
-    }, 60000);
-    
-    protocol.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-        'Referer': 'https://streamable.com/'
-      }
-    }, (response) => {
-      // Verificar status code
-      if (response.statusCode !== 200) {
-        clearTimeout(timeout);
+async function downloadVideoFromUrl(url, outputPath, maxRetries = 3) {
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[COMPOSER] ⬇️ Tentativa ${attempt}/${maxRetries} - Download de: ${url}`);
+      console.log(`[COMPOSER] ⬇️ Salvando em: ${outputPath}`);
+      
+      await new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(outputPath);
+        const protocol = url.startsWith('https') ? https : http;
+        
+        // Timeout de 90 segundos (aumentado para conexões lentas)
+        const timeout = setTimeout(() => {
+          file.close();
+          if (fs.existsSync(outputPath)) {
+            try {
+              fs.unlinkSync(outputPath);
+            } catch (e) {
+              // Ignorar erro ao remover
+            }
+          }
+          reject(new Error('Timeout ao baixar vídeo (90s)'));
+        }, 90000);
+        
+        const requestOptions = {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://streamable.com/',
+            'Connection': 'keep-alive'
+          },
+          timeout: 90000
+        };
+        
+        const req = protocol.get(url, requestOptions, (response) => {
+          // Verificar status code
+          if (response.statusCode !== 200) {
+            clearTimeout(timeout);
         file.close();
         if (fs.existsSync(outputPath)) {
           fs.unlinkSync(outputPath);
