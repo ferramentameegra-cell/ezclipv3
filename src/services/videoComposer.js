@@ -136,7 +136,7 @@ export async function composeFinalVideo({
   retentionVideoId = 'random',
   nicheId = null,
   backgroundColor = '#000000',
-  format = '9:16', // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical
+  format = '9:16', // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - IGNORAR parâmetro recebido
   platforms = { tiktok: true, reels: true, shorts: true },
   safeMargins = 10,
   clipNumber = null,
@@ -188,11 +188,14 @@ export async function composeFinalVideo({
   
   // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical para todos os vídeos gerados
   // Garantir que o formato seja sempre 9:16, independente do parâmetro recebido
+  // HARDCODED: Sempre usar 1080x1920
   const finalFormat = '9:16';
-  const { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } = getFormatDimensions(finalFormat);
+  const OUTPUT_WIDTH = 1080; // HARDCODED - sempre 1080
+  const OUTPUT_HEIGHT = 1920; // HARDCODED - sempre 1920
   const safeZones = getSafeZones(finalFormat, platforms, safeMargins);
   
-  console.log(`[COMPOSER] ⚠️ Formato forçado para 9:16 (1080x1920) - formato recebido: ${format} foi ignorado`);
+  console.log(`[COMPOSER] ⚠️ FORMATO FORÇADO: 9:16 (1080x1920) - formato recebido: ${format} foi IGNORADO`);
+  console.log(`[COMPOSER] ✅ Dimensões HARDCODED: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (vertical)`);
   
   // POSIÇÕES FIXAS E VALIDADAS (1080x1920):
   // - Margem superior: 180px (vídeo principal começa aqui)
@@ -338,7 +341,7 @@ export async function composeFinalVideo({
       return reject(new Error(`[COMPOSER] ❌ Altura do vídeo principal inválida: ${MAIN_VIDEO_HEIGHT}px. O vídeo de retenção pode estar ocupando muito espaço.`));
     }
     
-    console.log(`[COMPOSER] Layout vertical 9:16: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+    console.log(`[COMPOSER] Layout vertical 9:16: 1080x1920 (HARDCODED - sempre vertical)`);
     console.log(`[COMPOSER] ✅ Margem superior: ${TOP_MARGIN}px, Área livre inferior: ${BOTTOM_FREE_SPACE}px`);
     console.log(`[COMPOSER] ✅ Vídeo principal: ${OUTPUT_WIDTH}x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px)`);
     if (retentionVideoPath) {
@@ -375,19 +378,22 @@ export async function composeFinalVideo({
         // Redimensionar background para 1080x1920 mantendo proporção (sem distorção)
         // force_original_aspect_ratio=increase garante que preencha todo o canvas
         // crop garante que não ultrapasse as dimensões
-        filterParts.push(`[${backgroundInputIndex}:v]scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=increase[bg_scaled]`);
-        filterParts.push(`[bg_scaled]crop=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}[bg_fixed]`);
+        // HARDCODED: sempre 1080x1920
+        filterParts.push(`[${backgroundInputIndex}:v]scale=1080:1920:force_original_aspect_ratio=increase[bg_scaled]`);
+        filterParts.push(`[bg_scaled]crop=1080:1920[bg_fixed]`);
         console.log(`[COMPOSER] Background fixo aplicado como layer 0`);
       } else {
         // Fallback: criar background sólido se imagem não existir
-        filterParts.push(`color=c=${backgroundColor.replace('#', '')}:s=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:d=${videoDuration}[bg_fixed]`);
-        console.log(`[COMPOSER] Usando background sólido (fallback)`);
+        // HARDCODED: sempre 1080x1920
+        filterParts.push(`color=c=${backgroundColor.replace('#', '')}:s=1080:1920:d=${videoDuration}[bg_fixed]`);
+        console.log(`[COMPOSER] Usando background sólido (fallback) - 1080x1920 HARDCODED`);
       }
 
       // 2. Redimensionar vídeo principal para altura calculada (sem padding, sem distorção)
       // force_original_aspect_ratio=decrease garante que não distorça
       // Vídeo será redimensionado para caber exatamente em MAIN_VIDEO_HEIGHT
-      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
+      // HARDCODED: largura sempre 1080
+      filterParts.push(`${currentLabel}scale=1080:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
@@ -398,7 +404,7 @@ export async function composeFinalVideo({
       filterParts.push(`[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed]`);
       currentLabel = '[composed]';
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
-      console.log(`[COMPOSER] Overlay preserva dimensões do background: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+      console.log(`[COMPOSER] Overlay preserva dimensões do background: 1080x1920 (HARDCODED)`);
 
       // 4. Adicionar vídeo de retenção (se houver) - POSIÇÃO DINÂMICA
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
@@ -434,7 +440,7 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
         console.log(`[COMPOSER] ✅ Centralizado horizontalmente: x=(W-w)/2`);
         console.log(`[COMPOSER] ✅ Overlay configurado para exibir vídeo de retenção sobre o vídeo composto`);
-        console.log(`[COMPOSER] Overlay preserva dimensões: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+        console.log(`[COMPOSER] Overlay preserva dimensões: 1080x1920 (HARDCODED)`);
       }
 
       // 5. Adicionar headline (CENTRO VERTICAL do frame)
@@ -596,7 +602,8 @@ export async function composeFinalVideo({
           }
           
           // Posição Y: acima da safe zone inferior (respeitando margens configuradas)
-          const yPos = OUTPUT_HEIGHT - safeZones.bottom;
+          // HARDCODED: altura sempre 1920
+          const yPos = 1920 - safeZones.bottom;
 
           const inputLabel = index === 0 ? currentLabel : `[caption_${index - 1}]`;
           const outputLabel = `[caption_${index}]`;
@@ -618,12 +625,12 @@ export async function composeFinalVideo({
       // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
       // O currentLabel já tem 1080x1920 (do background via overlay), mas garantimos com scale+pad
-      // Usar scale com force_original_aspect_ratio=decrease para não distorcer, depois pad para garantir dimensões
-      filterParts.push(`${currentLabel}scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease[final_scaled]`);
-      // Pad para garantir dimensões exatas 1080x1920 (mesmo que já esteja correto)
+      // FORÇAR dimensões exatas: 1080x1920 (hardcoded para garantir)
+      filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=decrease[final_scaled]`);
+      // Pad para garantir dimensões exatas 1080x1920 (hardcoded)
       const padColor = backgroundColor.replace('#', '');
-      filterParts.push(`[final_scaled]pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
-      console.log(`[COMPOSER] ✅ Forçando resolução final para ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+      filterParts.push(`[final_scaled]pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
+      console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED`);
       
       // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -708,16 +715,17 @@ export async function composeFinalVideo({
       // NÃO usar -vf aqui pois já temos complexFilter que força as dimensões
       const outputOptions = [
         '-map', '[final]',
-        '-s', `${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`, // FORÇAR 1080x1920
+        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded para garantir)
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
-        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
+        '-aspect', '9:16', // FORÇAR aspect ratio 9:16
+        '-vf', `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black` // FORÇAR novamente via -vf como backup
       ];
       
-      console.log(`[COMPOSER] ✅ Forçando resolução de saída: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+      console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED`);
       console.log(`[COMPOSER] Usando label final: [final]`);
       console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
@@ -743,7 +751,7 @@ export async function composeFinalVideo({
       command
         .on('start', (cmdline) => {
           console.log('[COMPOSER] Comando iniciado');
-          console.log(`[COMPOSER] Saída FORÇADA: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16 vertical)`);
+          console.log(`[COMPOSER] Saída FORÇADA: 1080x1920 (9:16 vertical) - HARDCODED`);
           console.log(`[COMPOSER] Aspect ratio FORÇADO: 9:16`);
           console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM ✅' : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM ✅' : 'NÃO ❌'}`);
