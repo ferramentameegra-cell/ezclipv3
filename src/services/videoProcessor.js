@@ -126,13 +126,22 @@ export const generateVideoSeries = async (job, jobsMap) => {
       if (needsDownload) {
         console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
 
-        // Atualizar progresso usando função do BullMQ
-        if (typeof job.progress === 'function') {
-          await job.progress(5);
-        } else {
-          job.progress = 5;
-        }
-        if (jobsMap) jobsMap.set(job.id, job);
+      // Atualizar progresso usando função do BullMQ
+      if (typeof job.progress === 'function') {
+        await job.progress(5);
+      } else {
+        job.progress = 5;
+      }
+      if (jobsMap) jobsMap.set(job.id, job);
+      
+      // Atualizar evento de progresso para o frontend
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        progress: 5,
+        message: 'Validando vídeo...',
+        totalClips: 0,
+        currentClip: 0
+      });
 
         // Importar downloadYouTubeVideo dinamicamente se necessário
         const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
@@ -157,13 +166,22 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
         sourceVideoPath = downloadPath;
 
-        // Atualizar progresso usando função do BullMQ
-        if (typeof job.progress === 'function') {
-          await job.progress(20);
-        } else {
-          job.progress = 20;
-        }
-        if (jobsMap) jobsMap.set(job.id, job);
+      // Atualizar progresso usando função do BullMQ
+      if (typeof job.progress === 'function') {
+        await job.progress(20);
+      } else {
+        job.progress = 20;
+      }
+      if (jobsMap) jobsMap.set(job.id, job);
+      
+      // Atualizar evento de progresso para o frontend
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        progress: 20,
+        message: 'Preparando vídeo...',
+        totalClips: 0,
+        currentClip: 0
+      });
       }
     }
 
@@ -253,6 +271,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
         job.progress = 30;
       }
       if (jobsMap) jobsMap.set(job.id, job);
+      
+      // Atualizar evento de progresso para o frontend
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        progress: 30,
+        message: 'Aplicando trim ao vídeo...',
+        totalClips: 0,
+        currentClip: 0
+      });
 
       const trimmedPath = path.join(
         TMP_UPLOADS_DIR,
@@ -281,6 +308,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
         job.progress = 50;
       }
       if (jobsMap) jobsMap.set(job.id, job);
+      
+      // Atualizar evento de progresso para o frontend
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        progress: 50,
+        message: 'Trim aplicado, preparando clipes...',
+        totalClips: 0,
+        currentClip: 0
+      });
     } else {
       // Quando não há trim físico aplicado, obter a duração real do vídeo
       // porque a duração pode ser diferente da esperada
@@ -371,6 +407,23 @@ export const generateVideoSeries = async (job, jobsMap) => {
       : clips;
     
     console.log(`[PROCESSING] Clipes gerados: ${finalClips.length} (solicitado: ${finalNumberOfCuts || 'automático'})`);
+
+    // Atualizar progresso após gerar clipes
+    if (typeof job.progress === 'function') {
+      await job.progress(60);
+    } else {
+      job.progress = 60;
+    }
+    if (jobsMap) jobsMap.set(job.id, job);
+    
+    // Atualizar evento de progresso para o frontend
+    updateProgressEvent(job.id, {
+      status: 'processing',
+      progress: 60,
+      message: `${finalClips.length} clipe(s) gerado(s), iniciando composição...`,
+      totalClips: finalClips.length,
+      currentClip: 0
+    });
 
     // ===============================
     // APLICAR COMPOSIÇÃO FINAL EM CADA CLIP
