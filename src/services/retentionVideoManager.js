@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { RETENTION_VIDEOS } from '../models/niches.js';
+import { convertStreamableToDirectUrl, isStreamableUrl } from '../utils/streamableUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +46,12 @@ export function getRetentionVideoPath(retentionVideoId) {
 
   // PRIORIDADE 1: Se o vídeo tem URL externa configurada, usar ela
   if (videoMeta.url && (videoMeta.url.startsWith('http://') || videoMeta.url.startsWith('https://'))) {
+    // Se for URL do Streamable, converter para URL direta do vídeo
+    if (isStreamableUrl(videoMeta.url)) {
+      const directUrl = convertStreamableToDirectUrl(videoMeta.url);
+      console.log(`[RETENTION] Usando URL do Streamable para ${retentionVideoId}: ${videoMeta.url} -> ${directUrl}`);
+      return directUrl;
+    }
     console.log(`[RETENTION] Usando URL externa para ${retentionVideoId}: ${videoMeta.url}`);
     return videoMeta.url;
   }

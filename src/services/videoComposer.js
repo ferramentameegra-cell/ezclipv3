@@ -222,6 +222,13 @@ export async function composeFinalVideo({
     if (retentionVideoPath) {
       const isRetentionUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
       
+      // Se for URL do Streamable, já foi convertida em retentionVideoManager
+      // Mas vamos garantir que está convertida aqui também (caso tenha sido passada diretamente)
+      if (isRetentionUrl && isStreamableUrl(retentionVideoPath)) {
+        retentionVideoPath = convertStreamableToDirectUrl(retentionVideoPath);
+        console.log(`[COMPOSER] URL do Streamable convertida para uso direto: ${retentionVideoPath}`);
+      }
+      
       if (!isRetentionUrl && fs.existsSync(retentionVideoPath)) {
         try {
           const retentionMetadata = await new Promise((retentionResolve, retentionReject) => {
