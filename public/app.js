@@ -21,6 +21,7 @@ const appState = {
     currentUser: null,
     userToken: null,
     userCredits: null, // { free_trial_credits, credits_balance, total_credits, plan_id }
+    pendingGeneration: null, // Estado salvo para retomar geração após login
     currentTab: 'home',
     configurations: {
         format: '9:16',
@@ -157,19 +158,16 @@ const apiClient = new ApiClient(window.location.origin);
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
+    // Atualizar estado do botão de gerar ao carregar
+    updateGenerateButtonState();
     initializeApp();
 });
 
 async function initializeApp() {
-    // AUTENTICAÇÃO OBRIGATÓRIA - Verificar primeiro
-    const isAuthenticated = await checkAuth();
+    // Verificar autenticação (opcional - não bloqueia uso da plataforma)
+    await checkAuth();
     
-    if (!isAuthenticated) {
-        // Login obrigatório - não continuar inicialização
-        return;
-    }
-    
-    // Se autenticado, inicializar funcionalidades
+    // Inicializar funcionalidades (disponíveis para todos, mesmo sem login)
     setupYouTubeInput();
     setupUploadDragDrop();
     setupTrimControls();
@@ -192,6 +190,9 @@ async function initializeApp() {
     }, 100);
     
     updateProgressSteps('youtube'); // Etapa 1
+    
+    // Atualizar estado do botão de gerar
+    updateGenerateButtonState();
 }
 
 // ========== TAB NAVIGATION ==========
@@ -425,6 +426,7 @@ async function loadUserCredits() {
                 plan_id: data.plan_id || null
             };
             updateCreditsUI();
+            updateGenerateButtonState(); // Atualizar botão após carregar créditos
             console.log('[CREDITS] Créditos carregados:', appState.userCredits);
         }
     } catch (error) {
@@ -490,6 +492,9 @@ function updateUserUI() {
     
     // Atualizar créditos na UI
     updateCreditsUI();
+    
+    // Atualizar estado do botão de gerar
+    updateGenerateButtonState();
 }
 
 /**
@@ -621,6 +626,23 @@ async function handleLogin(event) {
             // Carregar créditos
             await loadUserCredits();
             
+            // Fechar modal de login se estiver aberto
+            closeLoginRequiredModal();
+            
+            // Retomar geração se estava pendente
+            if (appState.pendingGeneration) {
+                console.log('[AUTH] Retomando geração após login...');
+                // Restaurar estado
+                Object.assign(appState, appState.pendingGeneration);
+                appState.pendingGeneration = null;
+                
+                // Verificar créditos e continuar
+                setTimeout(() => {
+                    proceedToGenerate();
+                }, 500);
+                return;
+            }
+            
             // Mostrar conteúdo principal
             setTimeout(() => {
                 showMainContent();
@@ -684,6 +706,23 @@ async function handleRegister(event) {
             // Carregar créditos
             await loadUserCredits();
             
+            // Fechar modal de login se estiver aberto
+            closeLoginRequiredModal();
+            
+            // Retomar geração se estava pendente
+            if (appState.pendingGeneration) {
+                console.log('[AUTH] Retomando geração após registro...');
+                // Restaurar estado
+                Object.assign(appState, appState.pendingGeneration);
+                appState.pendingGeneration = null;
+                
+                // Verificar créditos e continuar
+                setTimeout(() => {
+                    proceedToGenerate();
+                }, 500);
+                return;
+            }
+            
             // Mostrar conteúdo principal após registro
             setTimeout(() => {
                 showMainContent();
@@ -717,6 +756,37 @@ function showLogin() {
     const registerCard = document.getElementById('register-card');
     if (registerCard) registerCard.classList.add('hidden');
     if (loginCard) loginCard.classList.remove('hidden');
+}
+
+/**
+ * Mostrar modal de login necessário para geração
+ */
+function showLoginRequiredModal() {
+    const modal = document.getElementById('login-required-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+/**
+ * Fechar modal de login necessário
+ */
+function closeLoginRequiredModal() {
+    const modal = document.getElementById('login-required-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+/**
+ * Abrir tela de login a partir do modal
+ */
+function openLoginFromModal() {
+    closeLoginRequiredModal();
+    showAuthRequired();
+    showLogin();
 }
 
 function logout() {
@@ -2285,6 +2355,41 @@ function showNicheSection() {
 }
 
 /**
+ * Atualizar estado visual do botão de gerar clipes
+ */
+function updateGenerateButtonState() {
+    const generateBtn = document.querySelector('button[onclick="proceedToGenerate()"]');
+    if (!generateBtn) return;
+    
+    const isLoggedIn = appState.currentUser && appState.userToken;
+    const isAdmin = appState.currentUser?.role === 'admin';
+    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
+    const totalCredits = appState.userCredits?.total_credits ?? 0;
+    const hasEnoughCredits = isAdmin || totalCredits >= clipsCount;
+    
+    if (!isLoggedIn) {
+        // Usuário não logado - botão desabilitado com mensagem
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.6';
+        generateBtn.style.cursor = 'not-allowed';
+        generateBtn.title = 'Faça login para gerar clipes';
+        // Adicionar ícone ou texto indicativo se necessário
+    } else if (!hasEnoughCredits && !isAdmin) {
+        // Usuário logado mas sem créditos suficientes
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.6';
+        generateBtn.style.cursor = 'not-allowed';
+        generateBtn.title = `Créditos insuficientes. Você tem ${totalCredits} crédito(s), mas precisa de ${clipsCount}`;
+    } else {
+        // Usuário logado com créditos ou admin - botão habilitado
+        generateBtn.disabled = false;
+        generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
+        generateBtn.title = isAdmin ? 'Gerar clipes (Admin - ilimitado)' : `Gerar ${clipsCount} clipe(s) - Consumirá ${clipsCount} crédito(s)`;
+    }
+}
+
+/**
  * Atualiza resumo na tela de gerar
  */
 function updateGenerateSummary() {
@@ -2863,10 +2968,26 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
-    // AUTENTICAÇÃO OBRIGATÓRIA
+    // AUTENTICAÇÃO OBRIGATÓRIA - Mostrar modal em vez de alert
     if (!appState.currentUser || !appState.userToken) {
-        alert('Você precisa estar logado para gerar clipes. Por favor, faça login primeiro.');
-        showAuthRequired();
+        // Salvar estado atual para retomar após login
+        appState.pendingGeneration = {
+            videoId: appState.videoId,
+            nicheId: appState.nicheId,
+            numberOfCuts: appState.numberOfCuts,
+            trimStart: appState.trimStart,
+            trimEnd: appState.trimEnd,
+            cutDuration: appState.cutDuration,
+            headlineStyle: appState.headlineStyle,
+            headlineText: appState.headlineText,
+            headlineSize: appState.headlineSize,
+            headlineColor: appState.headlineColor,
+            font: appState.font,
+            backgroundColor: appState.backgroundColor,
+            retentionVideoId: appState.retentionVideoId,
+            configurations: { ...appState.configurations }
+        };
+        showLoginRequiredModal();
         return;
     }
     
@@ -2909,11 +3030,12 @@ function proceedToGenerate() {
         }
     }
     
-    // Verificar créditos ANTES de continuar
+    // Verificar créditos ANTES de continuar (admin ignora verificação)
     const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
-    const totalCredits = appState.userCredits?.total_credits || 0;
+    const isAdmin = appState.currentUser?.role === 'admin';
+    const totalCredits = appState.userCredits?.total_credits ?? 0;
     
-    if (totalCredits < clipsCount) {
+    if (!isAdmin && totalCredits < clipsCount) {
         const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
         if (confirm(message)) {
             showCreditsPurchaseModal();
@@ -2921,8 +3043,14 @@ function proceedToGenerate() {
         return;
     }
     
-    // Confirmar antes de gerar (mostrar quantos créditos serão consumidos)
-    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
+    // Confirmar antes de gerar (admin não precisa confirmar créditos)
+    let confirmMessage;
+    if (isAdmin) {
+        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nComo administrador, você tem créditos ilimitados.\n\nDeseja continuar?`;
+    } else {
+        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
+    }
+    
     if (!confirm(confirmMessage)) {
         console.log('[GENERATE] Usuário cancelou a geração.');
         return;
@@ -3009,21 +3137,23 @@ function updatePreviewStyle() {
 }
 
 async function generateSeries() {
-    // AUTENTICAÇÃO OBRIGATÓRIA
+    // AUTENTICAÇÃO OBRIGATÓRIA - Backend também valida
     if (!appState.currentUser || !appState.userToken) {
+        // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
+        // Mas manter como segurança
         alert('Você precisa estar logado para gerar clipes. Por favor, faça login primeiro.');
         showAuthRequired();
         return;
     }
     
-    // Verificar créditos disponíveis ANTES de gerar
+    // Verificar créditos disponíveis ANTES de gerar (admin ignora)
     const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
-    const totalCredits = appState.userCredits?.total_credits || 0;
+    const isAdmin = appState.currentUser?.role === 'admin';
+    const totalCredits = appState.userCredits?.total_credits ?? 0;
     
-    if (totalCredits < clipsCount) {
+    if (!isAdmin && totalCredits < clipsCount) {
         const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
         if (confirm(message)) {
-            // Abrir modal de compra de créditos (será implementado)
             showCreditsPurchaseModal();
         }
         return;

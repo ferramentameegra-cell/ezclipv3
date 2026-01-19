@@ -1114,6 +1114,41 @@
         </div>
     </div>
 
+    <!-- Login Required Modal for Generation -->
+    <div id="login-required-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Login Necessário</h2>
+                <button onclick="closeLoginRequiredModal()" style="background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--text-secondary);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <p style="color: var(--text-primary); margin-bottom: 1rem; line-height: 1.6;">
+                    Para gerar clipes, você precisa criar uma conta e fazer login. É rápido e gratuito!
+                </p>
+                <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+                    <p style="margin: 0; font-size: 0.875rem; color: var(--text-secondary);">
+                        <strong>✨ Benefícios:</strong><br>
+                        • Ganhe 5 clipes grátis ao criar sua conta<br>
+                        • Acesse seus clipes de qualquer lugar<br>
+                        • Histórico completo de suas gerações
+                    </p>
+                </div>
+            </div>
+            <div class="modal-actions" style="display: flex; gap: 0.75rem;">
+                <button class="btn-modal secondary" onclick="closeLoginRequiredModal()" style="flex: 1;">
+                    Cancelar
+                </button>
+                <button class="btn-modal primary" onclick="openLoginFromModal()" style="flex: 1;">
+                    Fazer Login / Cadastrar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="headlineConfig.js?v=1.0.0"></script>
     <script src="app.js?v=3.0.0"></script>
     <script src="captions-editor.js?v=3.0.0"></script>
