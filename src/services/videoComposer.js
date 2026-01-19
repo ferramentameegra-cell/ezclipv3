@@ -922,14 +922,13 @@ export async function composeFinalVideo({
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 OBRIGATORIAMENTE (formato vertical 9:16)
       // [final] sempre existe após a etapa 8 e já tem as dimensões corretas (1080x1920)
-      // O complexFilter já força as dimensões através do [final] com scale+crop
+      // O complexFilter já força as dimensões através do [final] com scale=1080:1920 + crop=1080:1920:0:0
       // Adicionar -s e -aspect como backup OBRIGATÓRIO para garantir formato vertical
-      // Usar múltiplas opções para FORÇAR 1080x1920 em todas as etapas
+      // NÃO usar -vf aqui pois conflita com complexFilter - o complexFilter já faz o trabalho
       const outputOptions = [
         '-map', '[final]',
         '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical OBRIGATÓRIO)
         '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical OBRIGATÓRIO)
-        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920', // FORÇAR novamente no vídeo filter
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
@@ -938,8 +937,9 @@ export async function composeFinalVideo({
       ];
       
       console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
-      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16 -vf scale=1080:1920`);
-      console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento: complexFilter + -s + -aspect + -vf`);
+      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16`);
+      console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento: complexFilter (scale+crop) + -s + -aspect`);
+      console.log(`[COMPOSER] ✅ complexFilter garante: scale=1080:1920:force_original_aspect_ratio=increase + crop=1080:1920:0:0`);
       console.log(`[COMPOSER] ✅ Usando label final: [final]`);
       console.log(`[COMPOSER] ✅ Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
