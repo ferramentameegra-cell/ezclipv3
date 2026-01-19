@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Listar planos (público, mas com autenticação recomendada)
+// Listar planos (PÚBLICO - não requer autenticação)
 router.get('/plans', getPlans);
 
 // Rotas protegidas

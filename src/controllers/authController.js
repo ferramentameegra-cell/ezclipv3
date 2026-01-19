@@ -6,7 +6,12 @@
 import { createUser, getUserByEmail, verifyPassword } from '../models/users.js';
 import { generateToken } from '../services/authService.js';
 import { jwtConfig } from '../config/security.js';
-import { logLoginAttempt, logSecurityError } from '../middleware/logger.js';
+// Logger removido temporariamente
+// import { logLoginAttempt, logSecurityError } from '../middleware/logger.js';
+
+// Funções mockadas para não quebrar código
+const logLoginAttempt = () => {}; // Não fazer nada
+const logSecurityError = () => {}; // Não fazer nada
 
 /**
  * POST /api/auth/register

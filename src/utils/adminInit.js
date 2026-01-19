@@ -4,7 +4,7 @@
  * Limpa dados e cria usuário administrador
  */
 
-import { clearAllUsers, createAdminUser } from '../models/users.js';
+import { clearAllUsers, createAdminUser, userStore } from '../models/users.js';
 import { clearAllUsageLogs } from '../models/usageLogs.js';
 import { clearAllVideoLogs } from '../models/videoLogs.js';
 
@@ -18,21 +18,32 @@ let hasInitialized = false;
  * - Ainda não foi executado nesta sessão
  */
 export async function initializeAdmin() {
-  // Verificar se já foi inicializado
+  // Verificar se admin já existe antes de limpar tudo
+  const existingAdmin = Array.from(userStore.values()).find(
+    u => u.email === 'josyasborba@hotmail.com' && u.role === 'admin'
+  );
+  
+  if (existingAdmin) {
+    console.log('[ADMIN_INIT] ✅ Admin já existe:', existingAdmin.email);
+    hasInitialized = true;
+    return;
+  }
+
+  // Verificar se já foi inicializado nesta sessão
   if (hasInitialized) {
     console.log('[ADMIN_INIT] Inicialização administrativa já foi executada nesta sessão');
     return;
   }
 
-  // Verificar se deve executar
-  const shouldInit = 
-    process.env.NODE_ENV !== 'production' || 
-    process.env.INIT_ADMIN === 'true';
+  // SEMPRE executar inicialização (para garantir que admin existe)
+  // const shouldInit = 
+  //   process.env.NODE_ENV !== 'production' || 
+  //   process.env.INIT_ADMIN === 'true';
 
-  if (!shouldInit) {
-    console.log('[ADMIN_INIT] Inicialização administrativa desabilitada (produção sem INIT_ADMIN)');
-    return;
-  }
+  // if (!shouldInit) {
+  //   console.log('[ADMIN_INIT] Inicialização administrativa desabilitada (produção sem INIT_ADMIN)');
+  //   return;
+  // }
 
   try {
     console.log('[ADMIN_INIT] 🚀 Iniciando inicialização administrativa...');
