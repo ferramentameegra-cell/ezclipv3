@@ -778,12 +778,29 @@ async function handleLogin(event) {
     }
     
     try {
-        console.log('[AUTH] Tentando fazer login...', { email, apiBase: API_BASE });
+        console.log('[AUTH] 🔐 Tentando fazer login...', { 
+            email: email.substring(0, 5) + '***', 
+            apiBase: API_BASE,
+            timestamp: new Date().toISOString()
+        });
+        
+        const loginPayload = { email, password };
+        console.log('[AUTH] 📤 Enviando requisição:', {
+            url: `${API_BASE}/api/auth/login`,
+            method: 'POST',
+            hasEmail: !!email,
+            hasPassword: !!password
+        });
+        
         const response = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-            credentials: 'include' // Importante para cookies
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(loginPayload),
+            credentials: 'include', // Importante para cookies
+            mode: 'cors' // Garantir CORS
         });
         
         console.log('[AUTH] Resposta recebida:', { status: response.status, statusText: response.statusText, ok: response.ok });

@@ -108,7 +108,12 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log('[AUTH] Tentativa de login recebida:', { email: email ? email.substring(0, 5) + '***' : 'vazio' });
+    console.log('[AUTH] ========================================');
+    console.log('[AUTH] 🔐 TENTATIVA DE LOGIN RECEBIDA');
+    console.log('[AUTH] Email:', email ? email.substring(0, 5) + '***' : 'VAZIO');
+    console.log('[AUTH] IP:', req.ip || req.connection.remoteAddress);
+    console.log('[AUTH] User-Agent:', req.get('user-agent') || 'N/A');
+    console.log('[AUTH] ========================================');
 
     // Validações
     if (!email || !password) {
@@ -120,11 +125,20 @@ export const login = async (req, res) => {
     }
 
     // Buscar usuário
+    console.log('[AUTH] 🔍 Buscando usuário no banco...');
     const user = getUserByEmail(email);
     const ipAddress = req.ip;
     const userAgent = req.get('user-agent');
 
-    console.log('[AUTH] Usuário encontrado:', user ? 'SIM' : 'NÃO', user ? `(ID: ${user.id}, Role: ${user.role})` : '');
+    console.log('[AUTH] Usuário encontrado:', user ? '✅ SIM' : '❌ NÃO');
+    if (user) {
+      console.log('[AUTH]   ID:', user.id);
+      console.log('[AUTH]   Email:', user.email);
+      console.log('[AUTH]   Role:', user.role);
+      console.log('[AUTH]   Tem password_hash:', !!user.password_hash);
+    } else {
+      console.log('[AUTH] ❌ Usuário não encontrado para email:', email);
+    }
 
     if (!user) {
       // Registrar tentativa de login falha
@@ -135,7 +149,8 @@ export const login = async (req, res) => {
         userAgent
       });
 
-      console.log('[AUTH] ❌ Usuário não encontrado para email:', email);
+      console.log('[AUTH] ❌ LOGIN FALHOU: Usuário não encontrado');
+      console.log('[AUTH] ========================================\n');
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -143,9 +158,9 @@ export const login = async (req, res) => {
     }
 
     // Verificar senha
-    console.log('[AUTH] Verificando senha...');
+    console.log('[AUTH] 🔐 Verificando senha...');
     const isValidPassword = await verifyPassword(user, password);
-    console.log('[AUTH] Senha válida:', isValidPassword ? 'SIM' : 'NÃO');
+    console.log('[AUTH] Senha válida:', isValidPassword ? '✅ SIM' : '❌ NÃO');
     
     if (!isValidPassword) {
       // Registrar tentativa de login falha
@@ -157,7 +172,8 @@ export const login = async (req, res) => {
         userId: user.id
       });
 
-      console.log('[AUTH] ❌ Senha incorreta para usuário:', user.email);
+      console.log('[AUTH] ❌ LOGIN FALHOU: Senha incorreta');
+      console.log('[AUTH] ========================================\n');
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -184,7 +200,12 @@ export const login = async (req, res) => {
       userId: user.id
     });
 
-    console.log(`[AUTH] ✅ Login realizado com sucesso: ${user.email} (ID: ${user.id}, Role: ${user.role})`);
+    console.log('[AUTH] ✅ LOGIN BEM-SUCEDIDO!');
+    console.log('[AUTH]   Usuário:', user.email);
+    console.log('[AUTH]   ID:', user.id);
+    console.log('[AUTH]   Role:', user.role);
+    console.log('[AUTH]   Plano:', user.plan_id);
+    console.log('[AUTH] ========================================\n');
 
     const responseData = {
       message: 'Login realizado com sucesso',
@@ -200,7 +221,7 @@ export const login = async (req, res) => {
       token // Manter token no JSON para compatibilidade com frontend existente
     };
 
-    console.log('[AUTH] Enviando resposta de sucesso');
+    console.log('[AUTH] 📤 Enviando resposta de sucesso ao frontend');
     res.json(responseData);
   } catch (error) {
     console.error('[AUTH] Erro ao fazer login:', error);
