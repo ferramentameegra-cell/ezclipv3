@@ -748,8 +748,18 @@ export async function composeFinalVideo({
 
       // Input 2 (ou 1 se não houver background): vídeo de retenção (se houver)
       if (retentionVideoPath) {
-        command.input(retentionVideoPath);
-        console.log(`[COMPOSER] Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}`);
+        // Verificar se é URL (não deve ser, pois já foi baixado)
+        const isUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
+        if (isUrl) {
+          console.error(`[COMPOSER] ❌ ERRO: Vídeo de retenção ainda é URL! Isso não deveria acontecer. Desabilitando...`);
+          retentionVideoPath = null;
+        } else if (!fs.existsSync(retentionVideoPath)) {
+          console.error(`[COMPOSER] ❌ ERRO: Arquivo de retenção não existe: ${retentionVideoPath}. Desabilitando...`);
+          retentionVideoPath = null;
+        } else {
+          command.input(retentionVideoPath);
+          console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1}: ${retentionVideoPath}`);
+        }
       }
 
       // Aplicar filter_complex como string
