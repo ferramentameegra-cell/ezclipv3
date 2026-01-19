@@ -27,11 +27,44 @@ export function generateToken(user) {
 
 /**
  * Verificar e decodificar token JWT
+ * Validação robusta com proteção contra ataques
  */
 export function verifyToken(token) {
+  if (!token || typeof token !== 'string') {
+    throw new Error('Token inválido');
+  }
+  
+  // Validar formato básico do JWT (3 partes separadas por ponto)
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Token com formato inválido');
+  }
+  
+  // Validar que não está vazio
+  if (token.trim().length === 0) {
+    throw new Error('Token vazio');
+  }
+  
   try {
-    return jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'], // Apenas HS256, não permitir algoritmos fracos
+      maxAge: JWT_EXPIRES_IN // Validar expiração
+    });
+    
+    // Validações adicionais
+    if (!decoded.id || !decoded.email) {
+      throw new Error('Token com payload inválido');
+    }
+    
+    return decoded;
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      throw new Error('Token expirado');
+    } else if (error.name === 'JsonWebTokenError') {
+      throw new Error('Token inválido');
+    } else if (error.name === 'NotBeforeError') {
+      throw new Error('Token ainda não válido');
+    }
     throw new Error('Token inválido ou expirado');
   }
 }

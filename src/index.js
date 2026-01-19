@@ -9,10 +9,13 @@ import cookieParser from "cookie-parser";
 
 // Inicializar Redis primeiro (opcional)
 import { initRedis } from "./services/redisService.js";
-// MIDDLEWARES DE SEGURANÇA REMOVIDOS TEMPORARIAMENTE
-// import { apiLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
-// import loggerMiddleware from "./middleware/logger.js";
+// MIDDLEWARES DE SEGURANÇA
+import { apiLimiter, loginLimiter, authenticatedLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
+import loggerMiddleware from "./middleware/logger.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { securityHeaders, xssProtection, validateContentType } from "./middleware/security.js";
+import { csrfProtection, getCSRFToken } from "./middleware/csrf.js";
+import { corsConfig } from "./config/security.js";
 
 import youtubeRoutes from "./routes/youtube.js";
 import authRoutes from "./routes/auth.js";
@@ -58,34 +61,54 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // =====================
-// MIDDLEWARES BÁSICOS (SEGURANÇA REMOVIDA)
+// MIDDLEWARES DE SEGURANÇA (HARDENING)
 // =====================
-// CORS - totalmente permissivo
-app.use(cors({
-  origin: '*',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
 
-// Cookie parser
+// 1. Security Headers (Helmet) - PRIMEIRO
+app.use(securityHeaders);
+
+// 2. CORS - Configurado adequadamente
+app.use(cors(corsConfig));
+
+// 3. Cookie parser
 app.use(cookieParser());
 
-// Body parser
+// 4. Body parser com limite
 app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// Logger REMOVIDO - estava causando bloqueios
-// app.use(loggerMiddleware);
+// 5. Validação de Content-Type
+app.use(validateContentType);
 
-// Rate limiting REMOVIDO COMPLETAMENTE - estava bloqueando
-// app.use('/api/', apiLimiter);
-// app.use('/api/download/youtube', heavyOperationLimiter);
-// app.use('/api/generate', heavyOperationLimiter);
-// app.use('/api/captions/generate', heavyOperationLimiter);
+// 6. Proteção XSS (sanitização)
+app.use(xssProtection);
+
+// 7. Logger (assíncrono, não bloqueia)
+app.use(loggerMiddleware);
+
+// 8. Rate Limiting (fail-open, não bloqueia se Redis falhar)
+// Rate limit agressivo para login (prevenir brute force)
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/register', loginLimiter);
+
+// Rate limit para operações pesadas
+app.use('/api/download/youtube', heavyOperationLimiter);
+app.use('/api/generate', heavyOperationLimiter);
+app.use('/api/captions/generate', heavyOperationLimiter);
+
+// Rate limit geral para API (mais permissivo)
+app.use('/api/', apiLimiter);
+
+// 9. CSRF Protection (apenas em rotas que modificam dados)
+app.use(csrfProtection);
 
 // =====================
 // API
 // =====================
+
+// Rota para obter token CSRF (pública)
+app.get("/api/csrf-token", getCSRFToken);
+
 app.use("/api/youtube", youtubeRoutes); // Público (download de vídeos)
 app.use("/api/auth", authRoutes); // Público (login/registro)
 app.use("/api/credits", creditsRoutes); // Requer auth (verificar saldo/comprar)
