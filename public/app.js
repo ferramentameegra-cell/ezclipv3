@@ -785,6 +785,8 @@ async function handleLogin(event) {
         }
         
         if (data.user && data.token) {
+            console.log('[AUTH] ✅ Login realizado com sucesso!');
+            
             appState.currentUser = data.user;
             appState.userToken = data.token;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
@@ -795,6 +797,10 @@ async function handleLogin(event) {
                 statusMsg.className = 'status-modern success';
                 statusMsg.classList.remove('hidden');
             }
+            
+            // Restaurar botões
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
             
             updateUserUI();
             
@@ -826,11 +832,14 @@ async function handleLogin(event) {
                 switchTab('home');
             }, 500);
         } else {
+            console.error('[AUTH] Resposta inválida:', data);
             if (statusMsg) {
-                statusMsg.textContent = data.error || 'Erro ao fazer login';
+                statusMsg.textContent = data.error || 'Erro ao fazer login - resposta inválida';
                 statusMsg.className = 'status-modern error';
                 statusMsg.classList.remove('hidden');
             }
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
         }
     } catch (error) {
         console.error('[AUTH] Erro no login:', error);
@@ -916,14 +925,20 @@ async function handleRegister(event) {
         }
         
         if (data.user && data.token) {
+            console.log('[AUTH] ✅ Conta criada com sucesso!');
+            
             appState.currentUser = data.user;
             appState.userToken = data.token;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
             localStorage.setItem('ezv2_token', data.token);
             
-            statusMsg.textContent = `Conta criada com sucesso! Você ganhou ${data.user.free_trial_credits || 5} clipes gratuitos!`;
+            statusMsg.textContent = `Conta criada com sucesso! Você pode processar ${data.user.videos_limit || 1} vídeo(s).`;
             statusMsg.className = 'login-status success';
             statusMsg.classList.remove('hidden');
+            
+            // Restaurar botões
+            btnText.classList.remove('hidden');
+            btnSpinner.classList.add('hidden');
             
             updateUserUI();
             
@@ -955,9 +970,12 @@ async function handleRegister(event) {
                 switchTab('home');
             }, 500);
         } else {
-            statusMsg.textContent = data.error || 'Erro ao criar conta';
+            console.error('[AUTH] Resposta inválida:', data);
+            statusMsg.textContent = data.error || 'Erro ao criar conta - resposta inválida';
             statusMsg.className = 'login-status error';
             statusMsg.classList.remove('hidden');
+            btnText.classList.remove('hidden');
+            btnSpinner.classList.add('hidden');
         }
     } catch (error) {
         console.error('Erro:', error);
