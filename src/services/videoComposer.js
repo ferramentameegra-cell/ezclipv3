@@ -795,11 +795,12 @@ export async function composeFinalVideo({
         // Adicionar input do vídeo de retenção
         // O vídeo será loopado automaticamente pelo FFmpeg no overlay se for mais curto
         // usando shortest=0 no overlay (já configurado abaixo)
+        // Configurar loop infinito ANTES de adicionar o input
         const retentionInput = command.input(retentionVideoPath);
-        // Configurar loop infinito para o input de retenção
-        retentionInput.inputOptions(['-stream_loop', '-1']);
+        retentionInput.inputOptions(['-stream_loop', '-1']); // Loopar vídeo de retenção infinitamente
         console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1} com loop infinito: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
         console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente durante toda a duração do vídeo principal`);
+        console.log(`[COMPOSER] ✅ Vídeo de retenção será concatenado/sobreposto ao final da timeline durante todo o render`);
       } else if (retentionVideoId && retentionVideoId !== 'none') {
         // Se retentionVideoId foi especificado mas não há caminho, falhar
         return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}`));
