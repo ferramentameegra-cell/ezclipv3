@@ -176,13 +176,28 @@ async function initializeApp() {
     // CRÍTICO: Garantir que conteúdo principal está visível e interativo (nunca bloquear)
     showMainContent();
     
-    // Forçar que auth-section esteja escondida e não bloqueie
+    // Forçar que auth-section esteja escondida e não bloqueie (múltiplas garantias)
     const authSection = document.getElementById('auth-section');
     if (authSection) {
         authSection.style.display = 'none';
         authSection.style.pointerEvents = 'none';
         authSection.style.zIndex = '-1';
+        authSection.style.visibility = 'hidden';
+        authSection.style.opacity = '0';
+        authSection.style.position = 'fixed';
+        authSection.style.top = '-9999px';
+        authSection.style.left = '-9999px';
+        authSection.style.width = '0';
+        authSection.style.height = '0';
         authSection.classList.add('hidden');
+    }
+    
+    // Garantir que loading-overlay não bloqueie
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay && loadingOverlay.classList.contains('hidden')) {
+        loadingOverlay.style.display = 'none';
+        loadingOverlay.style.pointerEvents = 'none';
+        loadingOverlay.style.zIndex = '-1';
     }
     
     // Verificar autenticação (opcional - não bloqueia uso da plataforma)
