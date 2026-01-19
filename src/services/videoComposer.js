@@ -15,6 +15,8 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import https from 'https';
+import http from 'http';
 import { getRetentionVideoPath, getRandomRetentionVideoPath } from './retentionVideoManager.js';
 import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
 import { convertStreamableToDirectUrl, isStreamableUrl } from '../utils/streamableUtils.js';
@@ -226,11 +228,43 @@ export async function composeFinalVideo({
     if (retentionVideoPath) {
       const isRetentionUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
       
-      // Se for URL do Streamable, já foi convertida em retentionVideoManager
-      // Mas vamos garantir que está convertida aqui também (caso tenha sido passada diretamente)
-      if (isRetentionUrl && isStreamableUrl(retentionVideoPath)) {
-        retentionVideoPath = convertStreamableToDirectUrl(retentionVideoPath);
-        console.log(`[COMPOSER] URL do Streamable convertida para uso direto: ${retentionVideoPath}`);
+      // Se for URL (especialmente Streamable), baixar o vídeo primeiro
+      // FFmpeg pode ter problemas com URLs HTTP/HTTPS diretas
+      if (isRetentionUrl) {
+        try {
+          console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção de URL: ${retentionVideoPath}`);
+          
+          // Se for URL do Streamable, converter para URL direta primeiro
+          if (isStreamableUrl(retentionVideoPath)) {
+            retentionVideoPath = convertStreamableToDirectUrl(retentionVideoPath);
+            console.log(`[COMPOSER] URL do Streamable convertida: ${retentionVideoPath}`);
+          }
+          
+          // Baixar vídeo para arquivo temporário
+          const tempDir = path.join(process.cwd(), 'tmp', 'retention-downloads');
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+          }
+          
+          const urlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+          const tempVideoPath = path.join(tempDir, `retention_${urlHash}.mp4`);
+          
+          // Se já existe, usar o arquivo baixado
+          if (fs.existsSync(tempVideoPath)) {
+            console.log(`[COMPOSER] ✅ Usando vídeo de retenção já baixado: ${tempVideoPath}`);
+            retentionVideoPath = tempVideoPath;
+          } else {
+            // Baixar vídeo
+            console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção...`);
+            await downloadVideoFromUrl(retentionVideoPath, tempVideoPath);
+            console.log(`[COMPOSER] ✅ Vídeo de retenção baixado: ${tempVideoPath}`);
+            retentionVideoPath = tempVideoPath;
+          }
+        } catch (downloadError) {
+          console.error(`[COMPOSER] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
+          console.warn(`[COMPOSER] ⚠️ Tentando usar URL diretamente (pode falhar)...`);
+          // Continuar com URL original - pode funcionar em alguns casos
+        }
       }
       
       if (!isRetentionUrl && fs.existsSync(retentionVideoPath)) {
@@ -962,6 +996,43 @@ function getFontPath(fontName) {
 
   // Fallback para fonte padrão do sistema
   return '/System/Library/Fonts/Helvetica.ttc';
+}
+
+/**
+ * Baixar vídeo de uma URL para arquivo local
+ * @param {string} url - URL do vídeo
+ * @param {string} outputPath - Caminho onde salvar o vídeo
+ * @returns {Promise<void>}
+ */
+async function downloadVideoFromUrl(url, outputPath) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(outputPath);
+    const protocol = url.startsWith('https') ? https : http;
+    
+    protocol.get(url, (response) => {
+      // Verificar status code
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync(outputPath);
+        return reject(new Error(`Erro ao baixar vídeo: HTTP ${response.statusCode}`));
+      }
+      
+      // Pipe response para arquivo
+      response.pipe(file);
+      
+      file.on('finish', () => {
+        file.close();
+        console.log(`[COMPOSER] ✅ Vídeo baixado: ${outputPath} (${fs.statSync(outputPath).size} bytes)`);
+        resolve();
+      });
+    }).on('error', (err) => {
+      file.close();
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+      reject(err);
+    });
+  });
 }
 
 export default composeFinalVideo;

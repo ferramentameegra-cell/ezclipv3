@@ -3711,8 +3711,23 @@ async function generateSeries() {
         // Não bloquear - deixar backend validar
     }
     
+    // Mostrar overlay de progresso IMEDIATAMENTE
     const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+    const progressFill = document.getElementById('loading-progress');
+    const progressText = document.getElementById('loading-percent');
+    const progressMessage = document.getElementById('loading-message');
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+        // Garantir que está visível e no topo
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.zIndex = '9999';
+    }
+    
+    // Inicializar progresso visual
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
+    if (progressMessage) progressMessage.textContent = 'Iniciando geração de clipes...';
     
     try {
         // Mostrar feedback de fila
@@ -3821,9 +3836,22 @@ async function generateSeries() {
 }
 
 async function monitorProgress(jobId) {
+    const loadingOverlay = document.getElementById('loading-overlay');
     const progressFill = document.getElementById('loading-progress');
     const progressText = document.getElementById('loading-percent');
     const progressMessage = document.getElementById('loading-message');
+    
+    // Garantir que o overlay está visível
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.zIndex = '9999';
+    }
+    
+    // Inicializar progresso
+    if (progressFill) progressFill.style.width = '1%';
+    if (progressText) progressText.textContent = '1%';
+    if (progressMessage) progressMessage.textContent = 'Conectando ao servidor...';
     
     console.log(`[GENERATE] Iniciando monitoramento via SSE do job ${jobId}`);
     
