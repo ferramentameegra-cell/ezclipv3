@@ -12,14 +12,36 @@ import { initVideoState, updateVideoState, VIDEO_STATES } from '../services/vide
 
 export const videoStore = new Map();
 
+// Cache do arquivo de cookies para reutilizar entre tentativas
+let cookiesPathCache = null;
+let cookiesContentCache = null;
+
 /**
  * Cria arquivo temporário de cookies a partir da variável de ambiente
  * Retorna o caminho do arquivo ou null se não houver cookies
+ * Reutiliza arquivo se conteúdo não mudou
  */
 function createCookiesFile() {
   const cookiesContent = process.env.YTDLP_COOKIES;
+  
+  // Se não há cookies, limpar cache e retornar null
   if (!cookiesContent || cookiesContent.trim() === '') {
+    if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+      try {
+        fs.unlinkSync(cookiesPathCache);
+      } catch (e) {
+        // Ignorar erro ao remover
+      }
+    }
+    cookiesPathCache = null;
+    cookiesContentCache = null;
     return null;
+  }
+
+  // Se conteúdo não mudou e arquivo existe, reutilizar
+  if (cookiesPathCache && cookiesContentCache === cookiesContent && fs.existsSync(cookiesPathCache)) {
+    console.log('[DOWNLOAD] ✅ Reutilizando arquivo de cookies existente:', cookiesPathCache);
+    return cookiesPathCache;
   }
 
   try {
@@ -30,10 +52,26 @@ function createCookiesFile() {
     // Escrever conteúdo dos cookies
     fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
     
-    console.log('[DOWNLOAD] Arquivo de cookies criado:', cookiesPath);
+    // Remover arquivo antigo se existir
+    if (cookiesPathCache && fs.existsSync(cookiesPathCache) && cookiesPathCache !== cookiesPath) {
+      try {
+        fs.unlinkSync(cookiesPathCache);
+      } catch (e) {
+        // Ignorar erro ao remover arquivo antigo
+      }
+    }
+    
+    // Atualizar cache
+    cookiesPathCache = cookiesPath;
+    cookiesContentCache = cookiesContent;
+    
+    console.log('[DOWNLOAD] ✅ Arquivo de cookies criado:', cookiesPath);
+    console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', fs.statSync(cookiesPath).size, 'bytes');
     return cookiesPath;
   } catch (error) {
-    console.error('[DOWNLOAD] Erro ao criar arquivo de cookies:', error.message);
+    console.error('[DOWNLOAD] ❌ Erro ao criar arquivo de cookies:', error.message);
+    cookiesPathCache = null;
+    cookiesContentCache = null;
     return null;
   }
 }
@@ -413,9 +451,18 @@ export async function downloadWithProgress(req, res) {
       const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent;
       
       if (cookiesPath) {
-        console.log('[DOWNLOAD] Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+        console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+        console.log('[DOWNLOAD] ✅ Caminho do arquivo de cookies:', cookiesPath);
+        // Verificar tamanho do arquivo
+        try {
+          const stats = fs.statSync(cookiesPath);
+          console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
+        } catch (e) {
+          console.warn('[DOWNLOAD] ⚠️ Erro ao verificar arquivo de cookies:', e.message);
+        }
       } else {
-        console.log('[DOWNLOAD] Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+        console.warn('[DOWNLOAD] ⚠️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+        console.warn('[DOWNLOAD] ⚠️ Configure a variável YTDLP_COOKIES no Railway para evitar detecção de bot');
       }
       
       console.log('[DOWNLOAD] User-Agent:', finalUserAgent.substring(0, 50) + '...');
@@ -489,15 +536,8 @@ export async function downloadWithProgress(req, res) {
       ytdlp.on("close", async (code) => {
         if (hasResolved) return;
         
-        // Limpar arquivo de cookies temporário
-        if (cookiesPath && fs.existsSync(cookiesPath)) {
-          try {
-            fs.unlinkSync(cookiesPath);
-            console.log('[DOWNLOAD] Arquivo de cookies temporário removido');
-          } catch (unlinkError) {
-            console.warn('[DOWNLOAD] Erro ao remover cookies temporário:', unlinkError.message);
-          }
-        }
+        // NÃO limpar arquivo de cookies aqui - será reutilizado nas próximas tentativas
+        // Apenas limpar no final se todas as estratégias falharem ou se download for bem-sucedido
         
         console.log(`[DOWNLOAD] ${strategy.name} finalizou com código: ${code}`);
         
@@ -551,14 +591,7 @@ export async function downloadWithProgress(req, res) {
         if (hasResolved) return;
         hasResolved = true;
         
-        // Limpar arquivo de cookies temporário em caso de erro
-        if (cookiesPath && fs.existsSync(cookiesPath)) {
-          try {
-            fs.unlinkSync(cookiesPath);
-          } catch (unlinkError) {
-            // Ignorar erro de limpeza
-          }
-        }
+        // NÃO limpar arquivo de cookies aqui - será reutilizado nas próximas tentativas
         
         lastError = { error: error.message, strategy: strategy.name };
         reject(lastError);
@@ -608,6 +641,18 @@ export async function downloadWithProgress(req, res) {
   
   // Se nenhuma estratégia funcionou
   if (!downloadResult) {
+    // Limpar arquivo de cookies apenas no final se todas as estratégias falharam
+    if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+      try {
+        fs.unlinkSync(cookiesPathCache);
+        console.log('[DOWNLOAD] Arquivo de cookies removido após falha de todas as estratégias');
+      } catch (unlinkError) {
+        console.warn('[DOWNLOAD] Erro ao remover cookies:', unlinkError.message);
+      }
+      cookiesPathCache = null;
+      cookiesContentCache = null;
+    }
+    
     const errorMessage = parseYtDlpError(lastError?.stderr || '', lastError?.code || 1);
     console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam. Último erro: ${errorMessage}`);
     
@@ -618,6 +663,18 @@ export async function downloadWithProgress(req, res) {
     })}\n\n`);
     res.end();
     return;
+  }
+  
+  // Limpar arquivo de cookies após sucesso
+  if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+    try {
+      fs.unlinkSync(cookiesPathCache);
+      console.log('[DOWNLOAD] Arquivo de cookies removido após download bem-sucedido');
+    } catch (unlinkError) {
+      console.warn('[DOWNLOAD] Erro ao remover cookies:', unlinkError.message);
+    }
+    cookiesPathCache = null;
+    cookiesContentCache = null;
   }
   
   // Download foi bem-sucedido, processar resultado
