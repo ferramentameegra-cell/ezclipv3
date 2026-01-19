@@ -56,17 +56,31 @@ if (process.env.NODE_ENV !== 'production') {
 
 /**
  * Middleware de logging de requisições
+ * Não bloqueia requisições em caso de erro
  */
 export const loggerMiddleware = (req, res, next) => {
-  // Log apenas requisições importantes (não health checks, etc)
-  if (!req.path.startsWith('/health') && !req.path.startsWith('/favicon')) {
-    logger.info('HTTP Request', {
-      method: req.method,
-      path: req.path,
-      ip: req.ip,
-      userAgent: req.get('user-agent'),
-      userId: req.user?.id || null
-    });
+  try {
+    // Log apenas requisições importantes (não health checks, etc)
+    if (!req.path.startsWith('/health') && !req.path.startsWith('/favicon')) {
+      // Log assíncrono para não bloquear
+      setImmediate(() => {
+        try {
+          logger.info('HTTP Request', {
+            method: req.method,
+            path: req.path,
+            ip: req.ip,
+            userAgent: req.get('user-agent'),
+            userId: req.user?.id || null
+          });
+        } catch (logError) {
+          // Ignorar erros de log - não bloquear requisição
+          console.error('[LOGGER] Erro ao logar:', logError.message);
+        }
+      });
+    }
+  } catch (error) {
+    // Ignorar erros - nunca bloquear requisição por causa de log
+    console.error('[LOGGER] Erro no middleware:', error.message);
   }
   next();
 };

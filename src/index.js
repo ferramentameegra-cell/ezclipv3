@@ -58,11 +58,19 @@ const PORT = process.env.PORT || 8080;
 // =====================
 // MIDDLEWARES DE SEGURANÇA
 // =====================
-// Helmet - Headers de segurança HTTP
-app.use(helmet(helmetConfig));
+// Helmet - Headers de segurança HTTP (com tratamento de erro)
+try {
+  app.use(helmet(helmetConfig));
+} catch (error) {
+  console.error('[HELMET] Erro ao configurar Helmet, continuando sem ele:', error.message);
+  // Continuar sem Helmet se houver erro
+}
 
-// CORS
-app.use(cors());
+// CORS (mais permissivo para desenvolvimento)
+app.use(cors({
+  origin: '*', // Permitir todas as origens temporariamente
+  credentials: true
+}));
 
 // Cookie parser (necessário para cookies HttpOnly)
 app.use(cookieParser());
@@ -70,16 +78,18 @@ app.use(cookieParser());
 // Body parser
 app.use(express.json({ limit: '100mb' })); // Aumentar limite para vídeos grandes
 
-// Logger de auditoria
+// Logger de auditoria (não bloqueia em caso de erro)
 app.use(loggerMiddleware);
 
 // Rate limiting global (aplicar antes das rotas)
-app.use('/api/', apiLimiter);
+// DESABILITADO TEMPORARIAMENTE para debug - reativar após verificar
+// app.use('/api/', apiLimiter);
 
 // Rate limiting para operações pesadas
-app.use('/api/download/youtube', heavyOperationLimiter);
-app.use('/api/generate', heavyOperationLimiter);
-app.use('/api/captions/generate', heavyOperationLimiter);
+// DESABILITADO TEMPORARIAMENTE para debug - reativar após verificar
+// app.use('/api/download/youtube', heavyOperationLimiter);
+// app.use('/api/generate', heavyOperationLimiter);
+// app.use('/api/captions/generate', heavyOperationLimiter);
 
 // =====================
 // API

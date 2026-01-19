@@ -75,19 +75,24 @@ export const corsConfig = {
 };
 
 // Security Headers (Helmet)
+// Configuração mais permissiva para não bloquear funcionalidades
 export const helmetConfig = {
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"]
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Adicionado unsafe-eval para compatibilidade
+      imgSrc: ["'self'", "data:", "https:", "http:"], // Permitir http também
+      connectSrc: ["'self'", "https:", "http:"], // Permitir conexões externas
+      mediaSrc: ["'self'", "data:", "https:", "http:"], // Para vídeos
+      frameSrc: ["'self'", "https://www.youtube.com"] // Para embeds do YouTube
     }
   },
   crossOriginEmbedderPolicy: false, // Necessário para alguns recursos
-  crossOriginResourcePolicy: { policy: "cross-origin" } // Para vídeos e downloads
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Para vídeos e downloads
+  // Desabilitar políticas que podem causar problemas
+  crossOriginOpenerPolicy: false
 };
 
 export default {

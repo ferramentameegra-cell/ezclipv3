@@ -15,8 +15,21 @@ export function createRateLimiter(options = {}) {
 
   return async (req, res, next) => {
     try {
+      // Se Redis não estiver disponível, permitir requisição (fail open)
+      if (!redisStore || typeof redisStore.increment !== 'function') {
+        console.warn('[RATE_LIMITER] Redis não disponível, permitindo requisição');
+        return next();
+      }
+
       const key = `rate_limit:${req.ip}:${req.path}`;
-      const count = await redisStore.increment(key, Math.ceil(windowMs / 1000));
+      
+      // Timeout para evitar travamento
+      const incrementPromise = redisStore.increment(key, Math.ceil(windowMs / 1000));
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 1000)
+      );
+      
+      const count = await Promise.race([incrementPromise, timeoutPromise]);
 
       // Adicionar headers de rate limit
       res.setHeader('X-RateLimit-Limit', max);
@@ -32,8 +45,8 @@ export function createRateLimiter(options = {}) {
 
       next();
     } catch (error) {
-      console.error('[RATE_LIMITER] Erro:', error);
-      // Em caso de erro, permitir requisição (fail open)
+      console.error('[RATE_LIMITER] Erro:', error.message);
+      // Em caso de erro, SEMPRE permitir requisição (fail open)
       next();
     }
   };
@@ -55,8 +68,21 @@ export function createUserRateLimiter(options = {}) {
         return next(); // Se não autenticado, não aplicar limite
       }
 
+      // Se Redis não estiver disponível, permitir requisição (fail open)
+      if (!redisStore || typeof redisStore.increment !== 'function') {
+        console.warn('[USER_RATE_LIMITER] Redis não disponível, permitindo requisição');
+        return next();
+      }
+
       const key = `rate_limit:user:${req.user.id}:${req.path}`;
-      const count = await redisStore.increment(key, Math.ceil(windowMs / 1000));
+      
+      // Timeout para evitar travamento
+      const incrementPromise = redisStore.increment(key, Math.ceil(windowMs / 1000));
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 1000)
+      );
+      
+      const count = await Promise.race([incrementPromise, timeoutPromise]);
 
       res.setHeader('X-RateLimit-Limit', max);
       res.setHeader('X-RateLimit-Remaining', Math.max(0, max - count));
@@ -70,7 +96,8 @@ export function createUserRateLimiter(options = {}) {
 
       next();
     } catch (error) {
-      console.error('[USER_RATE_LIMITER] Erro:', error);
+      console.error('[USER_RATE_LIMITER] Erro:', error.message);
+      // Em caso de erro, SEMPRE permitir requisição (fail open)
       next();
     }
   };
