@@ -34,6 +34,7 @@ export async function createUser({ name, email, password }) {
     plan_id: null,
     credits_balance: 0,
     free_trial_credits: FREE_TRIAL_CREDITS,
+    role: 'user', // 'user' ou 'admin'
     created_at: new Date(),
     updated_at: new Date()
   };
@@ -66,6 +67,7 @@ export function getUserById(userId) {
     plan_id: user.plan_id,
     credits_balance: user.credits_balance,
     free_trial_credits: user.free_trial_credits,
+    role: user.role || 'user',
     created_at: user.created_at,
     updated_at: user.updated_at
   };
@@ -86,6 +88,7 @@ export function getUserByEmail(email) {
     plan_id: user.plan_id,
     credits_balance: user.credits_balance,
     free_trial_credits: user.free_trial_credits,
+    role: user.role || 'user',
     created_at: user.created_at,
     updated_at: user.updated_at
   };
@@ -125,6 +128,7 @@ export function updateUser(userId, updates) {
     plan_id: updatedUser.plan_id,
     credits_balance: updatedUser.credits_balance,
     free_trial_credits: updatedUser.free_trial_credits,
+    role: updatedUser.role || 'user',
     created_at: updatedUser.created_at,
     updated_at: updatedUser.updated_at
   };
@@ -146,17 +150,86 @@ export function addCredits(userId, credits) {
 
 /**
  * Obter saldo total de créditos (free trial + pagos)
+ * Admin retorna null (ilimitado)
  */
 export function getTotalCredits(userId) {
   const user = userStore.get(userId);
   if (!user) return 0;
 
-  return user.free_trial_credits + user.credits_balance;
+  // Admin tem créditos ilimitados
+  if (user.role === 'admin') {
+    return null; // null = ilimitado
+  }
+
+  // Tratar null como 0 para cálculos
+  const freeTrial = user.free_trial_credits ?? 0;
+  const paid = user.credits_balance ?? 0;
+
+  return freeTrial + paid;
 }
 
 /**
  * Verificar se usuário tem créditos suficientes
+ * Admin sempre tem créditos ilimitados
  */
 export function hasEnoughCredits(userId, requiredCredits = 1) {
+  const user = userStore.get(userId);
+  if (!user) return false;
+  
+  // Admin sempre tem créditos ilimitados
+  if (user.role === 'admin') {
+    return true;
+  }
+  
   return getTotalCredits(userId) >= requiredCredits;
+}
+
+/**
+ * Verificar se usuário é administrador
+ */
+export function isAdmin(userId) {
+  const user = userStore.get(userId);
+  return user && user.role === 'admin';
+}
+
+/**
+ * Limpar todos os usuários (apenas para inicialização)
+ */
+export function clearAllUsers() {
+  userStore.clear();
+  console.log('[USERS] Todos os usuários foram removidos');
+}
+
+/**
+ * Criar usuário administrador
+ */
+export async function createAdminUser({ name, email, password }) {
+  // Hash da senha
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // Criar usuário admin
+  const adminUser = {
+    id: uuidv4(),
+    name,
+    email,
+    password_hash: passwordHash,
+    plan_id: null,
+    credits_balance: null, // null = ilimitado
+    free_trial_credits: null, // null = não aplicável
+    role: 'admin',
+    created_at: new Date(),
+    updated_at: new Date()
+  };
+
+  userStore.set(adminUser.id, adminUser);
+
+  console.log(`[USERS] Usuário administrador criado: ${email} (ID: ${adminUser.id})`);
+
+  return {
+    id: adminUser.id,
+    name: adminUser.name,
+    email: adminUser.email,
+    role: adminUser.role,
+    created_at: adminUser.created_at
+  };
 }

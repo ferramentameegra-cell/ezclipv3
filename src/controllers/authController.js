@@ -73,7 +73,8 @@ export const register = async (req, res) => {
         email: user.email,
         plan_id: user.plan_id,
         credits_balance: user.credits_balance,
-        free_trial_credits: user.free_trial_credits
+        free_trial_credits: user.free_trial_credits,
+        role: user.role || 'user'
       },
       token // Manter token no JSON para compatibilidade com frontend existente
     });
@@ -178,7 +179,8 @@ export const login = async (req, res) => {
         email: user.email,
         plan_id: user.plan_id,
         credits_balance: user.credits_balance,
-        free_trial_credits: user.free_trial_credits
+        free_trial_credits: user.free_trial_credits,
+        role: user.role || 'user'
       },
       token // Manter token no JSON para compatibilidade com frontend existente
     });
@@ -247,6 +249,7 @@ export const getMe = async (req, res) => {
         plan_id: user.plan_id,
         credits_balance: user.credits_balance,
         free_trial_credits: user.free_trial_credits,
+        role: user.role || 'user',
         created_at: user.created_at,
         updated_at: user.updated_at
       }

@@ -3,17 +3,31 @@
  * Gerencia consumo e débito de créditos
  */
 
-import { getUserById, updateUser, getTotalCredits, hasEnoughCredits } from '../models/users.js';
+import { getUserById, updateUser, getTotalCredits, hasEnoughCredits, isAdmin } from '../models/users.js';
 import { createUsageLog } from '../models/usageLogs.js';
 
 /**
  * Verificar e debitar créditos para geração de clipes
  * Prioriza free trial antes dos créditos pagos
+ * Admin não consome créditos
  */
 export async function consumeCreditsForClips(userId, clipCount, seriesId = null) {
   const user = getUserById(userId);
   if (!user) {
     throw new Error('Usuário não encontrado');
+  }
+
+  // Admin não consome créditos - permitir diretamente
+  if (isAdmin(userId)) {
+    console.log(`[CREDITS] Admin ${user.email} gerando ${clipCount} clipes sem débito de créditos`);
+    return {
+      totalDebited: 0,
+      freeTrialUsed: 0,
+      paidCreditsUsed: 0,
+      remainingFreeTrial: null,
+      remainingPaid: null,
+      isAdmin: true
+    };
   }
 
   // Verificar se tem créditos suficientes
@@ -84,6 +98,7 @@ export async function consumeCreditsForClips(userId, clipCount, seriesId = null)
 
 /**
  * Verificar créditos disponíveis antes de gerar
+ * Admin sempre tem acesso ilimitado
  */
 export function checkCreditsBeforeGeneration(userId, requiredClips) {
   const user = getUserById(userId);
@@ -91,6 +106,18 @@ export function checkCreditsBeforeGeneration(userId, requiredClips) {
     return {
       allowed: false,
       reason: 'Usuário não encontrado'
+    };
+  }
+
+  // Admin sempre tem acesso ilimitado
+  if (isAdmin(userId)) {
+    return {
+      allowed: true,
+      availableCredits: null, // null = ilimitado
+      requiredCredits: requiredClips,
+      freeTrialCredits: null,
+      paidCredits: null,
+      isAdmin: true
     };
   }
 

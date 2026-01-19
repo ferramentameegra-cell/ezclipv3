@@ -30,6 +30,9 @@ import { requireAuth } from "./middleware/authMiddleware.js";
 // Configurar ffmpeg antes de importar workers
 import { configureFfmpeg } from "./utils/ffmpegDetector.js";
 
+// Inicialização administrativa (apenas em dev ou com INIT_ADMIN=true)
+import { initializeAdmin } from "./utils/adminInit.js";
+
 // Importar videoStore e configurar no videoProcessor
 import { videoStore } from "./controllers/downloadProgressController.js";
 import { setVideoStore } from "./services/videoProcessor.js";
@@ -148,6 +151,10 @@ app.use(errorHandler);
 // =====================
 async function initializeServer() {
   try {
+    // Inicialização administrativa (limpa dados e cria admin)
+    // Só executa se NODE_ENV !== 'production' OU INIT_ADMIN=true
+    await initializeAdmin();
+    
     // Inicializar Redis primeiro
     console.log('[INIT] Inicializando Redis...');
     await initRedis();

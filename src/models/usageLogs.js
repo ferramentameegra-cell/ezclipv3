@@ -60,3 +60,11 @@ export function getUserUsageStats(userId) {
     totalUsageLogs: logs.length
   };
 }
+
+/**
+ * Limpar todos os logs de uso (apenas para inicialização)
+ */
+export function clearAllUsageLogs() {
+  usageLogStore.clear();
+  console.log('[USAGE_LOGS] Todos os logs de uso foram removidos');
+}
