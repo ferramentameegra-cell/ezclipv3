@@ -259,15 +259,28 @@ export async function composeFinalVideo({
             retentionVideoPath = tempVideoPath;
           } else {
             // Baixar vídeo
-            console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção...`);
+            console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção de: ${retentionVideoPath}`);
             await downloadVideoFromUrl(retentionVideoPath, tempVideoPath);
-            console.log(`[COMPOSER] ✅ Vídeo de retenção baixado: ${tempVideoPath}`);
+            
+            // Validar que o arquivo foi baixado corretamente
+            if (!fs.existsSync(tempVideoPath)) {
+              throw new Error(`Arquivo não foi criado após download: ${tempVideoPath}`);
+            }
+            
+            const stats = fs.statSync(tempVideoPath);
+            if (stats.size === 0) {
+              fs.unlinkSync(tempVideoPath);
+              throw new Error(`Arquivo baixado está vazio: ${tempVideoPath}`);
+            }
+            
+            console.log(`[COMPOSER] ✅ Vídeo de retenção baixado com sucesso: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
             retentionVideoPath = tempVideoPath;
           }
         } catch (downloadError) {
           console.error(`[COMPOSER] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
-          console.warn(`[COMPOSER] ⚠️ Tentando usar URL diretamente (pode falhar)...`);
-          // Continuar com URL original - pode funcionar em alguns casos
+          console.warn(`[COMPOSER] ⚠️ Desabilitando vídeo de retenção devido a erro no download`);
+          // Desabilitar vídeo de retenção se download falhar
+          retentionVideoPath = null;
         }
       }
       
@@ -473,9 +486,11 @@ export async function composeFinalVideo({
       // 2. Redimensionar vídeo principal para altura calculada (sem padding, sem distorção)
       // force_original_aspect_ratio=decrease garante que não distorça
       // Vídeo será redimensionado para caber exatamente em MAIN_VIDEO_HEIGHT
-      // HARDCODED: largura sempre 1080
+      // HARDCODED: largura sempre 1080, altura sempre MAIN_VIDEO_HEIGHT (máximo 1920-180-140=1600px)
+      // FORÇAR formato vertical: largura fixa 1080px
       filterParts.push(`${currentLabel}scale=1080:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
+      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado para: 1080x${MAIN_VIDEO_HEIGHT} (formato vertical forçado)`);
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
       // Vídeo fica acima do background (layer 1)
@@ -705,16 +720,16 @@ export async function composeFinalVideo({
       }
       
       // 8. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // FORÇAR formato vertical 9:16 (1080x1920) em TODAS as etapas
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
-      // Isso garante que o output seja sempre 1080x1920 vertical
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
-      // O currentLabel já tem 1080x1920 (do background via overlay), mas garantimos com scale+pad
-      // FORÇAR dimensões exatas: 1080x1920 (hardcoded para garantir)
-      filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=decrease[final_scaled]`);
-      // Pad para garantir dimensões exatas 1080x1920 (hardcoded)
-      const padColor = backgroundColor.replace('#', '');
-      filterParts.push(`[final_scaled]pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
+      // FORÇAR dimensões exatas: 1080x1920 (hardcoded para garantir formato vertical)
+      // Usar force_original_aspect_ratio=increase para garantir que preencha todo o espaço
+      filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
+      // Crop para garantir dimensões exatas 1080x1920 (sem distorção)
+      filterParts.push(`[final_scaled]crop=1080:1920[final]`);
       console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED`);
+      console.log(`[COMPOSER] ✅ Formato vertical garantido: scale=1080:1920 + crop=1080:1920`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -795,23 +810,26 @@ export async function composeFinalVideo({
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
-      // [final] sempre existe após a etapa 6 e já tem as dimensões corretas (1080x1920)
-      // O complexFilter já força as dimensões através do [final], então não precisamos de -vf
+      // [final] sempre existe após a etapa 8 e já tem as dimensões corretas (1080x1920)
+      // O complexFilter já força as dimensões através do [final] com scale+crop
+      // Adicionar -s e -aspect como backup para garantir formato vertical
       const outputOptions = [
         '-map', '[final]',
-        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded para garantir)
+        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical obrigatório)
+        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical)
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
-        '-movflags', '+faststart',
-        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
+        '-movflags', '+faststart'
       ];
       
       console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED`);
+      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16`);
       console.log(`[COMPOSER] ✅ Usando label final: [final]`);
       console.log(`[COMPOSER] ✅ Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
+      console.log(`[COMPOSER] ✅ Vídeo de retenção: ${retentionVideoPath ? 'SIM' : 'NÃO'}`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
