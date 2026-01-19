@@ -24,6 +24,7 @@ import retentionRoutes from "./routes/retention.js";
 import captionsRoutes from "./routes/captions.js";
 import termsRoutes from "./routes/terms.js";
 import creditsRoutes from "./routes/credits.js";
+import stripeRoutes from "./routes/stripe.js";
 import { requireAuth } from "./middleware/authMiddleware.js";
 
 // Configurar ffmpeg antes de importar workers
@@ -88,6 +89,7 @@ app.use(express.json({ limit: '100mb' }));
 app.use("/api/youtube", youtubeRoutes); // Público (download de vídeos)
 app.use("/api/auth", authRoutes); // Público (login/registro)
 app.use("/api/credits", creditsRoutes); // Requer auth (verificar saldo/comprar)
+app.use("/api/stripe", stripeRoutes); // Webhooks e verificação de pagamentos
 app.use("/api/download", downloadRoutes); // Público (upload/download de vídeos)
 app.use("/api/trim", trimRoutes); // Público (cálculo de trim)
 app.use("/api/generate", generateRoutes); // Requer auth (geração de clipes)

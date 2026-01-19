@@ -167,6 +167,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Atualizar estado do botão de gerar ao carregar
     updateGenerateButtonState();
     initializeApp();
+    
+    // Verificar pagamento após retorno do Stripe
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('payment') === 'success') {
+        setTimeout(() => {
+            checkPaymentStatus();
+        }, 1000);
+    }
 });
 
 async function initializeApp() {
@@ -695,28 +703,121 @@ function closeCreditsModal() {
 }
 
 /**
- * Comprar plano
+ * Comprar plano (com Stripe)
  */
 async function purchasePlan(planId) {
-    if (!confirm('Deseja realmente comprar este plano? (Por enquanto, esta é uma compra mockada - sem cobrança real)')) {
-        return;
-    }
-    
     try {
-        const { data } = await apiClient.post('/api/credits/purchase', { planId });
+        console.log('[PLANS] Iniciando compra do plano:', planId);
         
-        const videosText = data.plan.is_unlimited ? 'vídeos ilimitados' : `${data.plan.videos_limit} vídeos`;
-        alert(`Plano comprado com sucesso! Você agora pode processar ${videosText}.`);
+        // Buscar informações do plano para mostrar confirmação
+        const plansResponse = await fetch(`${API_BASE}/api/credits/plans`);
+        const plansData = await plansResponse.json();
+        const plan = plansData.plans.find(p => p.id === planId);
         
-        // Recarregar informações de vídeos
-        await loadUserVideos();
+        if (!plan) {
+            throw new Error('Plano não encontrado');
+        }
         
-        // Fechar modal
-        closeCreditsModal();
+        // Se for plano free, processar diretamente
+        if (planId === 'free') {
+            const { data } = await apiClient.post('/api/credits/create-checkout', { planId });
+            
+            if (data.success) {
+                const videosText = data.plan.is_unlimited ? 'vídeos ilimitados' : `${data.plan.videos_limit} vídeo(s)`;
+                alert(`Plano Free ativado com sucesso! Você agora pode processar ${videosText}.`);
+                
+                await loadUserVideos();
+                closeCreditsModal();
+            }
+            return;
+        }
+        
+        // Confirmar compra
+        const priceFormatted = plan.price.toFixed(2).replace('.', ',');
+        const videosText = plan.is_unlimited ? 'vídeos ilimitados' : `${plan.videos_limit} vídeos`;
+        const confirmMessage = `Deseja comprar o plano ${plan.name}?\n\n${videosText}\nR$ ${priceFormatted}\n\nVocê será redirecionado para o pagamento seguro.`;
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        // Criar sessão de checkout
+        console.log('[PLANS] Criando checkout session...');
+        const { data } = await apiClient.post('/api/credits/create-checkout', { planId });
+        
+        if (!data.url || !data.sessionId) {
+            throw new Error('Erro ao criar sessão de pagamento');
+        }
+        
+        console.log('[PLANS] Redirecionando para Stripe Checkout:', data.url);
+        
+        // Salvar sessionId no localStorage para verificar após retorno
+        localStorage.setItem('stripe_session_id', data.sessionId);
+        localStorage.setItem('stripe_plan_id', planId);
+        
+        // Redirecionar para Stripe Checkout
+        window.location.href = data.url;
+        
     } catch (error) {
         console.error('[PLANS] Erro ao comprar plano:', error);
         const errorMsg = error.response?.data?.error || error.message || 'Erro ao processar compra';
         alert(`Erro ao comprar plano: ${errorMsg}`);
+    }
+}
+
+/**
+ * Verificar pagamento após retorno do Stripe
+ */
+async function checkPaymentStatus() {
+    const sessionId = localStorage.getItem('stripe_session_id');
+    const planId = localStorage.getItem('stripe_plan_id');
+    
+    if (!sessionId || !planId) {
+        return;
+    }
+    
+    try {
+        console.log('[PLANS] Verificando status do pagamento...', sessionId);
+        
+        // Verificar status da sessão
+        const { data } = await apiClient.get(`/api/stripe/verify-session?sessionId=${sessionId}`);
+        
+        if (data.payment_status === 'paid') {
+            // Pagamento confirmado, processar compra
+            console.log('[PLANS] Pagamento confirmado, processando compra...');
+            
+            const purchaseResponse = await apiClient.post('/api/credits/purchase', { 
+                planId, 
+                sessionId 
+            });
+            
+            const purchaseData = purchaseResponse.data;
+            const videosText = purchaseData.plan.is_unlimited 
+                ? 'vídeos ilimitados' 
+                : `${purchaseData.plan.videos_limit} vídeos`;
+            
+            alert(`✅ Pagamento confirmado! Plano ${purchaseData.plan.name} ativado com sucesso!\n\nVocê agora pode processar ${videosText}.`);
+            
+            // Recarregar informações
+            await loadUserVideos();
+            
+            // Limpar localStorage
+            localStorage.removeItem('stripe_session_id');
+            localStorage.removeItem('stripe_plan_id');
+            
+            // Remover parâmetros da URL
+            const url = new URL(window.location);
+            url.searchParams.delete('payment');
+            url.searchParams.delete('session_id');
+            window.history.replaceState({}, '', url);
+            
+        } else if (data.payment_status === 'unpaid') {
+            console.log('[PLANS] Pagamento ainda não confirmado');
+        }
+        
+    } catch (error) {
+        console.error('[PLANS] Erro ao verificar pagamento:', error);
+        // Não mostrar erro ao usuário, apenas logar
     }
 }
 

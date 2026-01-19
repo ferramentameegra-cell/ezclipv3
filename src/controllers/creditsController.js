@@ -62,10 +62,10 @@ export const getBalance = (req, res) => {
 };
 
 /**
- * POST /api/credits/purchase
- * Comprar plano (mockado - preparado para Stripe/Mercado Pago)
+ * POST /api/credits/create-checkout
+ * Criar sessão de checkout do Stripe
  */
-export const purchasePlan = (req, res) => {
+export const createCheckout = async (req, res) => {
   try {
     const user = req.user;
     const { planId } = req.body;
@@ -93,9 +93,115 @@ export const purchasePlan = (req, res) => {
       });
     }
 
-    // Em produção, aqui seria feito o pagamento via Stripe/Mercado Pago
-    // Por enquanto, apenas atualiza o plano (mockado)
-    console.log(`[PLANS] Compra mockada de plano: ${plan.name} (${plan.videos_limit || 'ilimitado'} vídeos) por usuário ${user.id}`);
+    // Se for plano free, processar diretamente sem pagamento
+    if (planId === 'free') {
+      const userData = getUserById(user.id);
+      const updates = {
+        plan_id: planId,
+        videos_limit: plan.videos_limit,
+        videos_used: userData.videos_used || 0
+      };
+      updateUser(user.id, updates);
+      
+      const videoStats = getUserVideoStats(user.id);
+      return res.json({
+        success: true,
+        message: 'Plano Free ativado com sucesso',
+        plan: {
+          id: plan.id,
+          name: plan.name,
+          videos_limit: plan.videos_limit,
+          is_unlimited: plan.is_unlimited,
+          price: plan.price
+        },
+        videos_used: videoStats.videos_used,
+        videos_limit: videoStats.videos_limit,
+        videos_remaining: videoStats.videos_remaining,
+        is_unlimited: videoStats.is_unlimited
+      });
+    }
+
+    // Criar sessão de checkout do Stripe
+    const { createCheckoutSession } = await import('../services/stripeService.js');
+    
+    const session = await createCheckoutSession({
+      planId: plan.id,
+      planName: plan.name,
+      price: plan.price,
+      videosLimit: plan.videos_limit,
+      userId: user.id,
+      userEmail: user.email,
+    });
+
+    console.log(`[STRIPE] Checkout session criada: ${session.id} para plano ${plan.name} (usuário ${user.id})`);
+
+    res.json({
+      sessionId: session.id,
+      url: session.url,
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        videos_limit: plan.videos_limit,
+        is_unlimited: plan.is_unlimited,
+        price: plan.price
+      }
+    });
+  } catch (error) {
+    console.error('[CREDITS] Erro ao criar checkout:', error);
+    res.status(500).json({
+      error: 'Erro ao criar sessão de pagamento',
+      code: 'CHECKOUT_ERROR',
+      details: error.message
+    });
+  }
+};
+
+/**
+ * POST /api/credits/purchase
+ * Comprar plano (processar após pagamento confirmado via webhook)
+ * Mantido para compatibilidade, mas agora processa pagamentos reais
+ */
+export const purchasePlan = async (req, res) => {
+  try {
+    const user = req.user;
+    const { planId, sessionId } = req.body;
+
+    if (!user) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
+
+    if (!planId) {
+      return res.status(400).json({
+        error: 'ID do plano é obrigatório',
+        code: 'MISSING_PLAN_ID'
+      });
+    }
+
+    // Buscar plano
+    const plan = getPlanById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        error: 'Plano não encontrado',
+        code: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    // Se tiver sessionId, verificar status do pagamento
+    if (sessionId) {
+      const { getCheckoutSession } = await import('../services/stripeService.js');
+      const session = await getCheckoutSession(sessionId);
+      
+      if (session.payment_status !== 'paid') {
+        return res.status(402).json({
+          error: 'Pagamento não confirmado',
+          code: 'PAYMENT_NOT_CONFIRMED',
+          payment_status: session.payment_status
+        });
+      }
+    }
 
     // Atualizar plano do usuário
     const userData = getUserById(user.id);
@@ -112,8 +218,10 @@ export const purchasePlan = (req, res) => {
     const updatedUser = getUserById(user.id);
     const videoStats = getUserVideoStats(user.id);
 
+    console.log(`[PLANS] Plano ${plan.name} ativado para usuário ${user.id}`);
+
     res.json({
-      message: 'Plano comprado com sucesso (mockado)',
+      message: 'Plano comprado com sucesso',
       plan: {
         id: plan.id,
         name: plan.name,
@@ -130,7 +238,8 @@ export const purchasePlan = (req, res) => {
     console.error('[CREDITS] Erro ao comprar plano:', error);
     res.status(500).json({
       error: 'Erro ao processar compra',
-      code: 'PURCHASE_ERROR'
+      code: 'PURCHASE_ERROR',
+      details: error.message
     });
   }
 };
