@@ -728,21 +728,12 @@ async function handleLogin(event) {
         event.stopPropagation();
     }
     
-    // Tentar encontrar elementos (pode estar no auth-section ou no modal)
-    let emailInput = document.getElementById('login-email');
-    let passwordInput = document.getElementById('login-password');
-    let btnText = document.getElementById('login-btn-text');
-    let btnSpinner = document.getElementById('login-btn-spinner');
-    let statusMsg = document.getElementById('login-status');
-    
-    // Se não encontrou, tentar no modal
-    if (!emailInput) {
-        emailInput = document.getElementById('login-email-modal');
-        passwordInput = document.getElementById('login-password-modal');
-        btnText = document.getElementById('login-btn-text-modal');
-        btnSpinner = document.getElementById('login-btn-spinner-modal');
-        statusMsg = document.getElementById('login-status-modal');
-    }
+    // Buscar elementos na nova estrutura
+    const emailInput = document.getElementById('auth-login-email');
+    const passwordInput = document.getElementById('auth-login-password');
+    const btnText = document.getElementById('auth-login-btn-text');
+    const btnSpinner = document.getElementById('auth-login-btn-spinner');
+    const statusMsg = document.getElementById('auth-login-status');
     
     console.log('[AUTH] Elementos encontrados:', { 
         emailInput: !!emailInput, 
@@ -769,7 +760,7 @@ async function handleLogin(event) {
     if (!email || !password) {
         if (statusMsg) {
             statusMsg.textContent = 'Por favor, preencha todos os campos';
-            statusMsg.className = 'status-modern error';
+            statusMsg.className = 'auth-status-message error';
             statusMsg.classList.remove('hidden');
         }
         if (btnText) btnText.classList.remove('hidden');
@@ -821,7 +812,7 @@ async function handleLogin(event) {
             // Mostrar erro
             if (statusMsg) {
                 statusMsg.textContent = data.error || 'Erro ao fazer login';
-                statusMsg.className = 'status-modern error';
+                statusMsg.className = 'auth-status-message error';
                 statusMsg.classList.remove('hidden');
             }
             if (btnText) btnText.classList.remove('hidden');
@@ -839,7 +830,7 @@ async function handleLogin(event) {
             
             if (statusMsg) {
                 statusMsg.textContent = 'Login realizado com sucesso!';
-                statusMsg.className = 'status-modern success';
+                statusMsg.className = 'auth-status-message success';
                 statusMsg.classList.remove('hidden');
             }
             
@@ -880,7 +871,7 @@ async function handleLogin(event) {
             console.error('[AUTH] Resposta inválida:', data);
             if (statusMsg) {
                 statusMsg.textContent = data.error || 'Erro ao fazer login - resposta inválida';
-                statusMsg.className = 'status-modern error';
+                statusMsg.className = 'auth-status-message error';
                 statusMsg.classList.remove('hidden');
             }
             if (btnText) btnText.classList.remove('hidden');
@@ -890,7 +881,7 @@ async function handleLogin(event) {
         console.error('[AUTH] Erro no login:', error);
         if (statusMsg) {
             statusMsg.textContent = error.message || 'Erro ao conectar com o servidor. Verifique sua conexão.';
-            statusMsg.className = 'status-modern error';
+            statusMsg.className = 'auth-status-message error';
             statusMsg.classList.remove('hidden');
         }
         if (btnText) btnText.classList.remove('hidden');
@@ -904,23 +895,13 @@ async function handleRegister(event) {
         event.stopPropagation();
     }
     
-    // Tentar encontrar elementos (pode estar no auth-section ou no modal)
-    let nameInput = document.getElementById('register-name');
-    let emailInput = document.getElementById('register-email');
-    let passwordInput = document.getElementById('register-password');
-    let btnText = document.getElementById('register-btn-text');
-    let btnSpinner = document.getElementById('register-btn-spinner');
-    let statusMsg = document.getElementById('register-status');
-    
-    // Se não encontrou, tentar no modal
-    if (!nameInput) {
-        nameInput = document.getElementById('register-name-modal');
-        emailInput = document.getElementById('register-email-modal');
-        passwordInput = document.getElementById('register-password-modal');
-        btnText = document.getElementById('register-btn-text-modal');
-        btnSpinner = document.getElementById('register-btn-spinner-modal');
-        statusMsg = document.getElementById('register-status-modal');
-    }
+    // Buscar elementos na nova estrutura
+    const nameInput = document.getElementById('auth-register-name');
+    const emailInput = document.getElementById('auth-register-email');
+    const passwordInput = document.getElementById('auth-register-password');
+    const btnText = document.getElementById('auth-register-btn-text');
+    const btnSpinner = document.getElementById('auth-register-btn-spinner');
+    const statusMsg = document.getElementById('auth-register-status');
     
     console.log('[AUTH] Elementos de registro encontrados:', { 
         nameInput: !!nameInput,
@@ -948,7 +929,7 @@ async function handleRegister(event) {
     // Validação básica
     if (!name || !email || !password) {
         statusMsg.textContent = 'Por favor, preencha todos os campos';
-        statusMsg.className = 'login-status error';
+        statusMsg.className = 'auth-status-message error';
         statusMsg.classList.remove('hidden');
         btnText.classList.remove('hidden');
         btnSpinner.classList.add('hidden');
@@ -957,7 +938,7 @@ async function handleRegister(event) {
     
     if (password.length < 6) {
         statusMsg.textContent = 'A senha deve ter no mínimo 6 caracteres';
-        statusMsg.className = 'login-status error';
+        statusMsg.className = 'auth-status-message error';
         statusMsg.classList.remove('hidden');
         btnText.classList.remove('hidden');
         btnSpinner.classList.add('hidden');
@@ -983,7 +964,7 @@ async function handleRegister(event) {
         if (!response.ok) {
             // Mostrar erro
             statusMsg.textContent = data.error || 'Erro ao criar conta';
-            statusMsg.className = 'login-status error';
+            statusMsg.className = 'auth-status-message error';
             statusMsg.classList.remove('hidden');
             btnText.classList.remove('hidden');
             btnSpinner.classList.add('hidden');
@@ -999,7 +980,7 @@ async function handleRegister(event) {
             localStorage.setItem('ezv2_token', data.token);
             
             statusMsg.textContent = `Conta criada com sucesso! Você pode processar ${data.user.videos_limit || 1} vídeo(s).`;
-            statusMsg.className = 'login-status success';
+            statusMsg.className = 'auth-status-message success';
             statusMsg.classList.remove('hidden');
             
             // Restaurar botões
@@ -1038,7 +1019,7 @@ async function handleRegister(event) {
         } else {
             console.error('[AUTH] Resposta inválida:', data);
             statusMsg.textContent = data.error || 'Erro ao criar conta - resposta inválida';
-            statusMsg.className = 'login-status error';
+            statusMsg.className = 'auth-status-message error';
             statusMsg.classList.remove('hidden');
             btnText.classList.remove('hidden');
             btnSpinner.classList.add('hidden');
@@ -1053,7 +1034,32 @@ async function handleRegister(event) {
     }
 }
 
+// Alternar entre login e registro na nova estrutura
+function switchAuthView(view) {
+    const loginCard = document.getElementById('auth-login-card');
+    const registerCard = document.getElementById('auth-register-card');
+    
+    if (view === 'register') {
+        if (loginCard) loginCard.classList.remove('active');
+        if (registerCard) registerCard.classList.add('active');
+    } else {
+        if (registerCard) registerCard.classList.remove('active');
+        if (loginCard) loginCard.classList.add('active');
+    }
+}
+
 function showRegister() {
+    switchAuthView('register');
+    switchTab('login');
+}
+
+function showLogin() {
+    switchAuthView('login');
+    switchTab('login');
+}
+
+// Função antiga mantida para compatibilidade
+function showRegisterOld() {
     const loginCard = document.getElementById('login-card');
     const registerCard = document.getElementById('register-card');
     if (loginCard) loginCard.classList.add('hidden');

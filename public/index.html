@@ -51,83 +51,7 @@
         </div>
     </nav>
 
-    <!-- Authentication Required Section (Obrigatória quando não logado) -->
-    <div id="auth-section" class="auth-section" style="display: none; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem;">
-        <div class="auth-container" style="max-width: 400px; margin: 0 auto; padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-            <div style="text-align: center; margin-bottom: 2rem;">
-                <h1 style="font-size: 2rem; font-weight: 700; color: #1a1a1a; margin-bottom: 0.5rem;">EZ Clips AI</h1>
-                <p style="color: #666;">Login obrigatório para continuar</p>
-            </div>
-            
-            <!-- Login Card -->
-            <div class="login-card" id="login-card">
-                <h2 class="login-title">Entrar</h2>
-                <p class="login-subtitle">Acesse sua conta para continuar</p>
-                <form id="login-form" class="login-form" onsubmit="handleLogin(event)">
-                    <div class="form-field">
-                        <label>Email</label>
-                        <input type="email" id="login-email" class="form-input" placeholder="seu@email.com" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Senha</label>
-                        <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
-                    </div>
-                    <button type="submit" class="btn-login">
-                        <span id="login-btn-text">Entrar</span>
-                        <span id="login-btn-spinner" class="hidden">
-                            <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
-                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
-                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
-                                </circle>
-                            </svg>
-                        </span>
-                    </button>
-                </form>
-                <div class="login-divider">
-                    <span>ou</span>
-                </div>
-                <button class="btn-register" onclick="showRegister()">Criar conta</button>
-                <div id="login-status" class="status-message hidden"></div>
-            </div>
-            
-            <!-- Register Card -->
-            <div class="register-card hidden" id="register-card">
-                <h2 class="login-title">Criar Conta</h2>
-                <p class="login-subtitle">Cadastre-se e ganhe 5 créditos grátis!</p>
-                <form id="register-form" class="login-form" onsubmit="handleRegister(event)">
-                    <div class="form-field">
-                        <label>Nome Completo</label>
-                        <input type="text" id="register-name" class="form-input" placeholder="Seu nome" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Email</label>
-                        <input type="email" id="register-email" class="form-input" placeholder="seu@email.com" required>
-                    </div>
-                    <div class="form-field">
-                        <label>Senha</label>
-                        <input type="password" id="register-password" class="form-input" placeholder="Mínimo 6 caracteres" minlength="6" required>
-                    </div>
-                    <button type="submit" class="btn-login">
-                        <span id="register-btn-text">Criar Conta</span>
-                        <span id="register-btn-spinner" class="hidden">
-                            <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
-                                    <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
-                                    <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
-                                </circle>
-                            </svg>
-                        </span>
-                    </button>
-                </form>
-                <div class="login-divider">
-                    <span>ou</span>
-                </div>
-                <button class="btn-register" onclick="showLogin()">Já tenho conta</button>
-                <div id="register-status" class="status-message hidden"></div>
-            </div>
-        </div>
-    </div>
+    <!-- Authentication Section (Removida - não é mais necessária) -->
 
     <!-- Main Content -->
     <main class="main-wrapper">
@@ -934,26 +858,43 @@
         </div>
 
 
-        <!-- TAB: LOGIN -->
+        <!-- TAB: LOGIN/REGISTRO -->
         <div class="tab-content" id="tab-login">
-            <div class="login-page">
-                <div class="login-container">
-                    <div class="login-card" id="login-card-modal">
-                        <h2 class="login-title">Entrar</h2>
-                        <p class="login-subtitle">Acesse sua conta para continuar</p>
-                        <form id="login-form-modal" class="login-form" onsubmit="handleLogin(event)">
-                            <div class="form-field">
-                                <label>Email</label>
-                                <input type="email" id="login-email-modal" class="form-input" placeholder="seu@email.com" required>
+            <div class="auth-page-container">
+                <div class="auth-wrapper">
+                    <!-- Login Card -->
+                    <div class="auth-card active" id="auth-login-card">
+                        <div class="auth-header">
+                            <h2 class="auth-title">Entrar</h2>
+                            <p class="auth-subtitle">Acesse sua conta para continuar</p>
+                        </div>
+                        <form id="auth-login-form" class="auth-form" onsubmit="handleLogin(event)">
+                            <div class="form-group">
+                                <label for="auth-login-email" class="form-label">Email</label>
+                                <input 
+                                    type="email" 
+                                    id="auth-login-email" 
+                                    class="form-input" 
+                                    placeholder="seu@email.com" 
+                                    required
+                                    autocomplete="email"
+                                >
                             </div>
-                            <div class="form-field">
-                                <label>Senha</label>
-                                <input type="password" id="login-password-modal" class="form-input" placeholder="••••••••" required>
+                            <div class="form-group">
+                                <label for="auth-login-password" class="form-label">Senha</label>
+                                <input 
+                                    type="password" 
+                                    id="auth-login-password" 
+                                    class="form-input" 
+                                    placeholder="••••••••" 
+                                    required
+                                    autocomplete="current-password"
+                                >
                             </div>
-                            <button type="submit" class="btn-login">
-                                <span id="login-btn-text-modal">Entrar</span>
-                                <span id="login-btn-spinner-modal" class="hidden">
-                                    <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
+                            <button type="submit" class="btn-auth-primary">
+                                <span id="auth-login-btn-text">Entrar</span>
+                                <span id="auth-login-btn-spinner" class="spinner-inline hidden">
+                                    <svg width="16" height="16" viewBox="0 0 24 24">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
                                             <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
                                             <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
@@ -961,33 +902,62 @@
                                     </svg>
                                 </span>
                             </button>
+                            <div id="auth-login-status" class="auth-status-message hidden"></div>
                         </form>
-                        <div class="login-divider">
+                        <div class="auth-divider">
                             <span>ou</span>
                         </div>
-                        <button class="btn-register" onclick="showRegister()">Criar conta</button>
-                        <div id="login-status-modal" class="status-message hidden"></div>
+                        <button type="button" class="btn-auth-secondary" onclick="switchAuthView('register')">
+                            Criar nova conta
+                        </button>
                     </div>
-                    <div class="register-card hidden" id="register-card-modal">
-                        <h2 class="login-title">Criar Conta</h2>
-                        <p class="login-subtitle">Cadastre-se para começar</p>
-                        <form id="register-form-modal" class="login-form" onsubmit="handleRegister(event)">
-                            <div class="form-field">
-                                <label>Nome Completo</label>
-                                <input type="text" id="register-name-modal" class="form-input" placeholder="Seu nome" required>
+
+                    <!-- Register Card -->
+                    <div class="auth-card" id="auth-register-card">
+                        <div class="auth-header">
+                            <h2 class="auth-title">Criar Conta</h2>
+                            <p class="auth-subtitle">Cadastre-se e comece a criar clipes incríveis</p>
+                        </div>
+                        <form id="auth-register-form" class="auth-form" onsubmit="handleRegister(event)">
+                            <div class="form-group">
+                                <label for="auth-register-name" class="form-label">Nome Completo</label>
+                                <input 
+                                    type="text" 
+                                    id="auth-register-name" 
+                                    class="form-input" 
+                                    placeholder="Seu nome completo" 
+                                    required
+                                    autocomplete="name"
+                                >
                             </div>
-                            <div class="form-field">
-                                <label>Email</label>
-                                <input type="email" id="register-email-modal" class="form-input" placeholder="seu@email.com" required>
+                            <div class="form-group">
+                                <label for="auth-register-email" class="form-label">Email</label>
+                                <input 
+                                    type="email" 
+                                    id="auth-register-email" 
+                                    class="form-input" 
+                                    placeholder="seu@email.com" 
+                                    required
+                                    autocomplete="email"
+                                >
                             </div>
-                            <div class="form-field">
-                                <label>Senha</label>
-                                <input type="password" id="register-password-modal" class="form-input" placeholder="Mínimo 6 caracteres" minlength="6" required>
+                            <div class="form-group">
+                                <label for="auth-register-password" class="form-label">Senha</label>
+                                <input 
+                                    type="password" 
+                                    id="auth-register-password" 
+                                    class="form-input" 
+                                    placeholder="Mínimo 6 caracteres" 
+                                    minlength="6"
+                                    required
+                                    autocomplete="new-password"
+                                >
+                                <small class="form-hint">A senha deve ter no mínimo 6 caracteres</small>
                             </div>
-                            <button type="submit" class="btn-login">
-                                <span id="register-btn-text-modal">Criar Conta</span>
-                                <span id="register-btn-spinner-modal" class="hidden">
-                                    <svg class="spinner-small" width="16" height="16" viewBox="0 0 24 24">
+                            <button type="submit" class="btn-auth-primary">
+                                <span id="auth-register-btn-text">Criar Conta</span>
+                                <span id="auth-register-btn-spinner" class="spinner-inline hidden">
+                                    <svg width="16" height="16" viewBox="0 0 24 24">
                                         <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
                                             <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
                                             <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
@@ -995,12 +965,14 @@
                                     </svg>
                                 </span>
                             </button>
+                            <div id="auth-register-status" class="auth-status-message hidden"></div>
                         </form>
-                        <div class="login-divider">
+                        <div class="auth-divider">
                             <span>ou</span>
                         </div>
-                        <button class="btn-register" onclick="showLogin()">Já tenho conta</button>
-                        <div id="register-status-modal" class="status-message hidden"></div>
+                        <button type="button" class="btn-auth-secondary" onclick="switchAuthView('login')">
+                            Já tenho uma conta
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1117,6 +1089,7 @@
     </div>
 
     <!-- Login Required Modal for Generation -->
+    <!-- Login Required Modal (Simplificado) -->
     <div id="login-required-modal" class="modal hidden">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">

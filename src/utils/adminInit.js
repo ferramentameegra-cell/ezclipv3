@@ -18,38 +18,17 @@ let hasInitialized = false;
  * - Ainda não foi executado nesta sessão
  */
 export async function initializeAdmin() {
-  // Verificar se admin já existe antes de limpar tudo
-  const existingAdmin = Array.from(userStore.values()).find(
-    u => u.email === 'josyasborba@hotmail.com' && u.role === 'admin'
-  );
-  
-  if (existingAdmin) {
-    console.log('[ADMIN_INIT] ✅ Admin já existe:', existingAdmin.email);
-    hasInitialized = true;
-    return;
-  }
-
   // Verificar se já foi inicializado nesta sessão
   if (hasInitialized) {
     console.log('[ADMIN_INIT] Inicialização administrativa já foi executada nesta sessão');
     return;
   }
 
-  // SEMPRE executar inicialização (para garantir que admin existe)
-  // const shouldInit = 
-  //   process.env.NODE_ENV !== 'production' || 
-  //   process.env.INIT_ADMIN === 'true';
-
-  // if (!shouldInit) {
-  //   console.log('[ADMIN_INIT] Inicialização administrativa desabilitada (produção sem INIT_ADMIN)');
-  //   return;
-  // }
-
   try {
     console.log('[ADMIN_INIT] 🚀 Iniciando inicialização administrativa...');
+    console.log('[ADMIN_INIT] 🗑️  Limpando TODOS os usuários existentes...');
 
-    // 1. Limpar todos os usuários
-    console.log('[ADMIN_INIT] Limpando usuários existentes...');
+    // 1. SEMPRE limpar todos os usuários primeiro
     clearAllUsers();
 
     // 2. Limpar logs de uso
@@ -60,7 +39,7 @@ export async function initializeAdmin() {
     console.log('[ADMIN_INIT] Limpando logs de vídeos...');
     clearAllVideoLogs();
 
-    // 4. Criar usuário administrador
+    // 4. Criar usuário administrador (único usuário após limpeza)
     console.log('[ADMIN_INIT] Criando usuário administrador...');
     const adminUser = await createAdminUser({
       name: 'Josyas Borba',
@@ -71,6 +50,7 @@ export async function initializeAdmin() {
     console.log('[ADMIN_INIT] ✅ Inicialização administrativa concluída com sucesso!');
     console.log(`[ADMIN_INIT] 👤 Admin criado: ${adminUser.email} (ID: ${adminUser.id})`);
     console.log('[ADMIN_INIT] 🔑 Senha: 12345678');
+    console.log('[ADMIN_INIT] 📊 Todos os usuários anteriores foram removidos');
     console.log('[ADMIN_INIT] ⚠️  Lembre-se de alterar a senha em produção!');
 
     hasInitialized = true;
