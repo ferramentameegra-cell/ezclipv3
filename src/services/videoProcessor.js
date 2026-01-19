@@ -381,9 +381,18 @@ export const generateVideoSeries = async (job, jobsMap) => {
         // Importar serviço de legendas
         const { generateCaptions } = await import('./captionService.js');
         
-        // Gerar legendas automaticamente do vídeo processado (já trimado se necessário)
-        console.log(`[PROCESSING] Iniciando geração automática de legendas para: ${processedVideoPath}`);
-        const captionResult = await generateCaptions(processedVideoPath, {
+        // Usar o vídeo processado (já trimado se necessário) para gerar legendas
+        // O generateCaptions já lida com trimStart e trimEnd internamente
+        const videoForCaptions = processedVideoPath || sourceVideoPath;
+        
+        if (!fs.existsSync(videoForCaptions)) {
+          throw new Error(`Vídeo não encontrado para geração de legendas: ${videoForCaptions}`);
+        }
+        
+        console.log(`[PROCESSING] Iniciando geração automática de legendas para: ${videoForCaptions}`);
+        console.log(`[PROCESSING] Intervalo: ${actualStartTime}s - ${actualEndTime}s`);
+        
+        const captionResult = await generateCaptions(videoForCaptions, {
           trimStart: actualStartTime,
           trimEnd: actualEndTime,
           language: captionLanguage || 'pt',
@@ -405,8 +414,9 @@ export const generateVideoSeries = async (job, jobsMap) => {
         }
       } catch (captionError) {
         console.error(`[PROCESSING] ❌ Erro ao gerar legendas automaticamente:`, captionError.message);
+        console.error(`[PROCESSING] Stack trace:`, captionError.stack);
         console.warn(`[PROCESSING] ⚠️ Continuando sem legendas devido ao erro na geração automática.`);
-        // Continuar sem legendas se houver erro
+        // Continuar sem legendas se houver erro (não bloquear geração)
       }
     } else {
       console.log(`[PROCESSING] ✅ Legendas disponíveis: ${captions.length} blocos de legenda`);
