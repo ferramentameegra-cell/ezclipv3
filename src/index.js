@@ -5,10 +5,15 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
 
 // Inicializar Redis primeiro
 import { initRedis } from "./services/redisService.js";
 import { apiLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
+import loggerMiddleware from "./middleware/logger.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { helmetConfig } from "./config/security.js";
 
 import youtubeRoutes from "./routes/youtube.js";
 import authRoutes from "./routes/auth.js";
@@ -48,10 +53,22 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // =====================
-// MIDDLEWARES
+// MIDDLEWARES DE SEGURANÇA
 // =====================
+// Helmet - Headers de segurança HTTP
+app.use(helmet(helmetConfig));
+
+// CORS
 app.use(cors());
+
+// Cookie parser (necessário para cookies HttpOnly)
+app.use(cookieParser());
+
+// Body parser
 app.use(express.json({ limit: '100mb' })); // Aumentar limite para vídeos grandes
+
+// Logger de auditoria
+app.use(loggerMiddleware);
 
 // Rate limiting global (aplicar antes das rotas)
 app.use('/api/', apiLimiter);
@@ -116,6 +133,15 @@ cleanupOldFiles(24).then(result => {
     console.log(`[CLEANUP] Limpeza inicial: ${result.cleanedCount} arquivos removidos`);
   }
 });
+
+// =====================
+// TRATAMENTO DE ERROS (deve ser o último middleware)
+// =====================
+// Handler para rotas não encontradas (404)
+app.use(notFoundHandler);
+
+// Handler de erros global
+app.use(errorHandler);
 
 // =====================
 // INICIALIZAÇÃO

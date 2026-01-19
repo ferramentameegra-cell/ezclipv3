@@ -1,4 +1,5 @@
 import { redisStore } from '../services/redisService.js';
+import { rateLimitConfig } from '../config/security.js';
 
 /**
  * Rate Limiter por IP
@@ -91,4 +92,24 @@ export const apiLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 200, // 200 requisições por 15 minutos
   message: 'Muitas requisições. Tente novamente em alguns minutos.'
+});
+
+/**
+ * Rate Limiter agressivo para login (prevenir brute force)
+ * Usa configuração centralizada de security.js
+ */
+export const loginLimiter = createRateLimiter({
+  windowMs: rateLimitConfig.login.windowMs,
+  max: rateLimitConfig.login.max,
+  message: rateLimitConfig.login.message
+});
+
+/**
+ * Rate Limiter para usuários autenticados
+ * Usa configuração centralizada de security.js
+ */
+export const authenticatedLimiter = createUserRateLimiter({
+  windowMs: rateLimitConfig.authenticated.windowMs,
+  max: rateLimitConfig.authenticated.max,
+  message: rateLimitConfig.authenticated.message
 });

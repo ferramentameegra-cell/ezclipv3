@@ -5,6 +5,8 @@
 
 import { createUser, getUserByEmail, verifyPassword } from '../models/users.js';
 import { generateToken } from '../services/authService.js';
+import { jwtConfig } from '../config/security.js';
+import { logLoginAttempt, logSecurityError } from '../middleware/logger.js';
 
 /**
  * POST /api/auth/register
@@ -44,6 +46,23 @@ export const register = async (req, res) => {
     // Gerar token
     const token = generateToken(user);
 
+    // Configurar cookie HttpOnly (mais seguro que localStorage)
+    res.cookie(jwtConfig.cookieName, token, {
+      httpOnly: jwtConfig.httpOnly,
+      secure: jwtConfig.secure,
+      sameSite: jwtConfig.sameSite,
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias (mesmo que JWT_EXPIRES_IN)
+    });
+
+    // Registrar login bem-sucedido (registro = login automático)
+    logLoginAttempt({
+      email: user.email,
+      success: true,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      userId: user.id
+    });
+
     console.log(`[AUTH] Novo usuário registrado: ${user.email} (ID: ${user.id})`);
 
     res.status(201).json({
@@ -56,7 +75,7 @@ export const register = async (req, res) => {
         credits_balance: user.credits_balance,
         free_trial_credits: user.free_trial_credits
       },
-      token
+      token // Manter token no JSON para compatibilidade com frontend existente
     });
   } catch (error) {
     console.error('[AUTH] Erro ao registrar:', error);
@@ -93,7 +112,18 @@ export const login = async (req, res) => {
 
     // Buscar usuário
     const user = getUserByEmail(email);
+    const ipAddress = req.ip;
+    const userAgent = req.get('user-agent');
+
     if (!user) {
+      // Registrar tentativa de login falha
+      logLoginAttempt({
+        email: email,
+        success: false,
+        ipAddress,
+        userAgent
+      });
+
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -103,6 +133,15 @@ export const login = async (req, res) => {
     // Verificar senha
     const isValidPassword = await verifyPassword(user, password);
     if (!isValidPassword) {
+      // Registrar tentativa de login falha
+      logLoginAttempt({
+        email: email,
+        success: false,
+        ipAddress,
+        userAgent,
+        userId: user.id
+      });
+
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -111,6 +150,23 @@ export const login = async (req, res) => {
 
     // Gerar token
     const token = generateToken(user);
+
+    // Configurar cookie HttpOnly (mais seguro que localStorage)
+    res.cookie(jwtConfig.cookieName, token, {
+      httpOnly: jwtConfig.httpOnly,
+      secure: jwtConfig.secure,
+      sameSite: jwtConfig.sameSite,
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
+    });
+
+    // Registrar login bem-sucedido
+    logLoginAttempt({
+      email: user.email,
+      success: true,
+      ipAddress,
+      userAgent,
+      userId: user.id
+    });
 
     console.log(`[AUTH] Login realizado: ${user.email} (ID: ${user.id})`);
 
@@ -124,7 +180,7 @@ export const login = async (req, res) => {
         credits_balance: user.credits_balance,
         free_trial_credits: user.free_trial_credits
       },
-      token
+      token // Manter token no JSON para compatibilidade com frontend existente
     });
   } catch (error) {
     console.error('[AUTH] Erro ao fazer login:', error);

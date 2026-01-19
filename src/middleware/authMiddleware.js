@@ -3,18 +3,18 @@
  * Protege rotas que exigem login obrigatório
  */
 
-import { verifyToken, extractTokenFromHeader } from '../services/authService.js';
+import { verifyToken, extractToken } from '../services/authService.js';
 import { getUserById } from '../models/users.js';
 
 /**
  * Middleware de autenticação obrigatória
  * Todas as rotas protegidas por este middleware exigem login
+ * Suporta token via header Authorization ou cookie HttpOnly
  */
 export const requireAuth = async (req, res, next) => {
   try {
-    // Extrair token do header
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const token = extractTokenFromHeader(authHeader);
+    // Extrair token do header ou cookie (prioriza header)
+    const token = extractToken(req);
 
     if (!token) {
       return res.status(401).json({
@@ -60,11 +60,11 @@ export const requireAuth = async (req, res, next) => {
 /**
  * Middleware opcional - adiciona usuário se token estiver presente
  * Usado em rotas que funcionam com ou sem autenticação
+ * Suporta token via header Authorization ou cookie HttpOnly
  */
 export const optionalAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization || req.headers.Authorization;
-    const token = extractTokenFromHeader(authHeader);
+    const token = extractToken(req);
 
     if (token) {
       try {

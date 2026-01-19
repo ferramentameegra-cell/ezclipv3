@@ -4,9 +4,11 @@
  */
 
 import jwt from 'jsonwebtoken';
+import { jwtConfig } from '../config/security.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ezclips-secret-key-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+// Usar JWT_SECRET do env ou do config (que já tem fallback seguro)
+const JWT_SECRET = process.env.JWT_SECRET || (typeof jwtConfig.secret === 'function' ? jwtConfig.secret() : jwtConfig.secret);
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || jwtConfig.expiresIn || '7d';
 
 /**
  * Gerar token JWT para usuário
@@ -49,4 +51,33 @@ export function extractTokenFromHeader(authHeader) {
   }
 
   return parts[1];
+}
+
+/**
+ * Extrair token do cookie HttpOnly
+ */
+export function extractTokenFromCookie(req) {
+  if (!req || !req.cookies) {
+    return null;
+  }
+
+  const cookieName = jwtConfig.cookieName || 'auth_token';
+  return req.cookies[cookieName] || null;
+}
+
+/**
+ * Extrair token de qualquer fonte (header ou cookie)
+ * Prioriza header, depois cookie
+ */
+export function extractToken(req) {
+  // Tentar header primeiro (compatibilidade com frontend existente)
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  const tokenFromHeader = extractTokenFromHeader(authHeader);
+  
+  if (tokenFromHeader) {
+    return tokenFromHeader;
+  }
+
+  // Se não encontrou no header, tentar cookie
+  return extractTokenFromCookie(req);
 }
