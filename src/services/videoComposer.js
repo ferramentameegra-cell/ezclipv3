@@ -209,14 +209,14 @@ export async function composeFinalVideo({
   // O cálculo da altura e posição do vídeo de retenção será feito dinamicamente
   // após obter as dimensões originais do vídeo (dentro do ffprobe)
 
-  console.log(`[COMPOSER] Formato: ${format}`);
-  console.log(`[COMPOSER] Layout: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+  console.log(`[COMPOSER] Formato: ${format} (IGNORADO - sempre 9:16)`);
+  console.log(`[COMPOSER] Layout: 1080x1920 (HARDCODED - sempre vertical)`);
   console.log(`[COMPOSER] Safe zones: top=${safeZones.top}px, bottom=${safeZones.bottom}px`);
   console.log(`[COMPOSER] Background: ${backgroundColor}`);
 
   return new Promise(async (resolve, reject) => {
-    console.log(`[COMPOSER] Iniciando composição final ${format}...`);
-    console.log(`[COMPOSER] Layout: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
+    console.log(`[COMPOSER] Iniciando composição final 9:16 (1080x1920)...`);
+    console.log(`[COMPOSER] Layout: 1080x1920 (HARDCODED - sempre vertical)`);
     console.log(`[COMPOSER] Background: ${backgroundColor}`);
 
     // Obter dimensões do vídeo de retenção ANTES de construir os filtros
@@ -640,7 +640,7 @@ export async function composeFinalVideo({
       filterParts.push(`[final_scaled]pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=${padColor}[final]`);
       console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED`);
       
-      // 8. Garantir que a saída final seja exatamente OUTPUT_WIDTH x OUTPUT_HEIGHT
+      // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
 
       // Construir comando FFmpeg
@@ -793,10 +793,10 @@ export async function composeFinalVideo({
                 const actualWidth = videoStream.width;
                 const actualHeight = videoStream.height;
                 console.log(`[COMPOSER] ✅ Resolução de saída: ${actualWidth}x${actualHeight}`);
-                if (actualWidth !== OUTPUT_WIDTH || actualHeight !== OUTPUT_HEIGHT) {
-                  console.warn(`[COMPOSER] ⚠️ ATENÇÃO: Resolução esperada ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}, mas obteve ${actualWidth}x${actualHeight}`);
+                if (actualWidth !== 1080 || actualHeight !== 1920) {
+                  console.warn(`[COMPOSER] ⚠️ ATENÇÃO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
                 } else {
-                  console.log(`[COMPOSER] ✅ Resolução correta: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (9:16)`);
+                  console.log(`[COMPOSER] ✅ Resolução correta: 1080x1920 (9:16 vertical)`);
                 }
               }
             }
@@ -808,10 +808,10 @@ export async function composeFinalVideo({
               const outputStream = probeData?.streams?.find(s => s.codec_type === 'video');
               if (outputStream) {
                 console.log(`[COMPOSER] Resolução de saída: ${outputStream.width}x${outputStream.height}`);
-                if (outputStream.width !== OUTPUT_WIDTH || outputStream.height !== OUTPUT_HEIGHT) {
-                  console.warn(`[COMPOSER] ⚠️ Resolução não corresponde ao esperado! Esperado: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}, Obtido: ${outputStream.width}x${outputStream.height}`);
+                if (outputStream.width !== 1080 || outputStream.height !== 1920) {
+                  console.warn(`[COMPOSER] ⚠️ Resolução não corresponde ao esperado! Esperado: 1080x1920, Obtido: ${outputStream.width}x${outputStream.height}`);
                 } else {
-                  console.log(`[COMPOSER] ✅ Resolução correta: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (${format})`);
+                  console.log(`[COMPOSER] ✅ Resolução correta: 1080x1920 (9:16 vertical)`);
                 }
               }
             }
