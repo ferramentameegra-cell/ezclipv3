@@ -386,8 +386,6 @@ function scrollToCard(stepName) {
 }
 
 function scrollToTool() {
-    scrollToCard('trim');
-    // Apenas garantir que card está visível
     scrollToCard('youtube');
 }
 
@@ -1933,7 +1931,7 @@ function showContinueButtonAfterTrim() {
 function continueToCaptions() {
     // Sem validação bloqueante - usuário controla o fluxo
     showCaptionsSection(); // Etapa 3
-    scrollToCard('trim');
+    scrollToCard('captions');
 }
 
 /**
