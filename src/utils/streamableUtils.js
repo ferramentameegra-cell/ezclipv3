@@ -6,10 +6,16 @@
 /**
  * Converter URL do Streamable para URL direta do vídeo
  * Streamable URLs: https://streamable.com/{id}
- * Direct video URL: https://cdn.streamable.com/video/mp4/{id}.mp4
+ * 
+ * O Streamable pode ter diferentes formatos de URL direta:
+ * - https://cdn.streamable.com/video/mp4/{id}.mp4 (formato comum)
+ * - https://streamable.com/e/{id} (formato embed)
+ * 
+ * FFmpeg pode usar URLs HTTP diretamente, então vamos tentar o formato mais comum.
+ * Se não funcionar, o FFmpeg retornará erro e podemos ajustar.
  * 
  * @param {string} streamableUrl - URL do Streamable (ex: https://streamable.com/zzzw81)
- * @returns {string} - URL direta do vídeo MP4
+ * @returns {string} - URL direta do vídeo MP4 ou URL original se não for Streamable
  */
 export function convertStreamableToDirectUrl(streamableUrl) {
   if (!streamableUrl || typeof streamableUrl !== 'string') {
@@ -22,13 +28,17 @@ export function convertStreamableToDirectUrl(streamableUrl) {
   }
 
   // Se é URL do Streamable, converter para URL direta
-  const streamableMatch = streamableUrl.match(/streamable\.com\/([a-z0-9]+)/i);
+  // Extrair ID da URL (pode ser streamable.com/{id} ou streamable.com/e/{id})
+  const streamableMatch = streamableUrl.match(/streamable\.com\/(?:e\/)?([a-z0-9]+)/i);
   if (streamableMatch) {
     const videoId = streamableMatch[1];
+    
     // Streamable usa CDN para servir vídeos diretamente
-    // Formato: https://cdn.streamable.com/video/mp4/{id}.mp4
+    // Formato mais comum: https://cdn.streamable.com/video/mp4/{id}.mp4
+    // Alternativa: https://streamable.com/e/{id} (mas pode precisar de headers)
     const directUrl = `https://cdn.streamable.com/video/mp4/${videoId}.mp4`;
     console.log(`[STREAMABLE] Convertendo URL: ${streamableUrl} -> ${directUrl}`);
+    console.log(`[STREAMABLE] FFmpeg tentará usar esta URL diretamente. Se falhar, pode ser necessário download prévio.`);
     return directUrl;
   }
 
