@@ -445,15 +445,28 @@ function showMainContent() {
         authSection.style.display = 'none';
         authSection.style.pointerEvents = 'none';
         authSection.style.zIndex = '-1';
+        authSection.style.visibility = 'hidden';
+        authSection.style.opacity = '0';
         authSection.classList.add('hidden');
     }
     
-    // Sempre mostrar conteúdo principal
+    // Sempre mostrar conteúdo principal e garantir interatividade
     if (mainContent) {
         mainContent.style.display = 'block';
         mainContent.style.pointerEvents = 'auto';
         mainContent.style.zIndex = '1';
+        mainContent.style.visibility = 'visible';
+        mainContent.style.opacity = '1';
         mainContent.classList.remove('hidden');
+        
+        // Garantir que todos os elementos filhos também sejam interativos
+        const interactiveElements = mainContent.querySelectorAll('button, a, input, select, textarea, [onclick]');
+        interactiveElements.forEach(el => {
+            if (!el.disabled) {
+                el.style.pointerEvents = 'auto';
+                el.style.cursor = 'pointer';
+            }
+        });
     }
 }
 
