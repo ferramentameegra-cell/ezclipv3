@@ -934,7 +934,12 @@ function openLoginFromModal() {
     
     showLogin();
     
-    scrollToCard('trim');
+    // Scroll para a seção de auth
+    setTimeout(() => {
+        if (authSection) {
+            authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 100);
 }
 
 function logout() {
@@ -1043,7 +1048,7 @@ function focusTermsCheckbox() {
         checkboxContainer.style.display = 'block';
         // Scroll suave até o checkbox
         setTimeout(() => {
-            scrollToCard('trim');
+            checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 100);
     }
     
@@ -1462,7 +1467,7 @@ async function handleYouTubeSubmit() {
             termsAlert.style.display = 'flex';
             // Scroll suave até o alerta
             setTimeout(() => {
-                scrollToCard('trim');
+                termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 100);
         }
         
@@ -1952,8 +1957,8 @@ function showCaptionsSection() {
     // Inicializar editor de legendas
     setTimeout(() => {
         initializeCaptionsEditor(appState.videoId);
-        scrollToCard('trim');
-    }, 100);
+        scrollToCard('captions');
+    }, 300);
 }
 
 /**
@@ -2920,7 +2925,7 @@ function continueToConfigurations() {
         configCard.style.display = 'block';
         updateProgressSteps('configurations'); // Etapa 4
         // Fazer scroll para a etapa de configurações
-        scrollToCard('youtube');
+        scrollToCard('configurations');
     }
 }
 
@@ -2991,7 +2996,7 @@ function showContinueButtonAfterCaptions() {
     if (continueSection) {
         continueSection.classList.remove('hidden');
         // Fazer scroll para a etapa de legendas
-        scrollToCard('youtube');
+        scrollToCard('captions');
     }
 }
 
@@ -3012,7 +3017,7 @@ function showContinueButtonAfterNiche() {
     if (continueSection) {
         continueSection.classList.remove('hidden');
         // Fazer scroll para a etapa de nicho
-        scrollToCard('youtube');
+        scrollToCard('niche');
     }
 }
 
@@ -3091,7 +3096,7 @@ function continueToGenerate() {
         generateCard.style.display = 'block';
         generateCard.classList.remove('hidden');
         // Fazer scroll para a etapa de geração
-        scrollToCard('youtube');
+        scrollToCard('generate');
         console.log('[NAV] Card de geração exibido');
     } else {
         console.error('[NAV] Card de geração não encontrado!');
