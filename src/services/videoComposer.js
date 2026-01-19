@@ -241,7 +241,11 @@ export async function composeFinalVideo({
           }
           
           // Baixar vídeo para arquivo temporário
-          const tempDir = path.join(process.cwd(), 'tmp', 'retention-downloads');
+          // Em produção (Railway): usar /tmp/retention-downloads
+          // Em desenvolvimento: usar tmp/retention-downloads na raiz
+          const tempDir = process.env.NODE_ENV === 'production' 
+            ? '/tmp/retention-downloads'
+            : path.join(process.cwd(), 'tmp', 'retention-downloads');
           if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
           }
