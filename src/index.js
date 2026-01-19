@@ -174,6 +174,18 @@ async function initializeServer() {
     console.error('[INIT] Algumas funcionalidades podem não funcionar. Por favor, instale o ffmpeg.');
   }
   
+  // Verificar Stripe
+  try {
+    const { stripe } = await import('./services/stripeService.js');
+    if (stripe) {
+      console.log('[INIT] ✅ Stripe configurado e pronto para processar pagamentos');
+    } else {
+      console.warn('[INIT] ⚠️ Stripe não configurado - configure STRIPE_SECRET_KEY');
+    }
+  } catch (error) {
+    console.warn('[INIT] ⚠️ Erro ao verificar Stripe:', error.message);
+  }
+  
   // Log de recursos disponíveis
   const memUsage = process.memoryUsage();
   const concurrency = parseInt(process.env.VIDEO_PROCESS_CONCURRENCY || '10');
@@ -185,7 +197,7 @@ async function initializeServer() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 EZ Clips rodando na porta ${PORT}`);
     console.log(`[INIT] ✅ Plataforma SaaS pronta para 1000+ usuários simultâneos`);
-    console.log(`[INIT] 📊 Rate limiting ativo`);
+    console.log(`[INIT] 💳 Stripe: ${process.env.STRIPE_SECRET_KEY ? 'Configurado' : 'Não configurado'}`);
     console.log(`[INIT] 🔄 Sistema de filas otimizado`);
   });
 }
