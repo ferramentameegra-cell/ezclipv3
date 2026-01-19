@@ -173,8 +173,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initializeApp() {
-    // Garantir que conteúdo principal está visível (nunca bloquear)
+    // CRÍTICO: Garantir que conteúdo principal está visível e interativo (nunca bloquear)
     showMainContent();
+    
+    // Forçar que auth-section esteja escondida e não bloqueie
+    const authSection = document.getElementById('auth-section');
+    if (authSection) {
+        authSection.style.display = 'none';
+        authSection.style.pointerEvents = 'none';
+        authSection.style.zIndex = '-1';
+        authSection.classList.add('hidden');
+    }
     
     // Verificar autenticação (opcional - não bloqueia uso da plataforma)
     await checkAuth();
@@ -193,11 +202,17 @@ async function initializeApp() {
     setTimeout(() => {
         document.querySelectorAll('[data-step-card]').forEach(card => {
             card.style.display = 'block';
+            card.style.pointerEvents = 'auto';
             card.classList.remove('hidden');
-            // Garantir que está visível
+            // Garantir que está visível e interativo
             if (card.style.display === 'none') {
                 card.style.display = 'block';
             }
+        });
+        
+        // Garantir que todos os elementos interativos estão funcionando
+        document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
+            el.style.pointerEvents = 'auto';
         });
     }, 100);
     
@@ -392,14 +407,21 @@ function clearAuth() {
 
 /**
  * Mostrar tela de login obrigatória
+ * NOTA: Esta função não deve ser usada para bloquear acesso inicial
+ * Apenas quando usuário explicitamente precisa fazer login
  */
 function showAuthRequired() {
     const mainContent = document.querySelector('main');
     const authSection = document.getElementById('auth-section');
     
-    if (mainContent) mainContent.style.display = 'none';
+    if (mainContent) {
+        mainContent.style.display = 'none';
+        mainContent.style.pointerEvents = 'none';
+    }
     if (authSection) {
         authSection.style.display = 'flex';
+        authSection.style.pointerEvents = 'auto';
+        authSection.style.zIndex = '1000';
         authSection.classList.remove('hidden');
     }
     
@@ -418,14 +440,19 @@ function showMainContent() {
     const authSection = document.getElementById('auth-section');
     
     // Sempre esconder seção de auth (não é a página inicial)
+    // Usar display: none E pointer-events: none para garantir que não bloqueie cliques
     if (authSection) {
         authSection.style.display = 'none';
+        authSection.style.pointerEvents = 'none';
+        authSection.style.zIndex = '-1';
         authSection.classList.add('hidden');
     }
     
     // Sempre mostrar conteúdo principal
     if (mainContent) {
         mainContent.style.display = 'block';
+        mainContent.style.pointerEvents = 'auto';
+        mainContent.style.zIndex = '1';
         mainContent.classList.remove('hidden');
     }
 }
@@ -848,11 +875,16 @@ function openLoginFromModal() {
     
     if (authSection) {
         authSection.style.display = 'flex';
+        authSection.style.pointerEvents = 'auto';
+        authSection.style.zIndex = '1000';
         authSection.classList.remove('hidden');
     }
     
-    // Não esconder conteúdo principal - apenas sobrepor com auth
-    // O usuário pode fechar e continuar usando
+    // Não esconder conteúdo principal completamente - apenas sobrepor
+    if (mainContent) {
+        mainContent.style.pointerEvents = 'none'; // Bloquear cliques no conteúdo enquanto auth está aberto
+    }
+    
     showLogin();
     
     // Scroll para a seção de auth
