@@ -14,34 +14,26 @@ export const PLANS = [
     is_unlimited: false
   },
   {
-    id: 'starter',
-    name: 'Starter',
-    videos_limit: 10,
-    price: 97.00,
-    description: 'Para iniciantes - 10 vídeos com cortes ilimitados',
-    is_unlimited: false
-  },
-  {
     id: 'creator',
     name: 'Creator',
-    videos_limit: 30,
-    price: 197.00,
-    description: 'Para criadores ativos - 30 vídeos com cortes ilimitados',
+    videos_limit: 10,
+    price: 79.00,
+    description: 'Para criadores - 10 vídeos com cortes ilimitados',
     is_unlimited: false
   },
   {
     id: 'pro',
     name: 'Pro',
-    videos_limit: 50,
-    price: 297.00,
-    description: 'Para profissionais - 50 vídeos com cortes ilimitados',
+    videos_limit: 40,
+    price: 197.00,
+    description: 'Para profissionais - 40 vídeos com cortes ilimitados',
     is_unlimited: false
   },
   {
     id: 'unlimited',
     name: 'Unlimited',
     videos_limit: null, // null = ilimitado
-    price: 497.00,
+    price: 397.00,
     description: 'Para criadores profissionais e agências - vídeos ilimitados',
     is_unlimited: true
   }
