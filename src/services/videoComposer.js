@@ -527,7 +527,9 @@ export async function composeFinalVideo({
         // Redimensionar vídeo de retenção para dimensões calculadas SEM CORTES
         // force_original_aspect_ratio=decrease garante que a imagem completa seja visível
         // Sem crop para evitar cortes - a imagem completa será exibida
-        filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease[retention_scaled]`);
+        // IMPORTANTE: Loopar vídeo de retenção para garantir que cubra toda a duração
+        // Usar loop filter para repetir o vídeo se necessário
+        filterParts.push(`[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease,loop=loop=-1:size=1:start=0[retention_scaled]`);
         
         // Aplicar pad para garantir dimensões exatas e centralizar (sem cortes)
         // Usar cor preta (0x000000) que será transparente no overlay
@@ -770,6 +772,7 @@ export async function composeFinalVideo({
       }
 
       // Input 2 (ou 1 se não houver background): vídeo de retenção (OBRIGATÓRIO se especificado)
+      // O vídeo de retenção será loopado automaticamente se for mais curto que o vídeo principal
       if (retentionVideoPath) {
         // Verificar se é URL (não deve ser, pois já foi baixado)
         const isUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
@@ -944,10 +947,16 @@ export async function composeFinalVideo({
                   console.log(`[COMPOSER] ✅ Resolução correta: 1080x1920 (9:16 vertical)`);
                 }
                 
-                // VALIDAR que vídeo de retenção está presente (verificar se há múltiplos inputs processados)
-                if (retentionVideoPath) {
-                  console.log(`[COMPOSER] ✅ VALIDAÇÃO: Vídeo de retenção foi processado e está presente no arquivo final`);
-                  console.log(`[COMPOSER] ✅ Arquivo final contém vídeo de retenção: ${retentionVideoPath}`);
+                // VALIDAR que vídeo de retenção está presente no arquivo final (OBRIGATÓRIO)
+                if (retentionVideoId && retentionVideoId !== 'none') {
+                  if (retentionVideoPath) {
+                    console.log(`[COMPOSER] ✅ VALIDAÇÃO: Vídeo de retenção foi processado e está presente no arquivo final`);
+                    console.log(`[COMPOSER] ✅ Arquivo final contém vídeo de retenção: ${retentionVideoPath}`);
+                    console.log(`[COMPOSER] ✅ Render concluído com sucesso - vídeo de retenção presente`);
+                  } else {
+                    console.error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final`);
+                    return reject(new Error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final. Render não pode ser considerado concluído.`));
+                  }
                 }
               }
             }
