@@ -46,8 +46,9 @@ export const securityHeaders = helmet({
   // Prevenir MIME type sniffing
   noSniff: true,
   
-  // Prevenir XSS
-  xssFilter: true,
+  // Prevenir XSS - DESABILITADO (já temos sanitização própria e pode bloquear event handlers)
+  // O XSS filter do Helmet pode bloquear onclick e outros event handlers inline
+  xssFilter: false,
   
   // Desabilitar X-Powered-By
   hidePoweredBy: true,
@@ -70,9 +71,15 @@ export const securityHeaders = helmet({
 /**
  * Middleware de sanitização XSS
  * Remove scripts e tags perigosas de inputs
+ * NÃO afeta HTML estático servido (apenas inputs do usuário)
  */
 export const xssProtection = (req, res, next) => {
-  // Sanitizar apenas body e query params
+  // NÃO sanitizar requisições GET ou requisições para arquivos estáticos
+  if (req.method === 'GET' || req.path.startsWith('/') && !req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Sanitizar apenas body e query params de requisições POST/PUT/DELETE para API
   if (req.body && typeof req.body === 'object') {
     req.body = sanitizeObject(req.body);
   }
@@ -107,18 +114,26 @@ function sanitizeObject(obj) {
 
 /**
  * Sanitizar string removendo tags HTML perigosas
+ * NÃO remove event handlers de strings que são HTML completo (para não quebrar funcionalidades)
+ * Apenas remove scripts e iframes perigosos
  */
 function sanitizeString(value) {
   if (typeof value !== 'string') {
     return value;
   }
   
-  // Remover tags HTML perigosas
+  // Limitar tamanho para prevenir DoS
+  if (value.length > 100000) {
+    return value.substring(0, 100000);
+  }
+  
+  // Remover apenas tags HTML perigosas (scripts e iframes)
+  // NÃO remover event handlers - isso quebraria funcionalidades
   return value
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
     .replace(/javascript:/gi, '')
-    .replace(/on\w+\s*=/gi, '') // Remover event handlers
+    // NÃO remover onclick e outros event handlers - necessário para funcionalidade
     .trim();
 }
 
