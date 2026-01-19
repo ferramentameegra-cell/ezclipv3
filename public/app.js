@@ -721,10 +721,21 @@ async function purchasePlan(planId) {
 }
 
 async function handleLogin(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    
+    if (!emailInput || !passwordInput) {
+        console.error('[AUTH] Campos de login não encontrados');
+        return;
+    }
+    
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
     const btnText = document.getElementById('login-btn-text');
     const btnSpinner = document.getElementById('login-btn-spinner');
     const statusMsg = document.getElementById('login-status');
@@ -733,14 +744,33 @@ async function handleLogin(event) {
     if (btnSpinner) btnSpinner.classList.remove('hidden');
     if (statusMsg) statusMsg.classList.add('hidden');
     
+    // Validação básica
+    if (!email || !password) {
+        if (statusMsg) {
+            statusMsg.textContent = 'Por favor, preencha todos os campos';
+            statusMsg.className = 'status-modern error';
+            statusMsg.classList.remove('hidden');
+        }
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
+        return;
+    }
+    
     try {
+        console.log('[AUTH] Tentando fazer login...');
         const response = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
         });
         
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            console.error('[AUTH] Erro ao parsear resposta:', parseError);
+            throw new Error('Resposta inválida do servidor');
+        }
         
         if (!response.ok) {
             // Mostrar erro
@@ -803,24 +833,35 @@ async function handleLogin(event) {
             }
         }
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('[AUTH] Erro no login:', error);
         if (statusMsg) {
-            statusMsg.textContent = 'Erro ao conectar com o servidor';
+            statusMsg.textContent = error.message || 'Erro ao conectar com o servidor. Verifique sua conexão.';
             statusMsg.className = 'status-modern error';
             statusMsg.classList.remove('hidden');
         }
-    } finally {
         if (btnText) btnText.classList.remove('hidden');
         if (btnSpinner) btnSpinner.classList.add('hidden');
     }
 }
 
 async function handleRegister(event) {
-    event.preventDefault();
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     
-    const name = document.getElementById('register-name').value;
-    const email = document.getElementById('register-email').value;
-    const password = document.getElementById('register-password').value;
+    const nameInput = document.getElementById('register-name');
+    const emailInput = document.getElementById('register-email');
+    const passwordInput = document.getElementById('register-password');
+    
+    if (!nameInput || !emailInput || !passwordInput) {
+        console.error('[AUTH] Campos de registro não encontrados');
+        return;
+    }
+    
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
     const btnText = document.getElementById('register-btn-text');
     const btnSpinner = document.getElementById('register-btn-spinner');
     const statusMsg = document.getElementById('register-status');
@@ -829,14 +870,40 @@ async function handleRegister(event) {
     btnSpinner.classList.remove('hidden');
     statusMsg.classList.add('hidden');
     
+    // Validação básica
+    if (!name || !email || !password) {
+        statusMsg.textContent = 'Por favor, preencha todos os campos';
+        statusMsg.className = 'login-status error';
+        statusMsg.classList.remove('hidden');
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+        return;
+    }
+    
+    if (password.length < 6) {
+        statusMsg.textContent = 'A senha deve ter no mínimo 6 caracteres';
+        statusMsg.className = 'login-status error';
+        statusMsg.classList.remove('hidden');
+        btnText.classList.remove('hidden');
+        btnSpinner.classList.add('hidden');
+        return;
+    }
+    
     try {
+        console.log('[AUTH] Tentando criar conta...');
         const response = await fetch(`${API_BASE}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email, password })
         });
         
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            console.error('[AUTH] Erro ao parsear resposta:', parseError);
+            throw new Error('Resposta inválida do servidor');
+        }
         
         if (!response.ok) {
             // Mostrar erro
