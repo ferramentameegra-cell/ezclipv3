@@ -302,30 +302,56 @@ export async function composeFinalVideo({
       retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
       
       // Validar que não ultrapassa margem superior
-      if (retentionY < TOP_MARGIN) {
-        // Se ultrapassou, reduzir altura para não ultrapassar
-        // HARDCODED: altura sempre 1920
-        const maxAllowedHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE;
-        retentionHeight = maxAllowedHeight;
+      // GARANTIR espaço mínimo para o vídeo principal (pelo menos 400px)
+      const MIN_MAIN_VIDEO_HEIGHT = 400; // Altura mínima para o vídeo principal
+      const maxRetentionHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE - MIN_MAIN_VIDEO_HEIGHT; // 1920 - 180 - 140 - 400 = 1200px máximo
+      
+      // Se o vídeo de retenção for muito grande, reduzir para caber
+      if (retentionHeight > maxRetentionHeight) {
+        console.log(`[COMPOSER] ⚠️ Vídeo de retenção muito grande (${retentionHeight}px), reduzindo para ${maxRetentionHeight}px para garantir espaço para vídeo principal`);
+        retentionHeight = maxRetentionHeight;
         retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
         
         // Se a largura calculada ultrapassar, ajustar novamente
-        // HARDCODED: largura sempre 1080
+        if (retentionWidth > 1080) {
+          retentionWidth = 1080;
+          retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
+        }
+      }
+      
+      // Recalcular posição Y com altura ajustada
+      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
+      
+      // Validar que não ultrapassa margem superior
+      if (retentionY < TOP_MARGIN) {
+        // Se ainda ultrapassar, reduzir mais
+        const maxAllowedHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE - MIN_MAIN_VIDEO_HEIGHT;
+        retentionHeight = Math.min(retentionHeight, maxAllowedHeight);
+        retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
+        
         if (retentionWidth > 1080) {
           retentionWidth = 1080;
           retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
         }
         
-        // HARDCODED: altura sempre 1920
         retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
       }
       
+      // Validação final
       if (retentionY < TOP_MARGIN) {
-        return reject(new Error(`[COMPOSER] ❌ Não é possível posicionar vídeo de retenção: altura calculada ${retentionHeight}px ultrapassa margem superior`));
+        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção ainda ultrapassa margem superior, desabilitando vídeo de retenção`);
+        retentionVideoPath = null; // Desabilitar vídeo de retenção se não couber
+        retentionHeight = 0;
+        retentionWidth = 0;
+        retentionY = 0;
       }
       
       if (retentionHeight <= 0 || retentionWidth <= 0) {
-        return reject(new Error(`[COMPOSER] ❌ Dimensões inválidas do vídeo de retenção: ${retentionWidth}x${retentionHeight}`));
+        console.warn(`[COMPOSER] ⚠️ Dimensões inválidas do vídeo de retenção, desabilitando`);
+        retentionVideoPath = null;
+        retentionHeight = 0;
+        retentionWidth = 0;
+        retentionY = 0;
       }
       
       console.log(`[COMPOSER] ✅ Vídeo de retenção: dimensões originais ${retentionOriginalWidth}x${retentionOriginalHeight} (aspect ratio: ${retentionAspectRatio.toFixed(2)})`);
@@ -337,13 +363,25 @@ export async function composeFinalVideo({
     // Calcular altura do vídeo principal baseada na posição do vídeo de retenção
     // Se houver vídeo de retenção, o vídeo principal termina onde o vídeo de retenção começa
     // Se não houver, o vídeo principal ocupa até a área livre inferior
+    // GARANTIR altura mínima para o vídeo principal (400px)
     // HARDCODED: altura sempre 1920
-    const MAIN_VIDEO_HEIGHT = retentionVideoPath 
-      ? retentionY - TOP_MARGIN 
+    const MIN_MAIN_VIDEO_HEIGHT = 400; // Altura mínima garantida
+    let MAIN_VIDEO_HEIGHT = retentionVideoPath && retentionY > TOP_MARGIN
+      ? Math.max(MIN_MAIN_VIDEO_HEIGHT, retentionY - TOP_MARGIN) // Garantir mínimo
       : 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE;
     
+    // Se ainda assim a altura for inválida, usar altura mínima
     if (MAIN_VIDEO_HEIGHT <= 0) {
-      return reject(new Error(`[COMPOSER] ❌ Altura do vídeo principal inválida: ${MAIN_VIDEO_HEIGHT}px. O vídeo de retenção pode estar ocupando muito espaço.`));
+      console.warn(`[COMPOSER] ⚠️ Altura do vídeo principal inválida (${MAIN_VIDEO_HEIGHT}px), usando altura mínima (${MIN_MAIN_VIDEO_HEIGHT}px)`);
+      MAIN_VIDEO_HEIGHT = MIN_MAIN_VIDEO_HEIGHT;
+      // Se usar altura mínima, desabilitar vídeo de retenção
+      if (retentionVideoPath) {
+        console.warn(`[COMPOSER] ⚠️ Desabilitando vídeo de retenção para garantir espaço para vídeo principal`);
+        retentionVideoPath = null;
+        retentionHeight = 0;
+        retentionWidth = 0;
+        retentionY = 0;
+      }
     }
     
     console.log(`[COMPOSER] Layout vertical 9:16: 1080x1920 (HARDCODED - sempre vertical)`);

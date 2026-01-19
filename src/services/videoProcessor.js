@@ -373,8 +373,41 @@ export const generateVideoSeries = async (job, jobsMap) => {
     
     console.log(`[PROCESSING] Legendas encontradas no vídeo: ${captions.length} (edited: ${video.captions?.edited?.length || 0}, raw: ${video.captions?.raw?.length || 0})`);
     
+    // FORÇAR geração automática de legendas se não houver legendas
     if (captions.length === 0) {
-      console.warn(`[PROCESSING] ⚠️ Nenhuma legenda encontrada para o vídeo ${videoId}. O vídeo será gerado sem legendas.`);
+      console.log(`[PROCESSING] ⚠️ Nenhuma legenda encontrada. Gerando legendas automaticamente...`);
+      
+      try {
+        // Importar serviço de legendas
+        const { generateCaptions } = await import('./captionService.js');
+        
+        // Gerar legendas automaticamente do vídeo processado (já trimado se necessário)
+        console.log(`[PROCESSING] Iniciando geração automática de legendas para: ${processedVideoPath}`);
+        const captionResult = await generateCaptions(processedVideoPath, {
+          trimStart: actualStartTime,
+          trimEnd: actualEndTime,
+          language: captionLanguage || 'pt',
+          maxCharsPerLine: 30, // Formato vertical 9:16
+          maxLinesPerBlock: 2
+        });
+        
+        if (captionResult && captionResult.captions && captionResult.captions.length > 0) {
+          captions = captionResult.captions;
+          console.log(`[PROCESSING] ✅ Legendas geradas automaticamente: ${captions.length} blocos`);
+          
+          // Log das primeiras legendas
+          const firstCaption = captions[0];
+          const lastCaption = captions[captions.length - 1];
+          console.log(`[PROCESSING] Primeira legenda gerada: "${firstCaption.text || firstCaption.lines?.join(' ')}" [${firstCaption.start}s - ${firstCaption.end}s]`);
+          console.log(`[PROCESSING] Última legenda gerada: "${lastCaption.text || lastCaption.lines?.join(' ')}" [${lastCaption.start}s - ${lastCaption.end}s]`);
+        } else {
+          console.warn(`[PROCESSING] ⚠️ Geração automática de legendas não retornou resultados. Continuando sem legendas.`);
+        }
+      } catch (captionError) {
+        console.error(`[PROCESSING] ❌ Erro ao gerar legendas automaticamente:`, captionError.message);
+        console.warn(`[PROCESSING] ⚠️ Continuando sem legendas devido ao erro na geração automática.`);
+        // Continuar sem legendas se houver erro
+      }
     } else {
       console.log(`[PROCESSING] ✅ Legendas disponíveis: ${captions.length} blocos de legenda`);
       // Log das primeiras legendas para debug
