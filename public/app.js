@@ -212,8 +212,31 @@ async function initializeApp() {
         
         // Garantir que todos os elementos interativos estão funcionando
         document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
-            el.style.pointerEvents = 'auto';
+            if (!el.disabled) {
+                el.style.pointerEvents = 'auto';
+                if (el.tagName === 'BUTTON' || el.tagName === 'A') {
+                    el.style.cursor = 'pointer';
+                }
+            }
         });
+        
+        // Verificar se há elementos bloqueando cliques
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach(el => {
+            const computedStyle = window.getComputedStyle(el);
+            // Se elemento está visível mas com pointer-events: none, verificar se deveria ter
+            if (computedStyle.display !== 'none' && 
+                computedStyle.visibility !== 'hidden' &&
+                computedStyle.pointerEvents === 'none' &&
+                (el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' || el.onclick)) {
+                // Elemento interativo com pointer-events: none - corrigir
+                if (!el.disabled) {
+                    el.style.pointerEvents = 'auto';
+                }
+            }
+        });
+        
+        console.log('[INIT] ✅ Interface inicializada e elementos interativos verificados');
     }, 100);
     
     updateProgressSteps('youtube'); // Etapa 1
@@ -1369,10 +1392,10 @@ function setupUploadDragDrop() {
     
     if (!uploadArea || !fileInput) return;
     
-    // Prevenir comportamento padrão do navegador
+    // Prevenir comportamento padrão do navegador APENAS na área de upload
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         uploadArea.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
+        // NÃO adicionar ao document.body para não bloquear outros cliques
     });
     
     function preventDefaults(e) {
