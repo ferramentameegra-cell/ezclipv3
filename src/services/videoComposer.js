@@ -719,8 +719,8 @@ export async function composeFinalVideo({
 
       // Mapear saída e configurar codecs
       // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
-      // [final] sempre existe após a etapa 6 e já tem as dimensões corretas
-      // NÃO usar -vf aqui pois já temos complexFilter que força as dimensões
+      // [final] sempre existe após a etapa 6 e já tem as dimensões corretas (1080x1920)
+      // O complexFilter já força as dimensões através do [final], então não precisamos de -vf
       const outputOptions = [
         '-map', '[final]',
         '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded para garantir)
@@ -729,8 +729,7 @@ export async function composeFinalVideo({
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart',
-        '-aspect', '9:16', // FORÇAR aspect ratio 9:16
-        '-vf', `scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black` // FORÇAR novamente via -vf como backup
+        '-aspect', '9:16' // FORÇAR aspect ratio 9:16
       ];
       
       console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED`);
