@@ -173,6 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initializeApp() {
+    // Garantir que conteúdo principal está visível (nunca bloquear)
+    showMainContent();
+    
     // Verificar autenticação (opcional - não bloqueia uso da plataforma)
     await checkAuth();
     
@@ -341,8 +344,8 @@ function scrollToTool() {
 
 // ========== AUTHENTICATION ==========
 /**
- * Verificar autenticação obrigatória
- * Se não houver token, redirecionar para login
+ * Verificar autenticação (opcional - não bloqueia acesso)
+ * Apenas carrega dados do usuário se houver token válido
  */
 async function checkAuth() {
     const token = localStorage.getItem('ezv2_token');
@@ -357,19 +360,21 @@ async function checkAuth() {
                 appState.userToken = token;
                 localStorage.setItem('ezv2_user', JSON.stringify(data.user));
                 updateUserUI();
-                showMainContent(); // Mostrar conteúdo principal
                 await loadUserVideos(); // Carregar informações de vídeos
                 return true;
             }
         } catch (error) {
             console.error('[AUTH] Erro ao verificar token:', error);
-            // Token inválido, limpar e mostrar login
+            // Token inválido, limpar mas NÃO bloquear acesso
             clearAuth();
         }
     }
     
-    // Sem token ou token inválido - mostrar login obrigatório
-    showAuthRequired();
+    // Sem token ou token inválido - continuar sem autenticação
+    // NÃO bloquear acesso - usuário pode usar a plataforma livremente
+    appState.currentUser = null;
+    appState.userToken = null;
+    updateUserUI();
     return false;
 }
 
@@ -406,17 +411,23 @@ function showAuthRequired() {
 }
 
 /**
- * Mostrar conteúdo principal (após login)
+ * Mostrar conteúdo principal (sempre visível - não bloqueia acesso)
  */
 function showMainContent() {
     const mainContent = document.querySelector('main');
     const authSection = document.getElementById('auth-section');
     
+    // Sempre esconder seção de auth (não é a página inicial)
     if (authSection) {
         authSection.style.display = 'none';
         authSection.classList.add('hidden');
     }
-    if (mainContent) mainContent.style.display = 'block';
+    
+    // Sempre mostrar conteúdo principal
+    if (mainContent) {
+        mainContent.style.display = 'block';
+        mainContent.classList.remove('hidden');
+    }
 }
 
 /**
@@ -671,6 +682,9 @@ async function handleLogin(event) {
             // Fechar modal de login se estiver aberto
             closeLoginRequiredModal();
             
+            // Garantir que conteúdo principal está visível
+            showMainContent();
+            
             // Retomar geração se estava pendente
             if (appState.pendingGeneration) {
                 console.log('[AUTH] Retomando geração após login...');
@@ -678,18 +692,17 @@ async function handleLogin(event) {
                 Object.assign(appState, appState.pendingGeneration);
                 appState.pendingGeneration = null;
                 
-                // Verificar créditos e continuar
+                // Verificar vídeos e continuar geração
                 setTimeout(() => {
                     proceedToGenerate();
                 }, 500);
                 return;
             }
             
-            // Mostrar conteúdo principal
+            // Se não havia geração pendente, apenas atualizar UI
             setTimeout(() => {
-                showMainContent();
                 switchTab('home');
-            }, 1000);
+            }, 500);
         } else {
             if (statusMsg) {
                 statusMsg.textContent = data.error || 'Erro ao fazer login';
@@ -751,6 +764,9 @@ async function handleRegister(event) {
             // Fechar modal de login se estiver aberto
             closeLoginRequiredModal();
             
+            // Garantir que conteúdo principal está visível
+            showMainContent();
+            
             // Retomar geração se estava pendente
             if (appState.pendingGeneration) {
                 console.log('[AUTH] Retomando geração após registro...');
@@ -758,18 +774,17 @@ async function handleRegister(event) {
                 Object.assign(appState, appState.pendingGeneration);
                 appState.pendingGeneration = null;
                 
-                // Verificar créditos e continuar
+                // Verificar vídeos e continuar geração
                 setTimeout(() => {
                     proceedToGenerate();
                 }, 500);
                 return;
             }
             
-            // Mostrar conteúdo principal após registro
+            // Se não havia geração pendente, apenas atualizar UI
             setTimeout(() => {
-                showMainContent();
                 switchTab('home');
-            }, 1500);
+            }, 500);
         } else {
             statusMsg.textContent = data.error || 'Erro ao criar conta';
             statusMsg.className = 'login-status error';
@@ -827,13 +842,29 @@ function closeLoginRequiredModal() {
  */
 function openLoginFromModal() {
     closeLoginRequiredModal();
-    showAuthRequired();
+    // Mostrar seção de auth mas manter conteúdo principal acessível
+    const authSection = document.getElementById('auth-section');
+    const mainContent = document.querySelector('main');
+    
+    if (authSection) {
+        authSection.style.display = 'flex';
+        authSection.classList.remove('hidden');
+    }
+    
+    // Não esconder conteúdo principal - apenas sobrepor com auth
+    // O usuário pode fechar e continuar usando
     showLogin();
+    
+    // Scroll para a seção de auth
+    if (authSection) {
+        authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 function logout() {
     clearAuth();
-    showAuthRequired();
+    // Após logout, mostrar conteúdo principal (não bloquear acesso)
+    showMainContent();
     // Limpar formulários
     const emailInput = document.getElementById('login-email');
     const passwordInput = document.getElementById('login-password');
@@ -1202,14 +1233,7 @@ async function handleUploadSubmit() {
         const data = await response.json();
         
         if (!response.ok) {
-            // Tratar erros de autenticação (já tratados no apiClient, mas garantindo aqui também)
-            if (response.status === 401 || response.status === 403) {
-                alert('Você precisa estar logado para fazer upload de vídeos. Por favor, faça login primeiro.');
-                if (typeof showAuthRequired === 'function') {
-                    showAuthRequired();
-                }
-                return;
-            }
+            // Upload não requer autenticação - apenas mostrar erro
             throw new Error(data.error || 'Erro ao enviar vídeo');
         }
         

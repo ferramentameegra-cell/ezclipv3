@@ -84,15 +84,15 @@ app.use('/api/captions/generate', heavyOperationLimiter);
 // =====================
 // API
 // =====================
-app.use("/api/youtube", youtubeRoutes);
-app.use("/api/auth", authRoutes);
-app.use("/api/credits", creditsRoutes);
-app.use("/api/download", requireAuth, downloadRoutes); // Proteger upload/download
-app.use("/api/trim", requireAuth, trimRoutes); // Proteger trim
-app.use("/api/generate", generateRoutes); // Já protegido individualmente
+app.use("/api/youtube", youtubeRoutes); // Público (download de vídeos)
+app.use("/api/auth", authRoutes); // Público (login/registro)
+app.use("/api/credits", creditsRoutes); // Requer auth (verificar saldo/comprar)
+app.use("/api/download", downloadRoutes); // Público (upload/download de vídeos)
+app.use("/api/trim", trimRoutes); // Público (cálculo de trim)
+app.use("/api/generate", generateRoutes); // Requer auth (geração de clipes)
 app.use("/api/niches", nichesRoutes); // Público (lista de nichos)
 app.use("/api/retention", retentionRoutes); // Público (lista de retenção)
-app.use("/api/captions", requireAuth, captionsRoutes); // Proteger legendas
+app.use("/api/captions", captionsRoutes); // Público (geração de legendas)
 app.use("/api/terms", termsRoutes); // Público (termos)
 
 // =====================
