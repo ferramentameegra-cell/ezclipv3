@@ -742,7 +742,19 @@ async function handleLogin(event) {
         
         const data = await response.json();
         
-        if (response.ok && data.user && data.token) {
+        if (!response.ok) {
+            // Mostrar erro
+            if (statusMsg) {
+                statusMsg.textContent = data.error || 'Erro ao fazer login';
+                statusMsg.className = 'status-modern error';
+                statusMsg.classList.remove('hidden');
+            }
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
+            return;
+        }
+        
+        if (data.user && data.token) {
             appState.currentUser = data.user;
             appState.userToken = data.token;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
@@ -826,7 +838,17 @@ async function handleRegister(event) {
         
         const data = await response.json();
         
-        if (response.ok && data.user && data.token) {
+        if (!response.ok) {
+            // Mostrar erro
+            statusMsg.textContent = data.error || 'Erro ao criar conta';
+            statusMsg.className = 'login-status error';
+            statusMsg.classList.remove('hidden');
+            btnText.classList.remove('hidden');
+            btnSpinner.classList.add('hidden');
+            return;
+        }
+        
+        if (data.user && data.token) {
             appState.currentUser = data.user;
             appState.userToken = data.token;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
