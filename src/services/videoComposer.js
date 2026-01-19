@@ -799,17 +799,19 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ⚠️ Nenhuma legenda para adicionar (captions=${captions?.length || 0})`);
       }
       
-      // 8. Garantir resolução final 1080x1920 (FORÇAR) - SEMPRE CRIAR [final]
+      // 8. Garantir resolução final 1080x1920 (FORÇAR OBRIGATORIAMENTE) - SEMPRE CRIAR [final]
       // FORÇAR formato vertical 9:16 (1080x1920) em TODAS as etapas
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
       // FORÇAR dimensões exatas: 1080x1920 (hardcoded para garantir formato vertical)
       // Usar force_original_aspect_ratio=increase para garantir que preencha todo o espaço
+      // Depois crop para garantir dimensões EXATAS 1080x1920 sem distorção
       filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
-      // Crop para garantir dimensões exatas 1080x1920 (sem distorção)
-      filterParts.push(`[final_scaled]crop=1080:1920[final]`);
-      console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED`);
-      console.log(`[COMPOSER] ✅ Formato vertical garantido: scale=1080:1920 + crop=1080:1920`);
+      // Crop para garantir dimensões EXATAS 1080x1920 (sem distorção, sem margem)
+      filterParts.push(`[final_scaled]crop=1080:1920:0:0[final]`);
+      console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
+      console.log(`[COMPOSER] ✅ Formato vertical garantido: scale=1080:1920:force_original_aspect_ratio=increase + crop=1080:1920:0:0`);
+      console.log(`[COMPOSER] ✅ Dimensões finais EXATAS: 1080x1920 (sem exceções)`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -918,14 +920,16 @@ export async function composeFinalVideo({
       }
 
       // Mapear saída e configurar codecs
-      // FORÇAR resolução 1080x1920 explicitamente (formato vertical 9:16)
+      // FORÇAR resolução 1080x1920 OBRIGATORIAMENTE (formato vertical 9:16)
       // [final] sempre existe após a etapa 8 e já tem as dimensões corretas (1080x1920)
       // O complexFilter já força as dimensões através do [final] com scale+crop
-      // Adicionar -s e -aspect como backup para garantir formato vertical
+      // Adicionar -s e -aspect como backup OBRIGATÓRIO para garantir formato vertical
+      // Usar múltiplas opções para FORÇAR 1080x1920 em todas as etapas
       const outputOptions = [
         '-map', '[final]',
-        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical obrigatório)
-        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical)
+        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical OBRIGATÓRIO)
+        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical OBRIGATÓRIO)
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920', // FORÇAR novamente no vídeo filter
         '-c:v', 'libx264',
         '-preset', 'medium',
         '-crf', '23',
@@ -933,8 +937,9 @@ export async function composeFinalVideo({
         '-movflags', '+faststart'
       ];
       
-      console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED`);
-      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16`);
+      console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
+      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16 -vf scale=1080:1920`);
+      console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento: complexFilter + -s + -aspect + -vf`);
       console.log(`[COMPOSER] ✅ Usando label final: [final]`);
       console.log(`[COMPOSER] ✅ Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
@@ -964,8 +969,9 @@ export async function composeFinalVideo({
       command
         .on('start', (cmdline) => {
           console.log('[COMPOSER] Comando iniciado');
-          console.log(`[COMPOSER] Saída FORÇADA: 1080x1920 (9:16 vertical) - HARDCODED`);
-          console.log(`[COMPOSER] Aspect ratio FORÇADO: 9:16`);
+          console.log(`[COMPOSER] ✅ Saída FORÇADA: 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
+          console.log(`[COMPOSER] ✅ Aspect ratio FORÇADO: 9:16 (OBRIGATÓRIO)`);
+          console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento aplicadas para garantir 1080x1920`);
           console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM ✅' : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM ✅' : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Safe zones: topo ${safeZones.top}px, rodapé ${safeZones.bottom}px`);
@@ -1002,11 +1008,14 @@ export async function composeFinalVideo({
               if (videoStream) {
                 const actualWidth = videoStream.width;
                 const actualHeight = videoStream.height;
-                console.log(`[COMPOSER] ✅ Resolução de saída: ${actualWidth}x${actualHeight}`);
+                console.log(`[COMPOSER] ✅ Resolução de saída verificada: ${actualWidth}x${actualHeight}`);
                 if (actualWidth !== 1080 || actualHeight !== 1920) {
-                  console.warn(`[COMPOSER] ⚠️ ATENÇÃO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
+                  console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
+                  console.error(`[COMPOSER] ❌ O vídeo NÃO está no formato correto! Verifique as opções de saída do FFmpeg.`);
+                  // Não rejeitar aqui, apenas logar o erro - o vídeo pode ainda estar funcional
                 } else {
-                  console.log(`[COMPOSER] ✅ Resolução correta: 1080x1920 (9:16 vertical)`);
+                  console.log(`[COMPOSER] ✅ Resolução correta confirmada: 1080x1920 (9:16 vertical)`);
+                  console.log(`[COMPOSER] ✅ Formato vertical 1080x1920 FORÇADO com sucesso!`);
                 }
                 
                 // VALIDAR que vídeo de retenção está presente no arquivo final (OBRIGATÓRIO)
