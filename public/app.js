@@ -3215,9 +3215,8 @@ async function generateSeries() {
     // AUTENTICAÇÃO OBRIGATÓRIA - Backend também valida
     if (!appState.currentUser || !appState.userToken) {
         // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
-        // Mas manter como segurança
-        alert('Você precisa estar logado para gerar clipes. Por favor, faça login primeiro.');
-        showAuthRequired();
+        // Mas manter como segurança - mostrar modal de login
+        showLoginRequiredModal();
         return;
     }
     
