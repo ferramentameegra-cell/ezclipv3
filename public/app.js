@@ -20,7 +20,7 @@ const appState = {
     seriesId: null,
     currentUser: null,
     userToken: null,
-    userCredits: null, // { free_trial_credits, credits_balance, total_credits, plan_id }
+    userVideos: null, // { videos_used, videos_limit, videos_remaining, is_unlimited, plan_id, plan_name }
     pendingGeneration: null, // Estado salvo para retomar geração após login
     currentTab: 'home',
     configurations: {
@@ -68,7 +68,7 @@ class ApiClient {
         console.warn('[API] Token inválido ou expirado, redirecionando para login...');
         appState.currentUser = null;
         appState.userToken = null;
-        appState.userCredits = null;
+        appState.userVideos = null;
         localStorage.removeItem('ezv2_user');
         localStorage.removeItem('ezv2_token');
         
@@ -83,10 +83,19 @@ class ApiClient {
         throw new Error(errorData.error || 'Autenticação obrigatória. Faça login para continuar.');
       }
       
-      // Tratar erros de créditos insuficientes
+      // Tratar erros de limite de vídeos
       if (response.status === 402) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Créditos insuficientes');
+        const errorMessage = errorData.error || 'Limite de vídeos atingido';
+        
+        // Se for erro de limite de vídeos, mostrar modal de upgrade
+        if (errorData.code === 'VIDEO_LIMIT_REACHED' && errorData.needsUpgrade) {
+          if (typeof showCreditsPurchaseModal === 'function') {
+            setTimeout(() => showCreditsPurchaseModal(), 100);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       if (response.status === 429) {
@@ -349,7 +358,7 @@ async function checkAuth() {
                 localStorage.setItem('ezv2_user', JSON.stringify(data.user));
                 updateUserUI();
                 showMainContent(); // Mostrar conteúdo principal
-                await loadUserCredits(); // Carregar créditos
+                await loadUserVideos(); // Carregar informações de vídeos
                 return true;
             }
         } catch (error) {
@@ -411,61 +420,82 @@ function showMainContent() {
 }
 
 /**
- * Carregar créditos do usuário
+ * Carregar informações de vídeos do usuário
  */
-async function loadUserCredits() {
+async function loadUserVideos() {
     if (!appState.currentUser) return;
     
     try {
         const { data } = await apiClient.get('/api/credits/balance');
         if (data) {
-            appState.userCredits = {
-                free_trial_credits: data.free_trial_credits || 0,
-                credits_balance: data.credits_balance || 0,
-                total_credits: data.total_credits || 0,
-                plan_id: data.plan_id || null
+            appState.userVideos = {
+                videos_used: data.videos_used || 0,
+                videos_limit: data.videos_limit,
+                videos_remaining: data.videos_remaining,
+                is_unlimited: data.is_unlimited || false,
+                plan_id: data.plan_id || null,
+                plan_name: data.plan_name || 'Sem plano',
+                total_videos_processed: data.total_videos_processed || 0
             };
-            updateCreditsUI();
-            updateGenerateButtonState(); // Atualizar botão após carregar créditos
-            console.log('[CREDITS] Créditos carregados:', appState.userCredits);
+            updateVideosUI();
+            updateGenerateButtonState(); // Atualizar botão após carregar vídeos
+            console.log('[VIDEOS] Informações de vídeos carregadas:', appState.userVideos);
         }
     } catch (error) {
-        console.error('[CREDITS] Erro ao carregar créditos:', error);
+        console.error('[VIDEOS] Erro ao carregar informações de vídeos:', error);
     }
 }
 
 /**
- * Atualizar UI de créditos
+ * Atualizar UI de vídeos processados
  */
-function updateCreditsUI() {
+function updateVideosUI() {
     const creditsElement = document.getElementById('user-credits');
     const creditsDropdown = document.getElementById('user-credits-dropdown');
     
-    if (appState.userCredits) {
-        const total = appState.userCredits.total_credits || 0;
-        const freeTrial = appState.userCredits.free_trial_credits || 0;
-        const paid = appState.userCredits.credits_balance || 0;
+    if (appState.userVideos) {
+        const videosUsed = appState.userVideos.videos_used || 0;
+        const videosLimit = appState.userVideos.videos_limit;
+        const isUnlimited = appState.userVideos.is_unlimited;
         
         // Badge na navbar
         if (creditsElement) {
-            creditsElement.innerHTML = `
-                ${total} créditos
-                ${freeTrial > 0 ? ` <span style="color: #10b981; font-size: 0.75rem;">(${freeTrial} grátis)</span>` : ''}
-            `;
+            if (isUnlimited) {
+                creditsElement.innerHTML = `
+                    ${videosUsed} vídeos <span style="color: #10b981; font-size: 0.75rem;">(ilimitado)</span>
+                `;
+            } else {
+                const remaining = appState.userVideos.videos_remaining || 0;
+                creditsElement.innerHTML = `
+                    ${videosUsed}/${videosLimit} vídeos
+                    ${remaining > 0 ? ` <span style="color: #10b981; font-size: 0.75rem;">(${remaining} restantes)</span>` : ''}
+                `;
+            }
         }
         
         // Informações no dropdown
         if (creditsDropdown) {
-            creditsDropdown.innerHTML = `
-                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <div>Total: <strong>${total} créditos</strong></div>
-                    ${freeTrial > 0 ? `<div style="color: #10b981; font-size: 0.75rem;">${freeTrial} gratuitos</div>` : ''}
-                    ${paid > 0 ? `<div style="color: #999; font-size: 0.75rem;">${paid} pagos</div>` : ''}
-                </div>
-            `;
+            if (isUnlimited) {
+                creditsDropdown.innerHTML = `
+                    <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div>Plano: <strong>${appState.userVideos.plan_name}</strong></div>
+                        <div style="color: #10b981; font-size: 0.75rem;">Vídeos ilimitados</div>
+                        <div style="color: #999; font-size: 0.75rem;">${videosUsed} processados</div>
+                    </div>
+                `;
+            } else {
+                creditsDropdown.innerHTML = `
+                    <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div>Plano: <strong>${appState.userVideos.plan_name}</strong></div>
+                        <div>Vídeos: <strong>${videosUsed}/${videosLimit}</strong></div>
+                        ${appState.userVideos.videos_remaining > 0 ? `<div style="color: #10b981; font-size: 0.75rem;">${appState.userVideos.videos_remaining} restantes</div>` : '<div style="color: #ef4444; font-size: 0.75rem;">Limite atingido</div>'}
+                        <div style="color: #999; font-size: 0.75rem; margin-top: 0.25rem;">Cortes ilimitados por vídeo</div>
+                    </div>
+                `;
+            }
         }
     } else if (creditsElement) {
-        creditsElement.textContent = '0 créditos';
+        creditsElement.textContent = '0 vídeos';
     }
 }
 
@@ -490,15 +520,15 @@ function updateUserUI() {
         if (userMenu) userMenu.classList.add('hidden');
     }
     
-    // Atualizar créditos na UI
-    updateCreditsUI();
+    // Atualizar vídeos na UI
+    updateVideosUI();
     
     // Atualizar estado do botão de gerar
     updateGenerateButtonState();
 }
 
 /**
- * Mostrar modal de compra de créditos
+ * Mostrar modal de compra de planos
  */
 async function showCreditsPurchaseModal() {
     try {
@@ -512,28 +542,39 @@ async function showCreditsPurchaseModal() {
         modal.id = 'credits-modal';
         modal.style.display = 'flex';
         modal.innerHTML = `
-            <div class="modal-content" style="max-width: 800px;">
-                <div class="modal-header">
-                    <h2>Comprar Créditos</h2>
-                    <button onclick="closeCreditsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            <div class="modal-content" style="max-width: 900px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                    <h2 style="margin: 0;">Escolher Plano</h2>
+                    <button onclick="closeCreditsModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p style="margin-bottom: 1.5rem;">Cada crédito = 1 clipe gerado. Escolha um plano:</p>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                        ${plans.map(plan => `
-                            <div class="plan-card" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s;" 
-                                 onmouseover="this.style.borderColor='#667eea'" 
-                                 onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
+                    <p style="margin-bottom: 1.5rem; color: var(--text-primary);">Cada plano permite processar uma quantidade de vídeos. <strong>Cortes por vídeo são ilimitados!</strong></p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                        ${plans.map(plan => {
+                            const videosText = plan.is_unlimited ? 'Ilimitados' : plan.videos_limit;
+                            const isUnlimited = plan.is_unlimited || plan.videos_limit === null;
+                            return `
+                            <div class="plan-card" style="border: 2px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 1.5rem; cursor: pointer; transition: all 0.3s; background: var(--bg-secondary);" 
+                                 onmouseover="this.style.borderColor='#667eea'; this.style.transform='translateY(-4px)'" 
+                                 onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'; this.style.transform='translateY(0)'"
                                  onclick="purchasePlan('${plan.id}')">
-                                <h3 style="margin: 0 0 0.5rem 0;">${plan.name}</h3>
-                                <div style="font-size: 2rem; font-weight: bold; margin: 1rem 0;">${plan.credits}</div>
-                                <div style="color: #999; font-size: 0.875rem; margin-bottom: 1rem;">${plan.description}</div>
-                                <div style="font-size: 1.25rem; font-weight: 600; color: #667eea;">R$ ${plan.price.toFixed(2)}</div>
+                                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">${plan.name}</h3>
+                                <div style="font-size: 2.5rem; font-weight: bold; margin: 1rem 0; color: #667eea;">
+                                    ${isUnlimited ? '∞' : videosText}
+                                </div>
+                                <div style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem; min-height: 40px;">${plan.description}</div>
+                                <div style="font-size: 1.5rem; font-weight: 600; color: #667eea; margin-bottom: 0.5rem;">
+                                    R$ ${plan.price.toFixed(2).replace('.', ',')}
+                                </div>
+                                <div style="color: #10b981; font-size: 0.75rem; margin-top: 0.5rem;">
+                                    ✨ Cortes ilimitados por vídeo
+                                </div>
                             </div>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </div>
-                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.875rem; color: #999;">
-                        💡 Você pode comprar o mesmo plano múltiplas vezes. Créditos não expiram.
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(102, 126, 234, 0.1); border-radius: 8px; font-size: 0.875rem; color: var(--text-secondary); border-left: 3px solid #667eea;">
+                        <strong>💡 Importante:</strong> Os vídeos são acumuláveis. Você pode comprar o mesmo plano múltiplas vezes e os vídeos não expiram. Cada vídeo pode gerar cortes ilimitados.
                     </div>
                 </div>
             </div>
@@ -547,8 +588,8 @@ async function showCreditsPurchaseModal() {
             }
         });
     } catch (error) {
-        console.error('[CREDITS] Erro ao carregar planos:', error);
-        alert('Erro ao carregar planos de créditos. Tente novamente.');
+        console.error('[PLANS] Erro ao carregar planos:', error);
+        alert('Erro ao carregar planos. Tente novamente.');
     }
 }
 
@@ -573,15 +614,16 @@ async function purchasePlan(planId) {
     try {
         const { data } = await apiClient.post('/api/credits/purchase', { planId });
         
-        alert(`Plano comprado com sucesso! Você recebeu ${data.plan.credits} créditos.`);
+        const videosText = data.plan.is_unlimited ? 'vídeos ilimitados' : `${data.plan.videos_limit} vídeos`;
+        alert(`Plano comprado com sucesso! Você agora pode processar ${videosText}.`);
         
-        // Recarregar créditos
-        await loadUserCredits();
+        // Recarregar informações de vídeos
+        await loadUserVideos();
         
         // Fechar modal
         closeCreditsModal();
     } catch (error) {
-        console.error('[CREDITS] Erro ao comprar plano:', error);
+        console.error('[PLANS] Erro ao comprar plano:', error);
         const errorMsg = error.response?.data?.error || error.message || 'Erro ao processar compra';
         alert(`Erro ao comprar plano: ${errorMsg}`);
     }
@@ -624,7 +666,7 @@ async function handleLogin(event) {
             updateUserUI();
             
             // Carregar créditos
-            await loadUserCredits();
+            await loadUserVideos();
             
             // Fechar modal de login se estiver aberto
             closeLoginRequiredModal();
@@ -704,7 +746,7 @@ async function handleRegister(event) {
             updateUserUI();
             
             // Carregar créditos
-            await loadUserCredits();
+            await loadUserVideos();
             
             // Fechar modal de login se estiver aberto
             closeLoginRequiredModal();
@@ -1745,6 +1787,7 @@ function saveTrimInterval() {
         const duration = appState.trimEnd - appState.trimStart;
         appState.numberOfCuts = Math.floor(duration / appState.cutDuration);
         updateClipsCount();
+        updateGenerateButtonState(); // Atualizar botão quando número de clipes mudar
     }
     
     // AVANÇAR AUTOMATICAMENTE para etapa 3 (Legendas) após salvar intervalo
@@ -2245,6 +2288,7 @@ async function calculateClips() {
     
     // Atualizar display imediatamente
     updateClipsDisplay(clips60s, clips120s, selectedClips);
+    updateGenerateButtonState(); // Atualizar botão quando número de clipes mudar
     
     // Também calcular via API para validação
     if (appState.videoId) {
@@ -2363,9 +2407,11 @@ function updateGenerateButtonState() {
     
     const isLoggedIn = appState.currentUser && appState.userToken;
     const isAdmin = appState.currentUser?.role === 'admin';
-    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
-    const totalCredits = appState.userCredits?.total_credits ?? 0;
-    const hasEnoughCredits = isAdmin || totalCredits >= clipsCount;
+    const isUnlimited = appState.userVideos?.is_unlimited || false;
+    const videosUsed = appState.userVideos?.videos_used ?? 0;
+    const videosLimit = appState.userVideos?.videos_limit;
+    const videosRemaining = appState.userVideos?.videos_remaining;
+    const hasVideoAvailable = isAdmin || isUnlimited || (videosRemaining !== null && videosRemaining > 0);
     
     if (!isLoggedIn) {
         // Usuário não logado - botão desabilitado com mensagem
@@ -2373,19 +2419,22 @@ function updateGenerateButtonState() {
         generateBtn.style.opacity = '0.6';
         generateBtn.style.cursor = 'not-allowed';
         generateBtn.title = 'Faça login para gerar clipes';
-        // Adicionar ícone ou texto indicativo se necessário
-    } else if (!hasEnoughCredits && !isAdmin) {
-        // Usuário logado mas sem créditos suficientes
+    } else if (!hasVideoAvailable && !isAdmin) {
+        // Usuário logado mas sem vídeos disponíveis
         generateBtn.disabled = true;
         generateBtn.style.opacity = '0.6';
         generateBtn.style.cursor = 'not-allowed';
-        generateBtn.title = `Créditos insuficientes. Você tem ${totalCredits} crédito(s), mas precisa de ${clipsCount}`;
+        generateBtn.title = `Limite de vídeos atingido. Você já processou ${videosUsed} de ${videosLimit} vídeos permitidos.`;
     } else {
-        // Usuário logado com créditos ou admin - botão habilitado
+        // Usuário logado com vídeos disponíveis ou admin - botão habilitado
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
         generateBtn.style.cursor = 'pointer';
-        generateBtn.title = isAdmin ? 'Gerar clipes (Admin - ilimitado)' : `Gerar ${clipsCount} clipe(s) - Consumirá ${clipsCount} crédito(s)`;
+        if (isAdmin || isUnlimited) {
+            generateBtn.title = 'Gerar clipes (ilimitado) - Cortes ilimitados por vídeo';
+        } else {
+            generateBtn.title = `Gerar clipes - ${videosRemaining} vídeo(s) restante(s). Cortes ilimitados por vídeo.`;
+        }
     }
 }
 
@@ -2809,6 +2858,11 @@ function updateConfiguration(key, value, checked = null) {
     }
     
     console.log('[CONFIG] Configuração atualizada:', key, value, appState.configurations);
+    
+    // Atualizar estado do botão se número de clipes mudou
+    if (key === 'clipsQuantity') {
+        updateGenerateButtonState();
+    }
 }
 
 /**
@@ -2999,7 +3053,9 @@ function proceedToGenerate() {
         trimStart: appState.trimStart,
         trimEnd: appState.trimEnd,
         cutDuration: appState.cutDuration,
-        totalCredits: appState.userCredits?.total_credits || 0
+        videos_used: appState.userVideos?.videos_used || 0,
+        videos_limit: appState.userVideos?.videos_limit,
+        is_unlimited: appState.userVideos?.is_unlimited || false
     });
     
     // Verificar dados mínimos necessários
@@ -3030,25 +3086,20 @@ function proceedToGenerate() {
         }
     }
     
-    // Verificar créditos ANTES de continuar (admin ignora verificação)
+    // Verificação de vídeos será feita no backend
+    // Aqui apenas mostramos confirmação
     const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
     const isAdmin = appState.currentUser?.role === 'admin';
-    const totalCredits = appState.userCredits?.total_credits ?? 0;
+    const isUnlimited = appState.userVideos?.is_unlimited || false;
+    const videosRemaining = appState.userVideos?.videos_remaining;
     
-    if (!isAdmin && totalCredits < clipsCount) {
-        const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
-        if (confirm(message)) {
-            showCreditsPurchaseModal();
-        }
-        return;
-    }
-    
-    // Confirmar antes de gerar (admin não precisa confirmar créditos)
+    // Confirmar antes de gerar
     let confirmMessage;
-    if (isAdmin) {
-        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nComo administrador, você tem créditos ilimitados.\n\nDeseja continuar?`;
+    if (isAdmin || isUnlimited) {
+        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nVocê tem vídeos ilimitados. Cortes por vídeo são ilimitados.\n\nDeseja continuar?`;
     } else {
-        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
+        const videoText = videosRemaining === 1 ? 'vídeo' : 'vídeos';
+        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\n${videosRemaining === 0 ? '⚠️ ATENÇÃO: Este será seu último vídeo disponível!' : `Você tem ${videosRemaining} ${videoText} restante(s).`}\n\nCortes por vídeo são ilimitados.\n\nDeseja continuar?`;
     }
     
     if (!confirm(confirmMessage)) {
@@ -3146,24 +3197,8 @@ async function generateSeries() {
         return;
     }
     
-    // Verificar créditos disponíveis ANTES de gerar (admin ignora)
-    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
-    const isAdmin = appState.currentUser?.role === 'admin';
-    const totalCredits = appState.userCredits?.total_credits ?? 0;
-    
-    if (!isAdmin && totalCredits < clipsCount) {
-        const message = `Créditos insuficientes!\n\nVocê tem ${totalCredits} crédito(s) disponível(is), mas precisa de ${clipsCount} para gerar ${clipsCount} clipe(s).\n\nDeseja comprar mais créditos?`;
-        if (confirm(message)) {
-            showCreditsPurchaseModal();
-        }
-        return;
-    }
-    
-    // Confirmar antes de gerar (mostrar quantos créditos serão consumidos)
-    const confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nIsso consumirá ${clipsCount} crédito(s).\n\nVocê tem ${totalCredits} crédito(s) disponível(is).\n\nDeseja continuar?`;
-    if (!confirm(confirmMessage)) {
-        return;
-    }
+    // Verificação de vídeos será feita no backend
+    // Aqui apenas mostramos confirmação (lógica já está em proceedToGenerate)
     
     // Sem validação bloqueante - tentar gerar mesmo se faltar dados (backend validará)
     if (!appState.videoId || !appState.nicheId || !appState.numberOfCuts) {
@@ -3230,8 +3265,8 @@ async function generateSeries() {
                     appState.numberOfCuts = data.numberOfCuts;
                 }
                 
-                // Recarregar créditos após iniciar geração (créditos já foram debitados)
-                await loadUserCredits();
+                // Recarregar informações de vídeos após iniciar geração
+                await loadUserVideos();
             
             // Mostrar informações de fila se disponíveis
             if (data.queuePosition) {
@@ -3256,12 +3291,32 @@ async function generateSeries() {
         } else {
             console.error('[GENERATE] Erro ao criar job:', data);
             const errorMsg = data?.error || 'Erro desconhecido';
-            alert('Erro ao gerar série: ' + errorMsg);
+            const errorCode = data?.code;
+            
+            // Se for erro de limite de vídeos, mostrar modal de upgrade
+            if (errorCode === 'VIDEO_LIMIT_REACHED' && data?.needsUpgrade) {
+                if (confirm(`${errorMsg}\n\nDeseja fazer upgrade do seu plano?`)) {
+                    showCreditsPurchaseModal();
+                }
+            } else {
+                alert('Erro ao gerar série: ' + errorMsg);
+            }
+            
             if (loadingOverlay) loadingOverlay.classList.add('hidden');
         }
     } catch (error) {
         console.error('Erro:', error);
-        alert('Erro ao gerar série');
+        const errorMessage = error.message || 'Erro ao gerar série';
+        
+        // Verificar se é erro de limite de vídeos
+        if (errorMessage.includes('Limite de vídeos') || errorMessage.includes('VIDEO_LIMIT')) {
+            if (confirm(`${errorMessage}\n\nDeseja fazer upgrade do seu plano?`)) {
+                showCreditsPurchaseModal();
+            }
+        } else {
+            alert('Erro ao gerar série: ' + errorMessage);
+        }
+        
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
     }
 }

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
-import { checkCreditsBeforeGeneration, consumeCreditsForClips } from '../services/creditService.js';
+import { canUserProcessVideo, registerVideoProcessed } from '../services/videoService.js';
 
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
@@ -50,14 +50,16 @@ export const generateSeries = async (req, res) => {
     // Calcular quantidade de clipes que serão gerados
     const finalClipsCount = clipsQuantity || numberOfCuts;
 
-    // Verificar créditos ANTES de iniciar processamento
-    const creditsCheck = checkCreditsBeforeGeneration(req.userId, finalClipsCount);
-    if (!creditsCheck.allowed) {
+    // Verificar se pode processar vídeo ANTES de iniciar processamento
+    const videoCheck = canUserProcessVideo(req.userId, videoId);
+    if (!videoCheck.allowed) {
       return res.status(402).json({
-        error: creditsCheck.reason,
-        code: 'INSUFFICIENT_CREDITS',
-        availableCredits: creditsCheck.availableCredits,
-        requiredCredits: creditsCheck.requiredCredits
+        error: videoCheck.reason,
+        code: 'VIDEO_LIMIT_REACHED',
+        videos_used: videoCheck.videos_used,
+        videos_limit: videoCheck.videos_limit,
+        plan_name: videoCheck.plan_name,
+        needsUpgrade: videoCheck.needsUpgrade || false
       });
     }
 
@@ -71,19 +73,24 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
-    // DEBITAR CRÉDITOS ANTES de adicionar à fila
-    // Se a geração falhar depois, será necessário fazer reembolso manualmente
-    let creditsDebited = false;
+    // REGISTRAR PROCESSAMENTO DE VÍDEO ANTES de adicionar à fila
+    // Se o vídeo já foi processado antes, não incrementa contador (cortes ilimitados)
+    let videoRegistered = false;
     try {
-      const debitResult = await consumeCreditsForClips(req.userId, finalClipsCount, seriesId);
-      creditsDebited = true;
-      console.log(`[GENERATE] Créditos debitados: ${debitResult.totalDebited} (${debitResult.freeTrialUsed} free trial + ${debitResult.paidCreditsUsed} pagos)`);
-    } catch (creditError) {
-      console.error('[GENERATE] Erro ao debitar créditos:', creditError);
-      // Se falhar ao debitar, não permitir geração
-      return res.status(402).json({
-        error: creditError.message || 'Erro ao processar créditos',
-        code: 'CREDIT_DEBIT_ERROR'
+      const registerResult = registerVideoProcessed(req.userId, videoId);
+      videoRegistered = true;
+      
+      if (registerResult.isNewVideo) {
+        console.log(`[GENERATE] Novo vídeo registrado: ${videoId}. Total: ${registerResult.videos_used}/${registerResult.videos_limit || 'ilimitado'}`);
+      } else {
+        console.log(`[GENERATE] Vídeo ${videoId} já processado antes. Permitindo cortes ilimitados.`);
+      }
+    } catch (videoError) {
+      console.error('[GENERATE] Erro ao registrar vídeo:', videoError);
+      // Se falhar ao registrar, não permitir geração
+      return res.status(500).json({
+        error: videoError.message || 'Erro ao processar vídeo',
+        code: 'VIDEO_REGISTRATION_ERROR'
       });
     }
 

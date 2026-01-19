@@ -1,11 +1,12 @@
 /**
- * CONTROLLER DE CRÉDITOS E PLANOS
- * Gerencia compra de créditos e visualização de saldo
+ * CONTROLLER DE PLANOS E VÍDEOS
+ * Gerencia compra de planos e visualização de vídeos processados
  */
 
 import { getAllPlans, getPlanById } from '../models/plans.js';
-import { getUserById, addCredits, getTotalCredits, updateUser } from '../models/users.js';
-import { getUserUsageLogs, getUserUsageStats } from '../models/usageLogs.js';
+import { getUserById, updateUser } from '../models/users.js';
+import { getUserVideoStats } from '../services/videoService.js';
+import { getUserVideoLogs } from '../models/videoLogs.js';
 
 /**
  * GET /api/credits/plans
@@ -26,7 +27,7 @@ export const getPlans = (req, res) => {
 
 /**
  * GET /api/credits/balance
- * Obter saldo de créditos do usuário
+ * Obter informações de vídeos processados do usuário
  */
 export const getBalance = (req, res) => {
   try {
@@ -39,20 +40,23 @@ export const getBalance = (req, res) => {
       });
     }
 
-    const totalCredits = getTotalCredits(user.id);
+    const videoStats = getUserVideoStats(user.id);
     const userData = getUserById(user.id);
 
     res.json({
-      free_trial_credits: userData.free_trial_credits,
-      credits_balance: userData.credits_balance,
-      total_credits: totalCredits,
-      plan_id: userData.plan_id
+      videos_used: videoStats.videos_used,
+      videos_limit: videoStats.videos_limit,
+      videos_remaining: videoStats.videos_remaining,
+      is_unlimited: videoStats.is_unlimited,
+      plan_id: userData.plan_id,
+      plan_name: videoStats.plan_name,
+      total_videos_processed: videoStats.total_videos_processed
     });
   } catch (error) {
-    console.error('[CREDITS] Erro ao obter saldo:', error);
+    console.error('[VIDEOS] Erro ao obter informações:', error);
     res.status(500).json({
-      error: 'Erro ao obter saldo de créditos',
-      code: 'GET_BALANCE_ERROR'
+      error: 'Erro ao obter informações de vídeos',
+      code: 'GET_VIDEO_INFO_ERROR'
     });
   }
 };
@@ -90,28 +94,37 @@ export const purchasePlan = (req, res) => {
     }
 
     // Em produção, aqui seria feito o pagamento via Stripe/Mercado Pago
-    // Por enquanto, apenas adiciona créditos (mockado)
-    console.log(`[CREDITS] Compra mockada de plano: ${plan.name} (${plan.credits} créditos) por usuário ${user.id}`);
+    // Por enquanto, apenas atualiza o plano (mockado)
+    console.log(`[PLANS] Compra mockada de plano: ${plan.name} (${plan.videos_limit || 'ilimitado'} vídeos) por usuário ${user.id}`);
 
-    // Adicionar créditos ao usuário
-    const updatedUser = addCredits(user.id, plan.credits);
-
-    // Atualizar plan_id se necessário
+    // Atualizar plano do usuário
     const userData = getUserById(user.id);
-    if (!userData.plan_id) {
-      updateUser(user.id, { plan_id: planId });
-    }
+    const updates = {
+      plan_id: planId,
+      videos_limit: plan.videos_limit,
+      videos_used: userData.videos_used || 0 // Manter vídeos já processados
+    };
+
+    // Se for upgrade, não resetar contador (créditos acumuláveis)
+    // Se for downgrade, manter contador mas limitar pelo novo plano
+    updateUser(user.id, updates);
+
+    const updatedUser = getUserById(user.id);
+    const videoStats = getUserVideoStats(user.id);
 
     res.json({
       message: 'Plano comprado com sucesso (mockado)',
       plan: {
         id: plan.id,
         name: plan.name,
-        credits: plan.credits,
+        videos_limit: plan.videos_limit,
+        is_unlimited: plan.is_unlimited,
         price: plan.price
       },
-      new_balance: updatedUser.credits_balance,
-      total_credits: getTotalCredits(user.id)
+      videos_used: videoStats.videos_used,
+      videos_limit: videoStats.videos_limit,
+      videos_remaining: videoStats.videos_remaining,
+      is_unlimited: videoStats.is_unlimited
     });
   } catch (error) {
     console.error('[CREDITS] Erro ao comprar plano:', error);
@@ -124,7 +137,7 @@ export const purchasePlan = (req, res) => {
 
 /**
  * GET /api/credits/usage
- * Obter histórico de uso de créditos
+ * Obter histórico de vídeos processados
  */
 export const getUsageHistory = (req, res) => {
   try {
@@ -137,18 +150,25 @@ export const getUsageHistory = (req, res) => {
       });
     }
 
-    const logs = getUserUsageLogs(user.id);
-    const stats = getUserUsageStats(user.id);
+    const logs = getUserVideoLogs(user.id);
+    const videoStats = getUserVideoStats(user.id);
 
     res.json({
       logs,
-      stats
+      stats: {
+        total_videos_processed: videoStats.total_videos_processed,
+        videos_used: videoStats.videos_used,
+        videos_limit: videoStats.videos_limit,
+        videos_remaining: videoStats.videos_remaining,
+        is_unlimited: videoStats.is_unlimited,
+        plan_name: videoStats.plan_name
+      }
     });
   } catch (error) {
-    console.error('[CREDITS] Erro ao obter histórico:', error);
+    console.error('[VIDEOS] Erro ao obter histórico:', error);
     res.status(500).json({
-      error: 'Erro ao obter histórico de uso',
-      code: 'GET_USAGE_ERROR'
+      error: 'Erro ao obter histórico de vídeos',
+      code: 'GET_VIDEO_HISTORY_ERROR'
     });
   }
 };

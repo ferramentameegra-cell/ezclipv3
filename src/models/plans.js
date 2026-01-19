@@ -1,43 +1,49 @@
 /**
  * PLANOS DISPONÍVEIS
- * Cada plano contém uma quantidade específica de créditos
+ * Cada plano permite processar uma quantidade específica de vídeos
+ * Cortes por vídeo são ilimitados
  */
 
 export const PLANS = [
   {
+    id: 'free',
+    name: 'Free',
+    videos_limit: 1,
+    price: 0,
+    description: 'Ideal para teste - 1 vídeo com cortes ilimitados',
+    is_unlimited: false
+  },
+  {
     id: 'starter',
     name: 'Starter',
-    credits: 27,
-    price: 9.90,
-    description: 'Ideal para iniciantes - 27 clipes'
+    videos_limit: 10,
+    price: 97.00,
+    description: 'Para iniciantes - 10 vídeos com cortes ilimitados',
+    is_unlimited: false
   },
   {
     id: 'creator',
     name: 'Creator',
-    credits: 75,
-    price: 19.90,
-    description: 'Para criadores ativos - 75 clipes'
+    videos_limit: 30,
+    price: 197.00,
+    description: 'Para criadores ativos - 30 vídeos com cortes ilimitados',
+    is_unlimited: false
   },
   {
     id: 'pro',
     name: 'Pro',
-    credits: 150,
-    price: 34.90,
-    description: 'Para profissionais - 150 clipes'
+    videos_limit: 50,
+    price: 297.00,
+    description: 'Para profissionais - 50 vídeos com cortes ilimitados',
+    is_unlimited: false
   },
   {
-    id: 'studio',
-    name: 'Studio',
-    credits: 300,
-    price: 59.90,
-    description: 'Para estúdios - 300 clipes'
-  },
-  {
-    id: 'scale',
-    name: 'Scale',
-    credits: 600,
-    price: 99.90,
-    description: 'Para agências - 600 clipes'
+    id: 'unlimited',
+    name: 'Unlimited',
+    videos_limit: null, // null = ilimitado
+    price: 497.00,
+    description: 'Para criadores profissionais e agências - vídeos ilimitados',
+    is_unlimited: true
   }
 ];
 

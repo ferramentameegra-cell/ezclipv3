@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 export const userStore = new Map();
 
 // Valores padrão
-const FREE_TRIAL_CREDITS = 5;
+const FREE_PLAN_ID = 'free'; // Plano free por padrão
 
 /**
  * Criar novo usuário
@@ -25,15 +25,15 @@ export async function createUser({ name, email, password }) {
   // Hash da senha
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Criar usuário
+  // Criar usuário com plano free por padrão
   const user = {
     id: uuidv4(),
     name,
     email,
     password_hash: passwordHash,
-    plan_id: null,
-    credits_balance: 0,
-    free_trial_credits: FREE_TRIAL_CREDITS,
+    plan_id: FREE_PLAN_ID, // Plano free por padrão
+    videos_used: 0,
+    videos_limit: 1, // Plano free = 1 vídeo
     role: 'user', // 'user' ou 'admin'
     created_at: new Date(),
     updated_at: new Date()
@@ -46,8 +46,8 @@ export async function createUser({ name, email, password }) {
     name: user.name,
     email: user.email,
     plan_id: user.plan_id,
-    credits_balance: user.credits_balance,
-    free_trial_credits: user.free_trial_credits,
+    videos_used: user.videos_used,
+    videos_limit: user.videos_limit,
     created_at: user.created_at,
     updated_at: user.updated_at
   };
@@ -64,9 +64,9 @@ export function getUserById(userId) {
     id: user.id,
     name: user.name,
     email: user.email,
-    plan_id: user.plan_id,
-    credits_balance: user.credits_balance,
-    free_trial_credits: user.free_trial_credits,
+    plan_id: user.plan_id || null,
+    videos_used: user.videos_used ?? 0,
+    videos_limit: user.videos_limit ?? null,
     role: user.role || 'user',
     created_at: user.created_at,
     updated_at: user.updated_at
@@ -85,9 +85,9 @@ export function getUserByEmail(email) {
     name: user.name,
     email: user.email,
     password_hash: user.password_hash,
-    plan_id: user.plan_id,
-    credits_balance: user.credits_balance,
-    free_trial_credits: user.free_trial_credits,
+    plan_id: user.plan_id || null,
+    videos_used: user.videos_used ?? 0,
+    videos_limit: user.videos_limit ?? null,
     role: user.role || 'user',
     created_at: user.created_at,
     updated_at: user.updated_at
@@ -125,9 +125,9 @@ export function updateUser(userId, updates) {
     id: updatedUser.id,
     name: updatedUser.name,
     email: updatedUser.email,
-    plan_id: updatedUser.plan_id,
-    credits_balance: updatedUser.credits_balance,
-    free_trial_credits: updatedUser.free_trial_credits,
+    plan_id: updatedUser.plan_id || null,
+    videos_used: updatedUser.videos_used ?? 0,
+    videos_limit: updatedUser.videos_limit ?? null,
     role: updatedUser.role || 'user',
     created_at: updatedUser.created_at,
     updated_at: updatedUser.updated_at
@@ -135,53 +135,90 @@ export function updateUser(userId, updates) {
 }
 
 /**
- * Adicionar créditos ao usuário
+ * Incrementar contador de vídeos processados
  */
-export function addCredits(userId, credits) {
+export function incrementVideosUsed(userId) {
   const user = userStore.get(userId);
   if (!user) {
     throw new Error('Usuário não encontrado');
   }
 
   return updateUser(userId, {
-    credits_balance: user.credits_balance + credits
+    videos_used: (user.videos_used ?? 0) + 1
   });
 }
 
 /**
- * Obter saldo total de créditos (free trial + pagos)
- * Admin retorna null (ilimitado)
+ * Verificar se usuário pode processar mais vídeos
+ * Admin e plano unlimited sempre podem
  */
-export function getTotalCredits(userId) {
-  const user = userStore.get(userId);
-  if (!user) return 0;
-
-  // Admin tem créditos ilimitados
-  if (user.role === 'admin') {
-    return null; // null = ilimitado
-  }
-
-  // Tratar null como 0 para cálculos
-  const freeTrial = user.free_trial_credits ?? 0;
-  const paid = user.credits_balance ?? 0;
-
-  return freeTrial + paid;
-}
-
-/**
- * Verificar se usuário tem créditos suficientes
- * Admin sempre tem créditos ilimitados
- */
-export function hasEnoughCredits(userId, requiredCredits = 1) {
+export function canProcessVideo(userId) {
   const user = userStore.get(userId);
   if (!user) return false;
-  
-  // Admin sempre tem créditos ilimitados
+
+  // Admin sempre pode processar
   if (user.role === 'admin') {
     return true;
   }
-  
-  return getTotalCredits(userId) >= requiredCredits;
+
+  // Plano unlimited (videos_limit === null)
+  if (user.videos_limit === null) {
+    return true;
+  }
+
+  // Verificar se ainda tem vídeos disponíveis
+  const videosUsed = user.videos_used ?? 0;
+  const videosLimit = user.videos_limit ?? 0;
+
+  return videosUsed < videosLimit;
+}
+
+/**
+ * Obter informações de vídeos do usuário
+ */
+export function getUserVideoInfo(userId) {
+  const user = userStore.get(userId);
+  if (!user) {
+    return {
+      videos_used: 0,
+      videos_limit: null,
+      videos_remaining: null,
+      is_unlimited: false
+    };
+  }
+
+  // Admin sempre ilimitado
+  if (user.role === 'admin') {
+    return {
+      videos_used: user.videos_used ?? 0,
+      videos_limit: null,
+      videos_remaining: null,
+      is_unlimited: true
+    };
+  }
+
+  const videosUsed = user.videos_used ?? 0;
+  const videosLimit = user.videos_limit;
+
+  // Plano unlimited
+  if (videosLimit === null) {
+    return {
+      videos_used: videosUsed,
+      videos_limit: null,
+      videos_remaining: null,
+      is_unlimited: true
+    };
+  }
+
+  // Plano com limite
+  const videosRemaining = Math.max(0, videosLimit - videosUsed);
+
+  return {
+    videos_used: videosUsed,
+    videos_limit: videosLimit,
+    videos_remaining: videosRemaining,
+    is_unlimited: false
+  };
 }
 
 /**
@@ -213,9 +250,9 @@ export async function createAdminUser({ name, email, password }) {
     name,
     email,
     password_hash: passwordHash,
-    plan_id: null,
-    credits_balance: null, // null = ilimitado
-    free_trial_credits: null, // null = não aplicável
+    plan_id: 'unlimited', // Admin tem plano unlimited
+    videos_used: 0,
+    videos_limit: null, // null = ilimitado
     role: 'admin',
     created_at: new Date(),
     updated_at: new Date()

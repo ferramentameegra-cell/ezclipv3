@@ -63,7 +63,7 @@ export const register = async (req, res) => {
       userId: user.id
     });
 
-    console.log(`[AUTH] Novo usuário registrado: ${user.email} (ID: ${user.id})`);
+    console.log(`[AUTH] Novo usuário registrado: ${user.email} (ID: ${user.id}) - Plano: ${user.plan_id || 'free'}`);
 
     res.status(201).json({
       message: 'Conta criada com sucesso',
@@ -72,8 +72,8 @@ export const register = async (req, res) => {
         name: user.name,
         email: user.email,
         plan_id: user.plan_id,
-        credits_balance: user.credits_balance,
-        free_trial_credits: user.free_trial_credits,
+        videos_used: user.videos_used || 0,
+        videos_limit: user.videos_limit || 1,
         role: user.role || 'user'
       },
       token // Manter token no JSON para compatibilidade com frontend existente
@@ -178,8 +178,8 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         plan_id: user.plan_id,
-        credits_balance: user.credits_balance,
-        free_trial_credits: user.free_trial_credits,
+        videos_used: user.videos_used || 0,
+        videos_limit: user.videos_limit || null,
         role: user.role || 'user'
       },
       token // Manter token no JSON para compatibilidade com frontend existente
@@ -247,8 +247,8 @@ export const getMe = async (req, res) => {
         name: user.name,
         email: user.email,
         plan_id: user.plan_id,
-        credits_balance: user.credits_balance,
-        free_trial_credits: user.free_trial_credits,
+        videos_used: user.videos_used || 0,
+        videos_limit: user.videos_limit || null,
         role: user.role || 'user',
         created_at: user.created_at,
         updated_at: user.updated_at

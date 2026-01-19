@@ -6,6 +6,7 @@
 
 import { clearAllUsers, createAdminUser } from '../models/users.js';
 import { clearAllUsageLogs } from '../models/usageLogs.js';
+import { clearAllVideoLogs } from '../models/videoLogs.js';
 
 // Flag para garantir que execute apenas uma vez
 let hasInitialized = false;
@@ -43,8 +44,12 @@ export async function initializeAdmin() {
     // 2. Limpar logs de uso
     console.log('[ADMIN_INIT] Limpando logs de uso...');
     clearAllUsageLogs();
+    
+    // 3. Limpar logs de vídeos
+    console.log('[ADMIN_INIT] Limpando logs de vídeos...');
+    clearAllVideoLogs();
 
-    // 3. Criar usuário administrador
+    // 4. Criar usuário administrador
     console.log('[ADMIN_INIT] Criando usuário administrador...');
     const adminUser = await createAdminUser({
       name: 'Josyas Borba',
