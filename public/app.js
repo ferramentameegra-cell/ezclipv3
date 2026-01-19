@@ -362,40 +362,24 @@ function advanceToNextStep() {
 }
 
 /**
- * Faz scroll suave até um card específico (apenas se necessário)
+ * Faz scroll suave até um card específico (DESATIVADO - usuário controla rolagem)
  */
 function scrollToCard(stepName) {
+    // ROLAGEM AUTOMÁTICA DESATIVADA - usuário controla a rolagem manualmente
+    // Apenas garantir que o card esteja visível
     const card = document.querySelector(`[data-step-card="${stepName}"]`);
     if (card) {
-        // Garantir que o card esteja visível antes de fazer scroll
         if (card.style.display === 'none') {
             card.style.display = 'block';
         }
-        
-        // Verificar se o card já está visível na viewport
-        const rect = card.getBoundingClientRect();
-        const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
-        
-        // Só fazer scroll se o card não estiver visível
-        if (!isVisible) {
-            setTimeout(() => {
-                // Scroll suave até o card
-                const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
-                const offset = 100; // Offset para navbar
-                
-                window.scrollTo({
-                    top: Math.max(0, cardPosition - offset),
-                    behavior: 'smooth'
-                });
-            }, 100);
-        }
-    } else {
-        console.warn(`[SCROLL] Card não encontrado: ${stepName}`);
     }
+    // Não fazer scroll automático - deixar usuário rolar manualmente
+    return;
 }
 
 function scrollToTool() {
-    // Fazer scroll até a etapa 1 (youtube/upload)
+    // Scroll automático desativado - usuário controla rolagem
+    // Apenas garantir que card está visível
     scrollToCard('youtube');
 }
 
@@ -942,16 +926,7 @@ function openLoginFromModal() {
     
     showLogin();
     
-    // Scroll para a seção de auth apenas se necessário
-    if (authSection) {
-        const rect = authSection.getBoundingClientRect();
-        const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
-        if (!isVisible) {
-            setTimeout(() => {
-                authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 100);
-        }
-    }
+    // Scroll automático desativado - usuário controla rolagem
 }
 
 function logout() {
@@ -1060,14 +1035,7 @@ function focusTermsCheckbox() {
         checkboxContainer.style.display = 'block';
         // Scroll suave até o checkbox
         setTimeout(() => {
-            // Scroll suave apenas se necessário
-            const rect = checkboxContainer.getBoundingClientRect();
-            const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
-            if (!isVisible) {
-                setTimeout(() => {
-                    checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 100);
-            }
+            // Scroll automático desativado - usuário controla rolagem
         }, 100);
     }
     
@@ -1375,8 +1343,7 @@ async function handleUploadSubmit() {
             // AVANÇAR AUTOMATICAMENTE para etapa 2 (Trim) após upload
             setTimeout(() => {
                 showTrimSection();
-                // Fazer scroll para a etapa de trim (apenas se necessário)
-                setTimeout(() => scrollToCard('trim'), 300);
+                // Scroll automático desativado - usuário controla rolagem
             }, 500);
             
             // Aguardar um pouco para garantir que elementos estão prontos
@@ -1487,14 +1454,7 @@ async function handleYouTubeSubmit() {
             termsAlert.style.display = 'flex';
             // Scroll suave até o alerta
             setTimeout(() => {
-                // Scroll suave apenas se necessário
-                const rect = termsAlert.getBoundingClientRect();
-                const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
-                if (!isVisible) {
-                    setTimeout(() => {
-                        termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }, 100);
-                }
+                // Scroll automático desativado - usuário controla rolagem
             }, 100);
         }
         
@@ -1615,8 +1575,7 @@ async function downloadWithProgress(url) {
                         // AVANÇAR AUTOMATICAMENTE para etapa 2 (Trim) após download
                         setTimeout(() => {
                             showTrimSection();
-                            // Fazer scroll para a etapa de trim
-                            scrollToCard('trim');
+                            // Scroll automático desativado - usuário controla rolagem
                         }, 500);
                         
                         clearDownloadProgress();
@@ -1897,8 +1856,7 @@ async function showTrimSection() {
         }, 300);
     }
     
-    // Fazer scroll automático para a etapa de trim (apenas se necessário)
-    setTimeout(() => scrollToCard('trim'), 300);
+    // Scroll automático desativado - usuário controla rolagem
 }
 
 /**
@@ -1924,8 +1882,7 @@ function saveTrimInterval() {
     // AVANÇAR AUTOMATICAMENTE para etapa 3 (Legendas) após salvar intervalo
     setTimeout(() => {
         showCaptionsSection();
-        // Fazer scroll para a etapa de legendas
-        scrollToCard('captions');
+        // Scroll automático desativado - usuário controla rolagem
     }, 500);
 }
 
@@ -1963,8 +1920,7 @@ function showContinueButtonAfterTrim() {
 function continueToCaptions() {
     // Sem validação bloqueante - usuário controla o fluxo
     showCaptionsSection(); // Etapa 3
-    // Fazer scroll para a etapa de legendas
-    scrollToCard('captions');
+    // Scroll automático desativado - usuário controla rolagem
 }
 
 /**
@@ -1988,8 +1944,7 @@ function showCaptionsSection() {
     // Inicializar editor de legendas
     setTimeout(() => {
         initializeCaptionsEditor(appState.videoId);
-        // Fazer scroll para a etapa de legendas
-        scrollToCard('captions');
+        // Scroll automático desativado - usuário controla rolagem
     }, 100);
 }
 
@@ -2508,8 +2463,7 @@ function showNextSteps() {
     const headlineCard = document.getElementById('headline-card');
     if (headlineCard) {
         headlineCard.style.display = 'block';
-        // Fazer scroll para a etapa de headline
-        scrollToCard('headline');
+        // Scroll automático desativado - usuário controla rolagem
     }
 }
 
@@ -2524,8 +2478,7 @@ function showNicheSection() {
         // Card sempre visível - garantir que está visível
         nicheCard.style.display = 'block';
         updateProgressSteps('niche'); // Etapa 5 (após configurations)
-        // Fazer scroll para a etapa de nicho
-        scrollToCard('niche');
+        // Scroll automático desativado - usuário controla rolagem
     }
 }
 
@@ -2627,8 +2580,8 @@ function editStep(stepName) {
     // Garantir que o card da etapa esteja visível
     const targetCard = document.querySelector(`[data-step-card="${stepName}"]`);
     
-    // Fazer scroll automático para a etapa selecionada
-    scrollToCard(stepName);
+    // Scroll automático desativado - usuário controla rolagem
+    scrollToCard(stepName); // Apenas garante que card está visível, sem scroll
     if (targetCard) {
         targetCard.style.display = 'block';
     }
@@ -2946,7 +2899,7 @@ function showContinueButtonAfterDownload() {
     if (continueSection) {
         continueSection.classList.remove('hidden');
         // Fazer scroll para a etapa de youtube (caso o usuário esteja longe)
-        setTimeout(() => scrollToCard('youtube'), 300);
+        // Scroll automático desativado
     }
 }
 
@@ -2960,7 +2913,7 @@ function continueToConfigurations() {
         configCard.style.display = 'block';
         updateProgressSteps('configurations'); // Etapa 4
         // Fazer scroll para a etapa de configurações
-        scrollToCard('configurations');
+        // Scroll automático desativado
     }
 }
 
@@ -3031,7 +2984,7 @@ function showContinueButtonAfterCaptions() {
     if (continueSection) {
         continueSection.classList.remove('hidden');
         // Fazer scroll para a etapa de legendas
-        setTimeout(() => scrollToCard('captions'), 300);
+        // Scroll automático desativado
     }
 }
 
@@ -3052,7 +3005,7 @@ function showContinueButtonAfterNiche() {
     if (continueSection) {
         continueSection.classList.remove('hidden');
         // Fazer scroll para a etapa de nicho
-        setTimeout(() => scrollToCard('niche'), 300);
+        // Scroll automático desativado
     }
 }
 
@@ -3131,7 +3084,7 @@ function continueToGenerate() {
         generateCard.style.display = 'block';
         generateCard.classList.remove('hidden');
         // Fazer scroll para a etapa de geração
-        scrollToCard('generate');
+        // Scroll automático desativado
         console.log('[NAV] Card de geração exibido');
     } else {
         console.error('[NAV] Card de geração não encontrado!');

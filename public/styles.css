@@ -239,6 +239,11 @@ body {
 .hero {
     padding: 4rem 0;
     background: linear-gradient(180deg, var(--bg) 0%, var(--bg-secondary) 100%);
+    /* Para usar imagem de fundo, descomente as linhas abaixo e ajuste o caminho */
+    /* background-image: url('/assets/backgrounds/ezclip-background.png'); */
+    /* background-size: cover; */
+    /* background-position: center; */
+    /* background-repeat: no-repeat; */
 }
 
 .hero-container {
@@ -371,6 +376,12 @@ body {
     height: 100%;
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     opacity: 0.1;
+    /* Para usar imagem no card preview, descomente as linhas abaixo e ajuste o caminho */
+    /* background-image: url('/assets/backgrounds/ezclip-background.png'); */
+    /* background-size: cover; */
+    /* background-position: center; */
+    /* background-repeat: no-repeat; */
+    /* opacity: 1; */
 }
 
 .preview-overlay {
@@ -2548,7 +2559,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled, a[disabled]
     pointer-events: auto !important;
 }
 
-/* Smooth scroll global */
-html {
+/* Smooth scroll desativado - usuário controla rolagem */
+/* html {
     scroll-behavior: smooth;
-}
+} */
