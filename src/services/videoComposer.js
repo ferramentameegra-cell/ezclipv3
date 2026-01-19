@@ -273,10 +273,10 @@ export async function composeFinalVideo({
       // Área disponível considerando que a base deve ficar a 140px da margem inferior
       // Primeiro, assumir que temos todo o espaço disponível até a margem superior
       // depois ajustaremos se necessário para não ultrapassar o vídeo principal
-      // Altura máxima teórica = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE
-      // Mas vamos começar assumindo que podemos usar até a margem superior
-      const maxAvailableHeight = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE; // 1920 - 180 - 140 = 1600px
-      const maxAvailableWidth = OUTPUT_WIDTH; // 1080px
+      // Altura máxima teórica = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE
+      // HARDCODED: sempre 1920 de altura
+      const maxAvailableHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE; // 1920 - 180 - 140 = 1600px
+      const maxAvailableWidth = 1080; // HARDCODED: sempre 1080px
       
       // Calcular dimensões escaladas mantendo proporção (force_original_aspect_ratio=decrease)
       // Dimensionar para o maior tamanho possível dentro dos limites
@@ -297,23 +297,27 @@ export async function composeFinalVideo({
       }
       
       // Calcular posição Y: base a 140px acima da margem inferior
-      // y = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE
-      retentionY = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE;
+      // y = 1920 - retentionHeight - BOTTOM_FREE_SPACE
+      // HARDCODED: altura sempre 1920
+      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
       
       // Validar que não ultrapassa margem superior
       if (retentionY < TOP_MARGIN) {
         // Se ultrapassou, reduzir altura para não ultrapassar
-        const maxAllowedHeight = OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE;
+        // HARDCODED: altura sempre 1920
+        const maxAllowedHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE;
         retentionHeight = maxAllowedHeight;
         retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
         
         // Se a largura calculada ultrapassar, ajustar novamente
-        if (retentionWidth > OUTPUT_WIDTH) {
-          retentionWidth = OUTPUT_WIDTH;
+        // HARDCODED: largura sempre 1080
+        if (retentionWidth > 1080) {
+          retentionWidth = 1080;
           retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
         }
         
-        retentionY = OUTPUT_HEIGHT - retentionHeight - BOTTOM_FREE_SPACE;
+        // HARDCODED: altura sempre 1920
+        retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
       }
       
       if (retentionY < TOP_MARGIN) {
@@ -333,9 +337,10 @@ export async function composeFinalVideo({
     // Calcular altura do vídeo principal baseada na posição do vídeo de retenção
     // Se houver vídeo de retenção, o vídeo principal termina onde o vídeo de retenção começa
     // Se não houver, o vídeo principal ocupa até a área livre inferior
+    // HARDCODED: altura sempre 1920
     const MAIN_VIDEO_HEIGHT = retentionVideoPath 
       ? retentionY - TOP_MARGIN 
-      : OUTPUT_HEIGHT - TOP_MARGIN - BOTTOM_FREE_SPACE;
+      : 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE;
     
     if (MAIN_VIDEO_HEIGHT <= 0) {
       return reject(new Error(`[COMPOSER] ❌ Altura do vídeo principal inválida: ${MAIN_VIDEO_HEIGHT}px. O vídeo de retenção pode estar ocupando muito espaço.`));
@@ -343,7 +348,7 @@ export async function composeFinalVideo({
     
     console.log(`[COMPOSER] Layout vertical 9:16: 1080x1920 (HARDCODED - sempre vertical)`);
     console.log(`[COMPOSER] ✅ Margem superior: ${TOP_MARGIN}px, Área livre inferior: ${BOTTOM_FREE_SPACE}px`);
-    console.log(`[COMPOSER] ✅ Vídeo principal: ${OUTPUT_WIDTH}x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px)`);
+    console.log(`[COMPOSER] ✅ Vídeo principal: 1080x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px)`);
     if (retentionVideoPath) {
       console.log(`[COMPOSER] ✅ Vídeo retenção: ${retentionWidth}x${retentionHeight} (y=${retentionY}px, base a ${BOTTOM_FREE_SPACE}px da margem inferior)`);
     }
@@ -422,8 +427,9 @@ export async function composeFinalVideo({
         filterParts.push(`[retention_scaled]pad=${retentionWidth}:${retentionHeight}:(ow-iw)/2:(oh-ih)/2:color=0x000000[retention_padded]`);
         
         // Validar que não ultrapassa limite inferior do frame
-        if (retentionY + retentionHeight > OUTPUT_HEIGHT) {
-          throw new Error(`[COMPOSER] ❌ Vídeo de retenção ultrapassa limite: y=${retentionY}, altura=${retentionHeight}, total=${retentionY + retentionHeight}px > ${OUTPUT_HEIGHT}px`);
+        // HARDCODED: altura sempre 1920
+        if (retentionY + retentionHeight > 1920) {
+          throw new Error(`[COMPOSER] ❌ Vídeo de retenção ultrapassa limite: y=${retentionY}, altura=${retentionHeight}, total=${retentionY + retentionHeight}px > 1920px`);
         }
         if (retentionY < 0) {
           throw new Error(`[COMPOSER] ❌ Vídeo de retenção com posição inválida: y=${retentionY}px < 0`);
@@ -465,8 +471,9 @@ export async function composeFinalVideo({
         // QUEBRA DE TEXTO AUTOMÁTICA: Usar box com largura limitada
         // Margens laterais de 80px de cada lado (conforme especificação)
         // Largura máxima = 1080 - 80 - 80 = 920px
+        // HARDCODED: largura sempre 1080
         const HEADLINE_SAFE_MARGIN = 80; // Margens de segurança de 80px
-        const maxTextWidth = OUTPUT_WIDTH - (HEADLINE_SAFE_MARGIN * 2); // 1080 - 160 = 920px
+        const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2); // 1080 - 160 = 920px (HARDCODED)
         const marginX = HEADLINE_SAFE_MARGIN; // 80px de cada lado
         
         const yPos = `(h-text_h)/2`;
@@ -491,6 +498,7 @@ export async function composeFinalVideo({
         const fontPath = getFontPath(font);
         
         // Quebrar texto automaticamente baseado na largura máxima
+        // HARDCODED: largura sempre 1080, então maxTextWidth = 1080 - 160 = 920
         const wrappedText = wrapText(headlineTextValue, maxTextWidth, fontSize);
         const escapedText = escapeText(wrappedText);
         
@@ -726,9 +734,9 @@ export async function composeFinalVideo({
       ];
       
       console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED`);
-      console.log(`[COMPOSER] Usando label final: [final]`);
-      console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
-      console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
+      console.log(`[COMPOSER] ✅ Usando label final: [final]`);
+      console.log(`[COMPOSER] ✅ Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
+      console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
 
       // Adicionar áudio se existir
       if (hasAudio) {
