@@ -615,9 +615,17 @@ function updateUserUI() {
  */
 async function showCreditsPurchaseModal() {
     try {
-        // Buscar planos disponíveis
-        const { data } = await apiClient.get('/api/credits/plans');
+        // Buscar planos disponíveis (rota pública)
+        const response = await fetch(`${API_BASE}/api/credits/plans`);
+        if (!response.ok) {
+            throw new Error('Erro ao carregar planos');
+        }
+        const data = await response.json();
         const plans = data.plans || [];
+        
+        if (!plans || plans.length === 0) {
+            throw new Error('Nenhum plano disponível');
+        }
         
         // Criar modal com planos
         const modal = document.createElement('div');

@@ -31,6 +31,8 @@ import { configureFfmpeg } from "./utils/ffmpegDetector.js";
 
 // Inicialização administrativa (apenas em dev ou com INIT_ADMIN=true)
 import { initializeAdmin } from "./utils/adminInit.js";
+// Garantir que admin sempre existe
+import { ensureAdminExists } from "./utils/ensureAdmin.js";
 
 // Importar videoStore e configurar no videoProcessor
 import { videoStore } from "./controllers/downloadProgressController.js";
@@ -153,6 +155,9 @@ async function initializeServer() {
     // Inicialização administrativa (limpa dados e cria admin)
     // Só executa se NODE_ENV !== 'production' OU INIT_ADMIN=true
     await initializeAdmin();
+    
+    // GARANTIR que admin sempre existe (mesmo se initializeAdmin não executou)
+    await ensureAdminExists();
     
     // Inicializar Redis primeiro
     console.log('[INIT] Inicializando Redis...');
