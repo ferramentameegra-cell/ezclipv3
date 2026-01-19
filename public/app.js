@@ -64,21 +64,18 @@ class ApiClient {
 
       // Tratar erros de autenticação
       if (response.status === 401 || response.status === 403) {
-        // Token expirado ou inválido - limpar autenticação e redirecionar para login
-        console.warn('[API] Token inválido ou expirado, redirecionando para login...');
+        // Token expirado ou inválido - limpar autenticação mas NÃO bloquear interface
+        console.warn('[API] Token inválido ou expirado, limpando autenticação...');
         appState.currentUser = null;
         appState.userToken = null;
         appState.userVideos = null;
         localStorage.removeItem('ezv2_user');
         localStorage.removeItem('ezv2_token');
+        updateUserUI();
+        updateGenerateButtonState();
         
-        // Se estiver tentando fazer algo que requer login, mostrar tela de login
-        if (typeof showAuthRequired === 'function') {
-          showAuthRequired();
-        } else {
-          window.location.reload();
-        }
-        
+        // NÃO bloquear interface - usuário pode continuar usando a plataforma
+        // Apenas lançar erro para que a função chamadora trate
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Autenticação obrigatória. Faça login para continuar.');
       }
@@ -2548,11 +2545,11 @@ function updateGenerateButtonState() {
     const hasVideoAvailable = isAdmin || isUnlimited || (videosRemaining !== null && videosRemaining > 0);
     
     if (!isLoggedIn) {
-        // Usuário não logado - botão desabilitado com mensagem
-        generateBtn.disabled = true;
-        generateBtn.style.opacity = '0.6';
-        generateBtn.style.cursor = 'not-allowed';
-        generateBtn.title = 'Faça login para gerar clipes';
+        // Usuário não logado - botão HABILITADO mas mostrará modal de login ao clicar
+        generateBtn.disabled = false;
+        generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
+        generateBtn.title = 'Clique para gerar clipes (login será solicitado)';
     } else if (!hasVideoAvailable && !isAdmin) {
         // Usuário logado mas sem vídeos disponíveis
         generateBtn.disabled = true;
