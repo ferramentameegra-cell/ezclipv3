@@ -4,23 +4,30 @@
     
     // Função para verificar e corrigir elementos bloqueados
     function fixClickableElements() {
-        // 1. Garantir que auth-section não bloqueie
+        // 1. FORÇAR auth-section a não bloquear (SEMPRE)
         const authSection = document.getElementById('auth-section');
         if (authSection) {
-            const isHidden = authSection.classList.contains('hidden') || 
-                           authSection.style.display === 'none' ||
-                           window.getComputedStyle(authSection).display === 'none';
+            const computedStyle = window.getComputedStyle(authSection);
+            const isVisible = computedStyle.display !== 'none' && 
+                            computedStyle.visibility !== 'hidden' &&
+                            computedStyle.opacity !== '0';
             
-            if (isHidden) {
-                authSection.style.display = 'none';
-                authSection.style.pointerEvents = 'none';
-                authSection.style.zIndex = '-1';
-                authSection.style.visibility = 'hidden';
-                authSection.style.opacity = '0';
-                authSection.style.position = 'fixed';
-                authSection.style.top = '-9999px';
-                authSection.style.left = '-9999px';
-                console.log('[FIX-CLICKS] ✅ Auth-section escondida e bloqueio removido');
+            // Se não está visível, FORÇAR a não bloquear
+            if (!isVisible) {
+                authSection.style.cssText = `
+                    display: none !important;
+                    pointer-events: none !important;
+                    z-index: -9999 !important;
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                    position: fixed !important;
+                    top: -9999px !important;
+                    left: -9999px !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                `;
+                authSection.classList.add('hidden');
+                console.log('[FIX-CLICKS] ✅ Auth-section FORÇADA a não bloquear');
             }
         }
         
@@ -38,14 +45,20 @@
             }
         }
         
-        // 3. Garantir que main está acessível
+        // 3. FORÇAR que main está acessível (SEMPRE)
         const main = document.querySelector('main');
         if (main) {
-            main.style.pointerEvents = 'auto';
-            main.style.position = 'relative';
-            main.style.zIndex = '1';
-            console.log('[FIX-CLICKS] ✅ Main configurado como interativo');
+            main.style.cssText += `
+                pointer-events: auto !important;
+                position: relative !important;
+                z-index: 1 !important;
+            `;
+            console.log('[FIX-CLICKS] ✅ Main FORÇADO como interativo');
         }
+        
+        // 3.5. FORÇAR que body está acessível
+        document.body.style.pointerEvents = 'auto';
+        document.body.style.position = 'relative';
         
         // 4. Corrigir todos os elementos interativos
         const interactiveElements = document.querySelectorAll('button, a, input, select, textarea, [onclick], [data-tab]');
@@ -73,18 +86,40 @@
         
         console.log(`[FIX-CLICKS] ✅ ${fixedCount} elementos interativos corrigidos`);
         
-        // 5. Verificar se há elementos sobrepostos bloqueando
-        const allFixedElements = document.querySelectorAll('[style*="position: fixed"], [style*="position: absolute"]');
+        // 5. Verificar TODOS os elementos fixos/absolutos que podem estar bloqueando
+        const allFixedElements = document.querySelectorAll('*');
         allFixedElements.forEach(el => {
-            const computedStyle = window.getComputedStyle(el);
-            const zIndex = parseInt(computedStyle.zIndex) || 0;
+            // Pular elementos que devem ter pointer-events: none (como overlays de timeline)
+            if (el.classList.contains('timeline-selected') || 
+                el.classList.contains('timeline-playhead') ||
+                el.classList.contains('handle-timecode')) {
+                return;
+            }
             
-            // Se elemento está fixo/absoluto com z-index alto mas não deveria estar visível
-            if (zIndex > 100 && (computedStyle.display === 'none' || computedStyle.visibility === 'hidden')) {
+            const computedStyle = window.getComputedStyle(el);
+            const position = computedStyle.position;
+            const zIndex = parseInt(computedStyle.zIndex) || 0;
+            const display = computedStyle.display;
+            const visibility = computedStyle.visibility;
+            const opacity = parseFloat(computedStyle.opacity) || 1;
+            
+            // Se elemento está fixo/absoluto com z-index alto mas não está visível
+            if ((position === 'fixed' || position === 'absolute') && 
+                zIndex > 100 && 
+                (display === 'none' || visibility === 'hidden' || opacity === 0)) {
                 el.style.pointerEvents = 'none';
                 el.style.zIndex = '-1';
-                console.log(`[FIX-CLICKS] ✅ Elemento sobreposto corrigido:`, el.id || el.className);
+                console.log(`[FIX-CLICKS] ✅ Elemento sobreposto corrigido:`, el.id || el.className || el.tagName);
             }
+        });
+        
+        // 6. FORÇAR que todos os modais escondidos não bloqueiem
+        document.querySelectorAll('.modal.hidden, .loading-overlay.hidden').forEach(modal => {
+            modal.style.cssText += `
+                display: none !important;
+                pointer-events: none !important;
+                z-index: -9999 !important;
+            `;
         });
     }
     
@@ -95,10 +130,23 @@
         fixClickableElements();
     }
     
-    // Executar novamente após um delay para garantir
+    // Executar novamente após delays para garantir (mais frequente)
+    setTimeout(fixClickableElements, 50);
     setTimeout(fixClickableElements, 100);
+    setTimeout(fixClickableElements, 300);
     setTimeout(fixClickableElements, 500);
     setTimeout(fixClickableElements, 1000);
+    setTimeout(fixClickableElements, 2000);
+    
+    // Executar continuamente a cada 2 segundos (até 10 segundos)
+    let intervalCount = 0;
+    const intervalId = setInterval(() => {
+        fixClickableElements();
+        intervalCount++;
+        if (intervalCount >= 5) {
+            clearInterval(intervalId);
+        }
+    }, 2000);
     
     // Adicionar listener global para detectar cliques bloqueados
     document.addEventListener('click', function(e) {

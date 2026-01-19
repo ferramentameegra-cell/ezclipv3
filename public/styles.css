@@ -2522,11 +2522,25 @@ body {
     pointer-events: auto;
 }
 
-/* Garantir que main sempre tenha pointer-events quando visível */
-main:not(.hidden) {
+/* FORÇAR que auth-section NUNCA bloqueie quando não está sendo usada */
+.auth-section {
+    /* Por padrão, não bloquear */
+    pointer-events: none;
+}
+
+.auth-section:not(.hidden) {
+    pointer-events: auto;
+}
+
+/* FORÇAR que main sempre tenha pointer-events quando visível */
+main {
     pointer-events: auto !important;
-    position: relative;
-    z-index: 1;
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+main.hidden {
+    display: none !important;
 }
 
 /* Garantir que elementos interativos sempre funcionem */
