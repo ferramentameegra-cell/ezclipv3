@@ -27,19 +27,34 @@
    - Verifica status ao retornar do Stripe
    - Processa compra automaticamente se pago
 
-## 🔑 Chaves Configuradas
+## 🔑 Chaves do Stripe (OBRIGATÓRIAS)
 
-### Chaves LIVE (já configuradas no código)
-- **Public Key**: `pk_live_51Sqgz6FGRbcoS1jUs1zGSNPXyd0vL8TJcogmT4iABnCRCMzrcNlWeMqE4bT9zynCwQRdtqlGnJIUCU7IUlD8wEcy000k78qejp`
-- **Secret Key**: `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`
+### ⚠️ IMPORTANTE: Configure as variáveis de ambiente
 
-### Variáveis de Ambiente (Opcional)
-Você pode configurar via `.env`:
+As chaves do Stripe **NÃO** devem estar no código. Configure via variáveis de ambiente:
+
+### Variáveis de Ambiente (OBRIGATÓRIAS)
 ```env
-STRIPE_SECRET_KEY=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
-STRIPE_PUBLISHABLE_KEY=pk_live_51Sqgz6FGRbcoS1jUs1zGSNPXyd0vL8TJcogmT4iABnCRCMzrcNlWeMqE4bT9zynCwQRdtqlGnJIUCU7IUlD8wEcy000k78qejp
-STRIPE_WEBHOOK_SECRET=whsec_... # Obter no dashboard do Stripe
-FRONTEND_URL=https://seu-dominio.com # URL do frontend
+# Substitua pelos valores reais das suas chaves do Stripe
+STRIPE_SECRET_KEY=sk_live_... # Sua chave secreta do Stripe
+STRIPE_PUBLISHABLE_KEY=pk_live_... # Sua chave pública do Stripe
+STRIPE_WEBHOOK_SECRET=whsec_... # Obter no dashboard do Stripe após configurar webhook
+FRONTEND_URL=https://seu-dominio.com # URL do frontend (ou RAILWAY_PUBLIC_DOMAIN)
+```
+
+### Configurar no Railway
+1. Acesse o dashboard do Railway
+2. Vá em "Variables"
+3. Adicione as variáveis acima
+4. Faça redeploy
+
+### Configurar Localmente
+Crie um arquivo `.env` na raiz do projeto:
+```env
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+FRONTEND_URL=http://localhost:8080
 ```
 
 ## 🔗 Configurar Webhook no Stripe

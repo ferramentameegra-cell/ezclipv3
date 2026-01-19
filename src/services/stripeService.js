@@ -5,14 +5,28 @@
 
 import Stripe from 'stripe';
 
-// Chaves do Stripe (LIVE)
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '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';
-const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || 'pk_live_51Sqgz6FGRbcoS1jUs1zGSNPXyd0vL8TJcogmT4iABnCRCMzrcNlWeMqE4bT9zynCwQRdtqlGnJIUCU7IUlD8wEcy000k78qejp';
+// Chaves do Stripe (OBRIGATÓRIAS via variáveis de ambiente)
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
+
+if (!STRIPE_SECRET_KEY) {
+  console.error('[STRIPE] ⚠️ STRIPE_SECRET_KEY não configurada! Configure a variável de ambiente.');
+}
+
+if (!STRIPE_PUBLISHABLE_KEY) {
+  console.error('[STRIPE] ⚠️ STRIPE_PUBLISHABLE_KEY não configurada! Configure a variável de ambiente.');
+}
 
 // Inicializar Stripe
-export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia', // Última versão estável
-});
+let stripe = null;
+if (STRIPE_SECRET_KEY) {
+  stripe = new Stripe(STRIPE_SECRET_KEY, {
+    apiVersion: '2024-11-20.acacia', // Última versão estável
+  });
+} else {
+  console.warn('[STRIPE] Stripe não inicializado - STRIPE_SECRET_KEY não configurada');
+}
+export { stripe };
 
 // Exportar chave pública para frontend
 export const getPublishableKey = () => STRIPE_PUBLISHABLE_KEY;
@@ -21,6 +35,10 @@ export const getPublishableKey = () => STRIPE_PUBLISHABLE_KEY;
  * Criar sessão de checkout do Stripe
  */
 export async function createCheckoutSession({ planId, planName, price, videosLimit, userId, userEmail }) {
+  if (!stripe) {
+    throw new Error('Stripe não está configurado. Configure STRIPE_SECRET_KEY.');
+  }
+  
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -63,6 +81,10 @@ export async function createCheckoutSession({ planId, planName, price, videosLim
  * Verificar status de uma sessão de checkout
  */
 export async function getCheckoutSession(sessionId) {
+  if (!stripe) {
+    throw new Error('Stripe não está configurado. Configure STRIPE_SECRET_KEY.');
+  }
+  
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     return session;
@@ -76,6 +98,10 @@ export async function getCheckoutSession(sessionId) {
  * Processar webhook do Stripe
  */
 export function constructWebhookEvent(payload, signature, secret) {
+  if (!stripe) {
+    throw new Error('Stripe não está configurado. Configure STRIPE_SECRET_KEY.');
+  }
+  
   try {
     return stripe.webhooks.constructEvent(payload, signature, secret);
   } catch (error) {
