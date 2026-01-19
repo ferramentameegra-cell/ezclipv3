@@ -453,11 +453,11 @@ export async function getVideoInfo(url) {
   console.log(`[DOWNLOAD-WORKER] Obtendo info para: ${videoId} (IP: ${WORKER_CONFIG.serverIP})`);
 
   // Verificar cookies
-  const hasCookies = fs.existsSync(WORKER_CONFIG.cookiesPath);
-  if (hasCookies) {
-    console.log(`[DOWNLOAD-WORKER] Cookies encontrados: ${WORKER_CONFIG.cookiesPath}`);
+  const cookiesPath = getCookiesPath();
+  if (cookiesPath) {
+    console.log(`[DOWNLOAD-WORKER] ✅ Cookies disponíveis: ${cookiesPath}`);
   } else {
-    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados: ${WORKER_CONFIG.cookiesPath}`);
+    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YT_DLP_COOKIES_PATH`);
   }
 
   let lastError = null;
@@ -542,11 +542,11 @@ export async function downloadVideo(url, outputPath, onProgress) {
   console.log(`[DOWNLOAD-WORKER] Download iniciado: ${videoId} -> ${outputPath} (IP: ${WORKER_CONFIG.serverIP})`);
 
   // Verificar cookies
-  const hasCookies = fs.existsSync(WORKER_CONFIG.cookiesPath);
-  if (hasCookies) {
-    console.log(`[DOWNLOAD-WORKER] Cookies encontrados: ${WORKER_CONFIG.cookiesPath}`);
+  const cookiesPath = getCookiesPath();
+  if (cookiesPath) {
+    console.log(`[DOWNLOAD-WORKER] ✅ Cookies disponíveis: ${cookiesPath}`);
   } else {
-    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados: ${WORKER_CONFIG.cookiesPath}`);
+    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YT_DLP_COOKIES_PATH`);
   }
 
   // Garantir diretório existe
