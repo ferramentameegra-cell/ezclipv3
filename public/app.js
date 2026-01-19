@@ -728,12 +728,28 @@ async function handleLogin(event) {
         event.stopPropagation();
     }
     
-    const emailInput = document.getElementById('login-email');
-    const passwordInput = document.getElementById('login-password');
+    // Tentar encontrar elementos (pode estar no auth-section ou no modal)
+    let emailInput = document.getElementById('login-email');
+    let passwordInput = document.getElementById('login-password');
+    let btnText = document.getElementById('login-btn-text');
+    let btnSpinner = document.getElementById('login-btn-spinner');
+    let statusMsg = document.getElementById('login-status');
+    
+    // Se não encontrou, tentar no modal
+    if (!emailInput) {
+        emailInput = document.getElementById('login-email-modal');
+        passwordInput = document.getElementById('login-password-modal');
+        btnText = document.getElementById('login-btn-text-modal');
+        btnSpinner = document.getElementById('login-btn-spinner-modal');
+        statusMsg = document.getElementById('login-status-modal');
+    }
     
     console.log('[AUTH] Elementos encontrados:', { 
         emailInput: !!emailInput, 
-        passwordInput: !!passwordInput 
+        passwordInput: !!passwordInput,
+        btnText: !!btnText,
+        btnSpinner: !!btnSpinner,
+        statusMsg: !!statusMsg
     });
     
     if (!emailInput || !passwordInput) {
@@ -744,9 +760,6 @@ async function handleLogin(event) {
     
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    const btnText = document.getElementById('login-btn-text');
-    const btnSpinner = document.getElementById('login-btn-spinner');
-    const statusMsg = document.getElementById('login-status');
     
     if (btnText) btnText.classList.add('hidden');
     if (btnSpinner) btnSpinner.classList.remove('hidden');
@@ -874,21 +887,42 @@ async function handleRegister(event) {
         event.stopPropagation();
     }
     
-    const nameInput = document.getElementById('register-name');
-    const emailInput = document.getElementById('register-email');
-    const passwordInput = document.getElementById('register-password');
+    // Tentar encontrar elementos (pode estar no auth-section ou no modal)
+    let nameInput = document.getElementById('register-name');
+    let emailInput = document.getElementById('register-email');
+    let passwordInput = document.getElementById('register-password');
+    let btnText = document.getElementById('register-btn-text');
+    let btnSpinner = document.getElementById('register-btn-spinner');
+    let statusMsg = document.getElementById('register-status');
+    
+    // Se não encontrou, tentar no modal
+    if (!nameInput) {
+        nameInput = document.getElementById('register-name-modal');
+        emailInput = document.getElementById('register-email-modal');
+        passwordInput = document.getElementById('register-password-modal');
+        btnText = document.getElementById('register-btn-text-modal');
+        btnSpinner = document.getElementById('register-btn-spinner-modal');
+        statusMsg = document.getElementById('register-status-modal');
+    }
+    
+    console.log('[AUTH] Elementos de registro encontrados:', { 
+        nameInput: !!nameInput,
+        emailInput: !!emailInput, 
+        passwordInput: !!passwordInput,
+        btnText: !!btnText,
+        btnSpinner: !!btnSpinner,
+        statusMsg: !!statusMsg
+    });
     
     if (!nameInput || !emailInput || !passwordInput) {
-        console.error('[AUTH] Campos de registro não encontrados');
+        console.error('[AUTH] ❌ Campos de registro não encontrados');
+        alert('Erro: Campos de registro não encontrados. Recarregue a página.');
         return;
     }
     
     const name = nameInput.value.trim();
     const email = emailInput.value.trim();
     const password = passwordInput.value;
-    const btnText = document.getElementById('register-btn-text');
-    const btnSpinner = document.getElementById('register-btn-spinner');
-    const statusMsg = document.getElementById('register-status');
     
     btnText.classList.add('hidden');
     btnSpinner.classList.remove('hidden');
