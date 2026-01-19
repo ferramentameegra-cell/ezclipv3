@@ -757,20 +757,27 @@ async function handleLogin(event) {
     }
     
     try {
-        console.log('[AUTH] Tentando fazer login...');
+        console.log('[AUTH] Tentando fazer login...', { email, apiBase: API_BASE });
         const response = await fetch(`${API_BASE}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, password }),
+            credentials: 'include' // Importante para cookies
         });
+        
+        console.log('[AUTH] Resposta recebida:', { status: response.status, statusText: response.statusText, ok: response.ok });
         
         let data;
         try {
-            data = await response.json();
+            const text = await response.text();
+            console.log('[AUTH] Resposta texto (primeiros 200 chars):', text.substring(0, 200));
+            data = JSON.parse(text);
         } catch (parseError) {
             console.error('[AUTH] Erro ao parsear resposta:', parseError);
             throw new Error('Resposta inválida do servidor');
         }
+        
+        console.log('[AUTH] Dados parseados:', { hasUser: !!data.user, hasToken: !!data.token, error: data.error });
         
         if (!response.ok) {
             // Mostrar erro

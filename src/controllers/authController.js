@@ -108,8 +108,11 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('[AUTH] Tentativa de login recebida:', { email: email ? email.substring(0, 5) + '***' : 'vazio' });
+
     // Validações
     if (!email || !password) {
+      console.log('[AUTH] ❌ Campos faltando:', { email: !!email, password: !!password });
       return res.status(400).json({
         error: 'Email e senha são obrigatórios',
         code: 'MISSING_FIELDS'
@@ -121,6 +124,8 @@ export const login = async (req, res) => {
     const ipAddress = req.ip;
     const userAgent = req.get('user-agent');
 
+    console.log('[AUTH] Usuário encontrado:', user ? 'SIM' : 'NÃO', user ? `(ID: ${user.id}, Role: ${user.role})` : '');
+
     if (!user) {
       // Registrar tentativa de login falha
       logLoginAttempt({
@@ -130,6 +135,7 @@ export const login = async (req, res) => {
         userAgent
       });
 
+      console.log('[AUTH] ❌ Usuário não encontrado para email:', email);
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -137,7 +143,10 @@ export const login = async (req, res) => {
     }
 
     // Verificar senha
+    console.log('[AUTH] Verificando senha...');
     const isValidPassword = await verifyPassword(user, password);
+    console.log('[AUTH] Senha válida:', isValidPassword ? 'SIM' : 'NÃO');
+    
     if (!isValidPassword) {
       // Registrar tentativa de login falha
       logLoginAttempt({
@@ -148,6 +157,7 @@ export const login = async (req, res) => {
         userId: user.id
       });
 
+      console.log('[AUTH] ❌ Senha incorreta para usuário:', user.email);
       return res.status(401).json({
         error: 'Email ou senha incorretos',
         code: 'INVALID_CREDENTIALS'
@@ -174,9 +184,9 @@ export const login = async (req, res) => {
       userId: user.id
     });
 
-    console.log(`[AUTH] Login realizado: ${user.email} (ID: ${user.id})`);
+    console.log(`[AUTH] ✅ Login realizado com sucesso: ${user.email} (ID: ${user.id}, Role: ${user.role})`);
 
-    res.json({
+    const responseData = {
       message: 'Login realizado com sucesso',
       user: {
         id: user.id,
@@ -188,7 +198,10 @@ export const login = async (req, res) => {
         role: user.role || 'user'
       },
       token // Manter token no JSON para compatibilidade com frontend existente
-    });
+    };
+
+    console.log('[AUTH] Enviando resposta de sucesso');
+    res.json(responseData);
   } catch (error) {
     console.error('[AUTH] Erro ao fazer login:', error);
     res.status(500).json({
