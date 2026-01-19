@@ -241,8 +241,13 @@ function parseYtDlpError(stderr, exitCode) {
     return 'Este vídeo não está disponível ou é privado. Use um vídeo público.';
   }
   
-  if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot')) {
-    return 'YouTube detectou acesso automatizado. Configure cookies do navegador na variável YTDLP_COOKIES para contornar. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
+  if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot') || errorLower.includes('use --cookies')) {
+    const hasCookies = process.env.YTDLP_COOKIES && process.env.YTDLP_COOKIES.trim() !== '';
+    if (!hasCookies) {
+      return 'YouTube detectou acesso automatizado. É OBRIGATÓRIO configurar cookies do navegador na variável YTDLP_COOKIES no Railway. Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas.';
+    } else {
+      return 'YouTube detectou acesso automatizado mesmo com cookies. Os cookies podem ter expirado. Atualize a variável YTDLP_COOKIES no Railway com cookies frescos. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
+    }
   }
   
   if (errorLower.includes('age-restricted') || errorLower.includes('age verification') || errorLower.includes('confirm your age')) {
