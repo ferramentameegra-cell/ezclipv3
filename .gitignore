@@ -17,3 +17,8 @@ cookies.txt
 
 # Logs de auditoria
 logs/
+.env
+.env.local
+CHAVES_STRIPE.txt
+*.key
+*.secret
