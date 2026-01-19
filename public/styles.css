@@ -2519,12 +2519,36 @@ main:not(.hidden) {
 }
 
 /* Garantir que elementos interativos sempre funcionem */
-button:not(:disabled), a, input:not(:disabled), select:not(:disabled), textarea:not(:disabled) {
+button:not(:disabled), a:not([disabled]), input:not(:disabled), select:not(:disabled), textarea:not(:disabled) {
     pointer-events: auto !important;
-    cursor: pointer;
 }
 
-button:disabled, input:disabled, select:disabled, textarea:disabled {
-    pointer-events: none;
-    cursor: not-allowed;
+button:not(:disabled), a:not([disabled]) {
+    cursor: pointer !important;
+}
+
+input:not(:disabled), select:not(:disabled), textarea:not(:disabled) {
+    cursor: text !important;
+}
+
+button:disabled, input:disabled, select:disabled, textarea:disabled, a[disabled] {
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+}
+
+/* Garantir que cards de step sejam clicáveis */
+[data-step-card] {
+    pointer-events: auto !important;
+}
+
+[data-step-card] button,
+[data-step-card] a,
+[data-step-card] input,
+[data-step-card] select {
+    pointer-events: auto !important;
+}
+
+/* Smooth scroll global */
+html {
+    scroll-behavior: smooth;
 }

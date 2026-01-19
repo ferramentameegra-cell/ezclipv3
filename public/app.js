@@ -365,7 +365,7 @@ function advanceToNextStep() {
 }
 
 /**
- * Faz scroll suave até um card específico
+ * Faz scroll suave até um card específico (apenas se necessário)
  */
 function scrollToCard(stepName) {
     const card = document.querySelector(`[data-step-card="${stepName}"]`);
@@ -375,16 +375,23 @@ function scrollToCard(stepName) {
             card.style.display = 'block';
         }
         
-        setTimeout(() => {
-            // Scroll suave até o card
-            const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
-            const offset = 80; // Offset maior para melhor visualização
-            
-            window.scrollTo({
-                top: cardPosition - offset,
-                behavior: 'smooth'
-            });
-        }, 200);
+        // Verificar se o card já está visível na viewport
+        const rect = card.getBoundingClientRect();
+        const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
+        
+        // Só fazer scroll se o card não estiver visível
+        if (!isVisible) {
+            setTimeout(() => {
+                // Scroll suave até o card
+                const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
+                const offset = 100; // Offset para navbar
+                
+                window.scrollTo({
+                    top: Math.max(0, cardPosition - offset),
+                    behavior: 'smooth'
+                });
+            }, 100);
+        }
     } else {
         console.warn(`[SCROLL] Card não encontrado: ${stepName}`);
     }
@@ -938,9 +945,15 @@ function openLoginFromModal() {
     
     showLogin();
     
-    // Scroll para a seção de auth
+    // Scroll para a seção de auth apenas se necessário
     if (authSection) {
-        authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const rect = authSection.getBoundingClientRect();
+        const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
+        if (!isVisible) {
+            setTimeout(() => {
+                authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     }
 }
 
@@ -1050,7 +1063,14 @@ function focusTermsCheckbox() {
         checkboxContainer.style.display = 'block';
         // Scroll suave até o checkbox
         setTimeout(() => {
-            checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Scroll suave apenas se necessário
+            const rect = checkboxContainer.getBoundingClientRect();
+            const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
+            if (!isVisible) {
+                setTimeout(() => {
+                    checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
         }, 100);
     }
     
@@ -1358,8 +1378,8 @@ async function handleUploadSubmit() {
             // AVANÇAR AUTOMATICAMENTE para etapa 2 (Trim) após upload
             setTimeout(() => {
                 showTrimSection();
-                // Fazer scroll para a etapa de trim
-                scrollToCard('trim');
+                // Fazer scroll para a etapa de trim (apenas se necessário)
+                setTimeout(() => scrollToCard('trim'), 300);
             }, 500);
             
             // Aguardar um pouco para garantir que elementos estão prontos
@@ -1470,7 +1490,14 @@ async function handleYouTubeSubmit() {
             termsAlert.style.display = 'flex';
             // Scroll suave até o alerta
             setTimeout(() => {
-                termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Scroll suave apenas se necessário
+                const rect = termsAlert.getBoundingClientRect();
+                const isVisible = rect.top >= 0 && rect.top <= window.innerHeight * 0.8;
+                if (!isVisible) {
+                    setTimeout(() => {
+                        termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
+                }
             }, 100);
         }
         
@@ -1873,8 +1900,8 @@ async function showTrimSection() {
         }, 300);
     }
     
-    // Fazer scroll automático para a etapa de trim
-    scrollToCard('trim');
+    // Fazer scroll automático para a etapa de trim (apenas se necessário)
+    setTimeout(() => scrollToCard('trim'), 300);
 }
 
 /**
