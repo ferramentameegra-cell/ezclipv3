@@ -3522,7 +3522,7 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
-    // AUTENTICAÇÃO OBRIGATÓRIA - Mostrar modal em vez de alert
+    // AUTENTICAÇÃO OBRIGATÓRIA - Redirecionar para login e mostrar planos
     if (!appState.currentUser || !appState.userToken) {
         // Salvar estado atual para retomar após login
         appState.pendingGeneration = {
@@ -3541,7 +3541,18 @@ function proceedToGenerate() {
             retentionVideoId: appState.retentionVideoId,
             configurations: { ...appState.configurations }
         };
-        showLoginRequiredModal();
+        
+        // Redirecionar para aba de login
+        switchTab('login');
+        
+        // Scroll suave para o topo da página
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Aguardar um pouco para garantir que a aba foi trocada e mostrar modal de planos
+        setTimeout(() => {
+            showCreditsPurchaseModal();
+        }, 300);
+        
         return;
     }
     
