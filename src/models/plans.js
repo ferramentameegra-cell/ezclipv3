@@ -19,7 +19,8 @@ export const PLANS = [
     videos_limit: 10,
     price: 79.00,
     description: 'Para criadores - 10 vídeos com cortes ilimitados',
-    is_unlimited: false
+    is_unlimited: false,
+    stripe_checkout_url: 'https://buy.stripe.com/bJeaEXa6hgRB7J907m6Na00'
   },
   {
     id: 'pro',
@@ -27,7 +28,8 @@ export const PLANS = [
     videos_limit: 40,
     price: 197.00,
     description: 'Para profissionais - 40 vídeos com cortes ilimitados',
-    is_unlimited: false
+    is_unlimited: false,
+    stripe_checkout_url: 'https://buy.stripe.com/9B67sL4LXbxhaVl4nC6Na01'
   },
   {
     id: 'unlimited',
@@ -35,7 +37,8 @@ export const PLANS = [
     videos_limit: null, // null = ilimitado
     price: 397.00,
     description: 'Para criadores profissionais e agências - vídeos ilimitados',
-    is_unlimited: true
+    is_unlimited: true,
+    stripe_checkout_url: 'https://buy.stripe.com/4gM8wPditfNxe7x2fu6Na02'
   }
 ];
 

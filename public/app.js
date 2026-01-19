@@ -168,12 +168,23 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGenerateButtonState();
     initializeApp();
     
-    // Verificar pagamento após retorno do Stripe
+    // Verificar pagamento após retorno do Stripe (Checkout Session dinâmica)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('payment') === 'success') {
         setTimeout(() => {
             checkPaymentStatus();
         }, 1000);
+    }
+    
+    // Verificar se há pagamento pendente via Payment Link
+    const paymentPending = localStorage.getItem('stripe_payment_pending');
+    const planId = localStorage.getItem('stripe_plan_id');
+    if (paymentPending === 'true' && planId) {
+        console.log('[APP] Verificando pagamento pendente via Payment Link...');
+        // Aguardar um pouco para dar tempo do webhook processar
+        setTimeout(() => {
+            verifyPaymentLinkPurchase(planId);
+        }, 3000);
     }
 });
 
@@ -741,7 +752,58 @@ async function purchasePlan(planId) {
             return;
         }
         
-        // Criar sessão de checkout
+        // Se o plano tiver link externo do Stripe, usar ele
+        if (plan.stripe_checkout_url) {
+            console.log('[PLANS] Usando link externo do Stripe:', plan.stripe_checkout_url);
+            
+            // Salvar informações no localStorage
+            localStorage.setItem('stripe_plan_id', planId);
+            localStorage.setItem('stripe_payment_pending', 'true');
+            
+            // Adicionar parâmetros à URL para identificar o usuário e plano
+            const currentUser = appState.currentUser;
+            if (currentUser && currentUser.id) {
+                const checkoutUrl = new URL(plan.stripe_checkout_url);
+                // Adicionar metadata via URL (Stripe Payment Links suporta client_reference_id)
+                checkoutUrl.searchParams.set('client_reference_id', currentUser.id);
+                checkoutUrl.searchParams.set('prefilled_email', currentUser.email || '');
+                
+                // Abrir em nova janela
+                const stripeWindow = window.open(
+                    checkoutUrl.toString(),
+                    'stripe-checkout',
+                    'width=600,height=700,scrollbars=yes,resizable=yes'
+                );
+                
+                // Monitorar quando a janela fecha
+                const checkWindowClosed = setInterval(() => {
+                    if (stripeWindow.closed) {
+                        clearInterval(checkWindowClosed);
+                        console.log('[PLANS] Janela do Stripe fechada, verificando pagamento...');
+                        
+                        // Aguardar um pouco antes de verificar (dar tempo para webhook processar)
+                        setTimeout(() => {
+                            verifyPaymentLinkPurchase(planId);
+                        }, 2000);
+                    }
+                }, 1000);
+                
+                // Timeout de segurança (5 minutos)
+                setTimeout(() => {
+                    clearInterval(checkWindowClosed);
+                }, 300000);
+                
+            } else {
+                // Se não estiver logado, redirecionar para login primeiro
+                alert('Você precisa estar logado para comprar um plano.');
+                switchTab('login');
+                return;
+            }
+            
+            return;
+        }
+        
+        // Fallback: criar sessão de checkout dinâmica
         console.log('[PLANS] Criando checkout session...');
         const { data } = await apiClient.post('/api/credits/create-checkout', { planId });
         
@@ -766,7 +828,7 @@ async function purchasePlan(planId) {
 }
 
 /**
- * Verificar pagamento após retorno do Stripe
+ * Verificar pagamento após retorno do Stripe (Checkout Session dinâmica)
  */
 async function checkPaymentStatus() {
     const sessionId = localStorage.getItem('stripe_session_id');
@@ -818,6 +880,72 @@ async function checkPaymentStatus() {
     } catch (error) {
         console.error('[PLANS] Erro ao verificar pagamento:', error);
         // Não mostrar erro ao usuário, apenas logar
+    }
+}
+
+/**
+ * Verificar compra via Payment Link (link externo)
+ */
+async function verifyPaymentLinkPurchase(planId) {
+    try {
+        console.log('[PLANS] Verificando compra via Payment Link para plano:', planId);
+        
+        // Verificar se o plano foi ativado (o webhook deve ter processado)
+        const { data: balanceData } = await apiClient.get('/api/credits/balance');
+        
+        // Buscar informações do plano
+        const plansResponse = await fetch(`${API_BASE}/api/credits/plans`);
+        const plansData = await plansResponse.json();
+        const plan = plansData.plans.find(p => p.id === planId);
+        
+        if (!plan) {
+            throw new Error('Plano não encontrado');
+        }
+        
+        // Verificar se o plano atual do usuário corresponde ao plano comprado
+        if (balanceData.plan_id === planId) {
+            // Plano ativado com sucesso!
+            const videosText = plan.is_unlimited 
+                ? 'vídeos ilimitados' 
+                : `${plan.videos_limit} vídeos`;
+            
+            alert(`✅ Pagamento confirmado! Plano ${plan.name} ativado com sucesso!\n\nVocê agora pode processar ${videosText}.`);
+            
+            // Recarregar informações
+            await loadUserVideos();
+            closeCreditsModal();
+            
+            // Limpar localStorage
+            localStorage.removeItem('stripe_plan_id');
+            localStorage.removeItem('stripe_payment_pending');
+        } else {
+            // Ainda não processado, tentar validar manualmente
+            console.log('[PLANS] Plano ainda não ativado, tentando validação manual...');
+            
+            // Chamar endpoint de validação manual
+            const { data } = await apiClient.post('/api/stripe/validate-payment-link', { planId });
+            
+            if (data.success) {
+                const videosText = plan.is_unlimited 
+                    ? 'vídeos ilimitados' 
+                    : `${plan.videos_limit} vídeos`;
+                
+                alert(`✅ Pagamento confirmado! Plano ${plan.name} ativado com sucesso!\n\nVocê agora pode processar ${videosText}.`);
+                
+                await loadUserVideos();
+                closeCreditsModal();
+                
+                localStorage.removeItem('stripe_plan_id');
+                localStorage.removeItem('stripe_payment_pending');
+            } else {
+                console.log('[PLANS] Pagamento ainda não confirmado, aguardando webhook...');
+                // Não mostrar erro, o webhook pode ainda estar processando
+            }
+        }
+        
+    } catch (error) {
+        console.error('[PLANS] Erro ao verificar compra via Payment Link:', error);
+        // Não mostrar erro ao usuário, o webhook pode processar depois
     }
 }
 

@@ -143,3 +143,121 @@ export const verifySession = async (req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/stripe/validate-payment-link
+ * Validar compra via Payment Link (buscar pagamentos recentes do usuário)
+ */
+export const validatePaymentLink = async (req, res) => {
+  try {
+    const user = req.user;
+    const { planId } = req.body;
+
+    if (!user) {
+      return res.status(401).json({
+        error: 'Usuário não autenticado',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
+
+    if (!planId) {
+      return res.status(400).json({
+        error: 'planId é obrigatório',
+        code: 'MISSING_PLAN_ID'
+      });
+    }
+
+    if (!stripe) {
+      return res.status(500).json({
+        error: 'Stripe não configurado',
+        code: 'STRIPE_NOT_CONFIGURED'
+      });
+    }
+
+    // Buscar pagamentos recentes do usuário (últimos 5 minutos)
+    // Payment Links criam Checkout Sessions com client_reference_id
+    const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 300;
+    
+    const sessions = await stripe.checkout.sessions.list({
+      limit: 10,
+      created: { gte: fiveMinutesAgo },
+      expand: ['data.payment_intent']
+    });
+
+    // Procurar sessão com client_reference_id correspondente ao usuário
+    const userSession = sessions.data.find(session => 
+      session.client_reference_id === user.id &&
+      session.payment_status === 'paid' &&
+      session.status === 'complete'
+    );
+
+    if (!userSession) {
+      return res.json({
+        success: false,
+        message: 'Nenhum pagamento confirmado encontrado'
+      });
+    }
+
+    // Verificar se já foi processado (verificar metadata ou status do usuário)
+    const userData = getUserById(user.id);
+    const plan = getPlanById(planId);
+
+    if (!plan) {
+      return res.status(404).json({
+        error: 'Plano não encontrado',
+        code: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    // Se o plano já está ativado, retornar sucesso
+    if (userData.plan_id === planId) {
+      return res.json({
+        success: true,
+        message: 'Plano já está ativado',
+        plan: {
+          id: plan.id,
+          name: plan.name,
+          videos_limit: plan.videos_limit,
+          is_unlimited: plan.is_unlimited
+        }
+      });
+    }
+
+    // Ativar o plano
+    const updates = {
+      plan_id: planId,
+      videos_limit: plan.videos_limit,
+      videos_used: userData.videos_used || 0
+    };
+
+    updateUser(user.id, updates);
+
+    const videoStats = getUserVideoStats(user.id);
+
+    console.log(`[STRIPE] ✅ Plano ${plan.name} ativado para usuário ${user.id} via validação manual`);
+
+    res.json({
+      success: true,
+      message: 'Plano ativado com sucesso',
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        videos_limit: plan.videos_limit,
+        is_unlimited: plan.is_unlimited,
+        price: plan.price
+      },
+      videos_used: videoStats.videos_used,
+      videos_limit: videoStats.videos_limit,
+      videos_remaining: videoStats.videos_remaining,
+      is_unlimited: videoStats.is_unlimited
+    });
+
+  } catch (error) {
+    console.error('[STRIPE] Erro ao validar Payment Link:', error);
+    res.status(500).json({
+      error: 'Erro ao validar pagamento',
+      code: 'VALIDATE_PAYMENT_LINK_ERROR',
+      details: error.message
+    });
+  }
+};

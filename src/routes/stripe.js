@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { handleStripeWebhook, verifySession } from '../controllers/stripeController.js';
+import { handleStripeWebhook, verifySession, validatePaymentLink } from '../controllers/stripeController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -15,5 +15,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeW
 
 // Verificar status de sessão (requer autenticação)
 router.get('/verify-session', requireAuth, verifySession);
+
+// Validar compra via Payment Link (requer autenticação)
+router.post('/validate-payment-link', requireAuth, validatePaymentLink);
 
 export default router;
