@@ -88,7 +88,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=ios'
     ],
     useCookies: true
   },
@@ -100,7 +100,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=android'
     ],
     useCookies: true
   },
@@ -112,7 +112,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=web'
     ],
     useCookies: true
   },
@@ -124,7 +124,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=ios,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=ios'
     ],
     useCookies: false
   },
@@ -136,7 +136,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=android,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=android'
     ],
     useCookies: false
   },
@@ -148,7 +148,7 @@ const DOWNLOAD_STRATEGIES = [
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=web,youtube:skip=dash'
+      '--extractor-args', 'youtube:player_client=web'
     ],
     useCookies: false
   },
@@ -320,8 +320,14 @@ async function tryGetInfoWithStrategy(url, strategy, ytDlpCommand) {
       
       if (code !== 0) {
         const is403 = is403Error(stderr, code);
+        const isFormatError = stderr.includes('Requested format is not available') || 
+                             stderr.includes('format is not available') ||
+                             stderr.includes('format not available');
+        
         if (is403) {
           reject(new Error('403_FORBIDDEN'));
+        } else if (isFormatError) {
+          reject(new Error('FORMAT_NOT_AVAILABLE'));
         } else if (stderr.includes('Video unavailable')) {
           reject(new Error('Vídeo não disponível ou privado'));
         } else {
@@ -357,10 +363,11 @@ async function tryDownloadWithStrategy(url, outputPath, strategy, ytDlpCommand, 
     const strategyArgs = getStrategyArgs(strategy, cookiesPath);
     
     const baseArgs = [
-      '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+      '-f', 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best',
       '--merge-output-format', 'mp4',
       '--no-playlist',
       '--no-warnings',
+      '--no-check-formats',
       ...strategyArgs,
       '-o', outputPath,
       url
@@ -399,8 +406,14 @@ async function tryDownloadWithStrategy(url, outputPath, strategy, ytDlpCommand, 
     process.on('close', (code) => {
       if (code !== 0) {
         const is403 = is403Error(stderr, code);
+        const isFormatError = stderr.includes('Requested format is not available') || 
+                             stderr.includes('format is not available') ||
+                             stderr.includes('format not available');
+        
         if (is403) {
           reject(new Error('403_FORBIDDEN'));
+        } else if (isFormatError) {
+          reject(new Error('FORMAT_NOT_AVAILABLE'));
         } else {
           reject(new Error(`Download falhou: ${stderr.slice(-300)}`));
         }
@@ -488,10 +501,23 @@ export async function getVideoInfo(url) {
 
       lastError = error;
 
-      // Se não for erro 403, não tentar outras estratégias
-      if (error.message !== '403_FORBIDDEN' && !error.message.includes('403')) {
+      // Verificar se é erro de formato não disponível
+      const isFormatError = error.message === 'FORMAT_NOT_AVAILABLE' ||
+                           error.message.includes('Requested format is not available') || 
+                           error.message.includes('format is not available') ||
+                           error.message.includes('format not available');
+      
+      // Se não for erro 403 ou de formato, não tentar outras estratégias
+      if (error.message !== '403_FORBIDDEN' && !error.message.includes('403') && !isFormatError) {
         console.error(`[DOWNLOAD-WORKER] ❌ Erro não recuperável: ${error.message}`);
         throw new Error(`Erro ao obter informações: ${error.message}`);
+      }
+      
+      // Se for erro de formato, tentar próxima estratégia
+      if (isFormatError) {
+        console.warn(`[DOWNLOAD-WORKER] ⚠️ Estratégia "${strategy.name}" falhou (formato não disponível), tentando próxima...`);
+        await new Promise(resolve => setTimeout(resolve, WORKER_CONFIG.retryDelay));
+        continue;
       }
 
       console.warn(`[DOWNLOAD-WORKER] ⚠️ Estratégia "${strategy.name}" falhou (403), tentando próxima...`);
@@ -569,10 +595,33 @@ export async function downloadVideo(url, outputPath, onProgress) {
 
       lastError = error;
 
-      // Se não for erro 403, não tentar outras estratégias
-      if (error.message !== '403_FORBIDDEN' && !error.message.includes('403')) {
+      // Verificar se é erro de formato não disponível
+      const isFormatError = error.message === 'FORMAT_NOT_AVAILABLE' ||
+                           error.message.includes('Requested format is not available') || 
+                           error.message.includes('format is not available') ||
+                           error.message.includes('format not available');
+      
+      // Se não for erro 403 ou de formato, não tentar outras estratégias
+      if (error.message !== '403_FORBIDDEN' && !error.message.includes('403') && !isFormatError) {
         console.error(`[DOWNLOAD-WORKER] ❌ Erro não recuperável: ${error.message}`);
         throw error;
+      }
+      
+      // Se for erro de formato, tentar próxima estratégia
+      if (isFormatError) {
+        console.warn(`[DOWNLOAD-WORKER] ⚠️ Estratégia "${strategy.name}" falhou (formato não disponível), tentando próxima...`);
+        
+        // Limpar arquivo parcial
+        if (fs.existsSync(outputPath)) {
+          try {
+            fs.unlinkSync(outputPath);
+          } catch (unlinkError) {
+            // Ignorar
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, WORKER_CONFIG.retryDelay));
+        continue;
       }
 
       console.warn(`[DOWNLOAD-WORKER] ⚠️ Estratégia "${strategy.name}" falhou (403), tentando próxima...`);
