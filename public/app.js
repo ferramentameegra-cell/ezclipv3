@@ -721,6 +721,8 @@ async function purchasePlan(planId) {
 }
 
 async function handleLogin(event) {
+    console.log('[AUTH] handleLogin chamado', event);
+    
     if (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -729,8 +731,14 @@ async function handleLogin(event) {
     const emailInput = document.getElementById('login-email');
     const passwordInput = document.getElementById('login-password');
     
+    console.log('[AUTH] Elementos encontrados:', { 
+        emailInput: !!emailInput, 
+        passwordInput: !!passwordInput 
+    });
+    
     if (!emailInput || !passwordInput) {
-        console.error('[AUTH] Campos de login não encontrados');
+        console.error('[AUTH] ❌ Campos de login não encontrados');
+        alert('Erro: Campos de login não encontrados. Recarregue a página.');
         return;
     }
     
