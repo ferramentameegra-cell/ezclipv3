@@ -241,12 +241,21 @@ function parseYtDlpError(stderr, exitCode) {
     return 'Este vídeo não está disponível ou é privado. Use um vídeo público.';
   }
   
-  if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot') || errorLower.includes('use --cookies')) {
+  if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot') || errorLower.includes('use --cookies') || errorLower.includes('--cookies-from-browser')) {
     const hasCookies = process.env.YTDLP_COOKIES && process.env.YTDLP_COOKIES.trim() !== '';
     if (!hasCookies) {
-      return 'YouTube detectou acesso automatizado. É OBRIGATÓRIO configurar cookies do navegador na variável YTDLP_COOKIES no Railway. Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas.';
+      return '❌ ERRO CRÍTICO: YouTube detectou acesso automatizado. É OBRIGATÓRIO configurar cookies do navegador na variável YTDLP_COOKIES no Railway. Sem cookies, o download não funcionará. Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas.';
     } else {
-      return 'YouTube detectou acesso automatizado mesmo com cookies. Os cookies podem ter expirado. Atualize a variável YTDLP_COOKIES no Railway com cookies frescos. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
+      // Verificar se o arquivo de cookies foi criado corretamente
+      const cookiesPath = createCookiesFile();
+      if (!cookiesPath || !fs.existsSync(cookiesPath)) {
+        return '❌ ERRO: Cookies configurados mas arquivo não foi criado. Verifique se YTDLP_COOKIES está no formato Netscape correto. Veja: COMO_CONFIGURAR_COOKIES_YOUTUBE.md';
+      }
+      const stats = fs.statSync(cookiesPath);
+      if (stats.size === 0) {
+        return '❌ ERRO: Arquivo de cookies está vazio. Verifique se YTDLP_COOKIES contém cookies válidos no formato Netscape. Veja: COMO_CONFIGURAR_COOKIES_YOUTUBE.md';
+      }
+      return '⚠️ YouTube detectou acesso automatizado mesmo com cookies. Os cookies podem ter expirado ou estar inválidos. Atualize a variável YTDLP_COOKIES no Railway com cookies frescos exportados do navegador. Veja: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp';
     }
   }
   
@@ -456,18 +465,39 @@ export async function downloadWithProgress(req, res) {
       const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent;
       
       if (cookiesPath) {
-        console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
-        console.log('[DOWNLOAD] ✅ Caminho do arquivo de cookies:', cookiesPath);
-        // Verificar tamanho do arquivo
+        // Validar que o arquivo existe e não está vazio
         try {
-          const stats = fs.statSync(cookiesPath);
-          console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
+          if (!fs.existsSync(cookiesPath)) {
+            console.error('[DOWNLOAD] ❌ ERRO: Arquivo de cookies não existe:', cookiesPath);
+            console.error('[DOWNLOAD] ❌ Re-criando arquivo de cookies...');
+            // Tentar recriar
+            const newCookiesPath = createCookiesFile();
+            if (newCookiesPath && fs.existsSync(newCookiesPath)) {
+              cookiesPath = newCookiesPath;
+            } else {
+              console.error('[DOWNLOAD] ❌ Falha ao recriar arquivo de cookies');
+            }
+          }
+          
+          if (fs.existsSync(cookiesPath)) {
+            const stats = fs.statSync(cookiesPath);
+            if (stats.size === 0) {
+              console.error('[DOWNLOAD] ❌ ERRO: Arquivo de cookies está vazio:', cookiesPath);
+              console.error('[DOWNLOAD] ❌ Verifique se YTDLP_COOKIES contém cookies válidos');
+            } else {
+              console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+              console.log('[DOWNLOAD] ✅ Caminho do arquivo de cookies:', cookiesPath);
+              console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
+            }
+          }
         } catch (e) {
-          console.warn('[DOWNLOAD] ⚠️ Erro ao verificar arquivo de cookies:', e.message);
+          console.error('[DOWNLOAD] ❌ Erro ao validar arquivo de cookies:', e.message);
         }
       } else {
-        console.warn('[DOWNLOAD] ⚠️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
-        console.warn('[DOWNLOAD] ⚠️ Configure a variável YTDLP_COOKIES no Railway para evitar detecção de bot');
+        console.error('[DOWNLOAD] ❌ ERRO CRÍTICO: Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+        console.error('[DOWNLOAD] ❌ É OBRIGATÓRIO configurar a variável YTDLP_COOKIES no Railway');
+        console.error('[DOWNLOAD] ❌ Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas');
+        console.error('[DOWNLOAD] ❌ Sem cookies, o YouTube detectará acesso automatizado e bloqueará o download');
       }
       
       console.log('[DOWNLOAD] User-Agent:', finalUserAgent.substring(0, 50) + '...');
