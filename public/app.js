@@ -978,11 +978,10 @@ async function handleRegister(event) {
             btnSpinner.classList.add('hidden');
         }
     } catch (error) {
-        console.error('Erro:', error);
-        statusMsg.textContent = 'Erro ao conectar com o servidor';
+        console.error('[AUTH] Erro no registro:', error);
+        statusMsg.textContent = error.message || 'Erro ao conectar com o servidor. Verifique sua conexão.';
         statusMsg.className = 'login-status error';
         statusMsg.classList.remove('hidden');
-    } finally {
         btnText.classList.remove('hidden');
         btnSpinner.classList.add('hidden');
     }
