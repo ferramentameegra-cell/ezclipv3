@@ -126,9 +126,6 @@ export const purchasePlan = (req, res) => {
  * GET /api/credits/usage
  * Obter histórico de uso de créditos
  */
-import { getUserUsageLogs, getUserUsageStats } from '../models/usageLogs.js';
-import { updateUser } from '../models/users.js';
-
 export const getUsageHistory = (req, res) => {
   try {
     const user = req.user;
