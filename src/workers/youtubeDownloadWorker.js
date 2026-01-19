@@ -651,13 +651,13 @@ export async function downloadVideo(url, outputPath, onProgress) {
  */
 export async function checkAvailability() {
   const command = await detectYtDlpCommand();
-  const hasCookies = fs.existsSync(WORKER_CONFIG.cookiesPath);
+  const cookiesPath = getCookiesPath();
   
   return {
     ytDlpAvailable: command !== null,
     ytDlpCommand: command,
-    cookiesAvailable: hasCookies,
-    cookiesPath: WORKER_CONFIG.cookiesPath,
+    cookiesAvailable: cookiesPath !== null,
+    cookiesPath: cookiesPath || WORKER_CONFIG.cookiesPath,
     serverIP: WORKER_CONFIG.serverIP
   };
 }
