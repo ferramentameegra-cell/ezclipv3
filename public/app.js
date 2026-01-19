@@ -1890,7 +1890,7 @@ function saveTrimInterval() {
     // AVANÇAR AUTOMATICAMENTE para etapa 3 (Legendas) após salvar intervalo
     setTimeout(() => {
         showCaptionsSection();
-        scrollToCard('trim');
+        scrollToCard('captions');
     }, 500);
 }
 
@@ -2486,7 +2486,7 @@ function showNicheSection() {
         // Card sempre visível - garantir que está visível
         nicheCard.style.display = 'block';
         updateProgressSteps('niche'); // Etapa 5 (após configurations)
-        scrollToCard('trim');
+        scrollToCard('niche');
     }
 }
 
@@ -2588,8 +2588,7 @@ function editStep(stepName) {
     // Garantir que o card da etapa esteja visível
     const targetCard = document.querySelector(`[data-step-card="${stepName}"]`);
     
-    scrollToCard('trim');
-    scrollToCard(stepName); // Apenas garante que card está visível, sem scroll
+    scrollToCard(stepName);
     if (targetCard) {
         targetCard.style.display = 'block';
     }
