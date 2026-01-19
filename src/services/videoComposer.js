@@ -1197,53 +1197,80 @@ async function downloadVideoFromUrl(url, outputPath, maxRetries = 3) {
           // Verificar status code
           if (response.statusCode !== 200) {
             clearTimeout(timeout);
-        file.close();
-        if (fs.existsSync(outputPath)) {
-          fs.unlinkSync(outputPath);
-        }
-        return reject(new Error(`Erro ao baixar vídeo: HTTP ${response.statusCode} - ${response.statusMessage}`));
-      }
-      
-      let downloadedBytes = 0;
-      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
-      
-      // Pipe response para arquivo
-      response.pipe(file);
-      
-      response.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (totalBytes > 0) {
-          const percent = ((downloadedBytes / totalBytes) * 100).toFixed(1);
-          if (downloadedBytes % (1024 * 1024) < chunk.length) { // Log a cada MB
-            console.log(`[COMPOSER] ⬇️ Download: ${(downloadedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB (${percent}%)`);
+            file.close();
+            if (fs.existsSync(outputPath)) {
+              try {
+                fs.unlinkSync(outputPath);
+              } catch (e) {
+                // Ignorar erro ao remover
+              }
+            }
+            reject(new Error(`Erro HTTP ${response.statusCode}: ${response.statusMessage}`));
+            return;
           }
-        }
-      });
-      
-      file.on('finish', () => {
-        clearTimeout(timeout);
-        file.close();
-        const stats = fs.statSync(outputPath);
-        console.log(`[COMPOSER] ✅ Vídeo baixado com sucesso: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-        resolve();
-      });
-      
-      file.on('error', (err) => {
-        clearTimeout(timeout);
-        file.close();
-        if (fs.existsSync(outputPath)) {
-          fs.unlinkSync(outputPath);
-        }
-        reject(new Error(`Erro ao escrever arquivo: ${err.message}`));
-      });
-    }).on('error', (err) => {
-      clearTimeout(timeout);
-      file.close();
-      if (fs.existsSync(outputPath)) {
-        fs.unlinkSync(outputPath);
-      }
-      reject(new Error(`Erro de conexão: ${err.message}`));
-    });
+          
+          let downloadedBytes = 0;
+          const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+          
+          // Pipe response para arquivo
+          response.pipe(file);
+          
+          response.on('data', (chunk) => {
+            downloadedBytes += chunk.length;
+            if (totalBytes > 0) {
+              const percent = ((downloadedBytes / totalBytes) * 100).toFixed(1);
+              if (downloadedBytes % (1024 * 1024) < chunk.length) { // Log a cada MB
+                console.log(`[COMPOSER] ⬇️ Download: ${(downloadedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB (${percent}%)`);
+              }
+            }
+          });
+          
+          file.on('finish', () => {
+            clearTimeout(timeout);
+            file.close();
+            resolve();
+          });
+          
+          file.on('error', (err) => {
+            clearTimeout(timeout);
+            if (fs.existsSync(outputPath)) {
+              try {
+                fs.unlinkSync(outputPath);
+              } catch (e) {
+                // Ignorar erro ao remover
+              }
+            }
+            reject(new Error(`Erro ao escrever arquivo: ${err.message}`));
+          });
+        });
+        
+        // Tratar erros de conexão
+        req.on('error', (err) => {
+          clearTimeout(timeout);
+          file.close();
+          if (fs.existsSync(outputPath)) {
+            try {
+              fs.unlinkSync(outputPath);
+            } catch (e) {
+              // Ignorar erro ao remover
+            }
+          }
+          reject(new Error(`Erro de conexão: ${err.message}`));
+        });
+        
+        req.on('timeout', () => {
+          req.destroy();
+          clearTimeout(timeout);
+          file.close();
+          if (fs.existsSync(outputPath)) {
+            try {
+              fs.unlinkSync(outputPath);
+            } catch (e) {
+              // Ignorar erro ao remover
+            }
+          }
+          reject(new Error('Timeout na requisição (90s)'));
+        });
   });
 }
 
