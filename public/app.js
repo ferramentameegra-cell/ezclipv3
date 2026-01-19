@@ -2474,7 +2474,7 @@ function showNextSteps() {
     const headlineCard = document.getElementById('headline-card');
     if (headlineCard) {
         headlineCard.style.display = 'block';
-        scrollToCard('trim');
+        scrollToCard('headline');
     }
 }
 
