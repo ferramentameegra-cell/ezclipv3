@@ -77,11 +77,11 @@ app.use(cookieParser());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// 5. Validação de Content-Type (apenas para API)
-app.use('/api/', validateContentType);
+// 5. Validação de Content-Type (permissiva, não bloqueia)
+app.use(validateContentType);
 
-// 6. Proteção XSS (sanitização - apenas para API, não afeta HTML estático)
-app.use('/api/', xssProtection);
+// 6. Proteção XSS (sanitização - apenas para API POST/PUT/DELETE, não afeta HTML estático)
+app.use(xssProtection);
 
 // 7. Logger (assíncrono, não bloqueia)
 app.use(loggerMiddleware);

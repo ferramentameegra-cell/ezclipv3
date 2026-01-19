@@ -11,61 +11,37 @@ import { helmetConfig } from '../config/security.js';
  * Configuração permissiva para não quebrar funcionalidades
  */
 export const securityHeaders = helmet({
-  // Content Security Policy - permissivo para não quebrar frontend
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Necessário para alguns scripts
-      imgSrc: ["'self'", "data:", "https:", "http:"], // Permitir imagens externas
-      connectSrc: ["'self'", "https:", "http:", "ws:", "wss:"], // Permitir conexões (SSE, WebSocket)
-      mediaSrc: ["'self'", "data:", "https:", "http:"], // Para vídeos
-      frameSrc: ["'self'", "https://www.youtube.com", "https://buy.stripe.com"], // YouTube e Stripe
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null // Apenas em produção
-    }
-  },
-  // Cross-Origin policies - permissivas para não quebrar funcionalidades
-  crossOriginEmbedderPolicy: false, // Necessário para alguns recursos
-  crossOriginResourcePolicy: { policy: "cross-origin" }, // Para vídeos e downloads
-  crossOriginOpenerPolicy: false, // Para popups do Stripe
+  // Content Security Policy - MUITO PERMISSIVO para não quebrar nada
+  contentSecurityPolicy: false, // DESABILITADO - pode bloquear event handlers inline
   
-  // Headers de segurança
+  // Cross-Origin policies - DESABILITADAS para não quebrar funcionalidades
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
+  
+  // Headers de segurança básicos (não bloqueiam funcionalidades)
   hsts: {
-    maxAge: 31536000, // 1 ano
+    maxAge: 31536000,
     includeSubDomains: true,
     preload: true
   },
   
-  // Prevenir clickjacking
+  // Prevenir clickjacking - permissivo
   frameguard: {
-    action: 'sameorigin' // Permitir frames do mesmo origin
+    action: 'sameorigin'
   },
   
   // Prevenir MIME type sniffing
   noSniff: true,
   
-  // Prevenir XSS - DESABILITADO (já temos sanitização própria e pode bloquear event handlers)
-  // O XSS filter do Helmet pode bloquear onclick e outros event handlers inline
+  // XSS filter DESABILITADO
   xssFilter: false,
   
   // Desabilitar X-Powered-By
   hidePoweredBy: true,
   
-  // Referrer Policy
-  referrerPolicy: {
-    policy: "strict-origin-when-cross-origin"
-  },
-  
-  // Permissions Policy
-  permissionsPolicy: {
-    features: {
-      geolocation: ["'none'"],
-      microphone: ["'none'"],
-      camera: ["'none'"]
-    }
-  }
+  // Referrer Policy - permissivo
+  referrerPolicy: false
 });
 
 /**
@@ -139,35 +115,21 @@ function sanitizeString(value) {
 
 /**
  * Middleware de validação de Content-Type
+ * MUITO PERMISSIVO - não bloqueia requisições
  */
 export const validateContentType = (req, res, next) => {
-  // Permitir GET, HEAD, OPTIONS sem Content-Type
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-    return next();
-  }
-  
-  // Para POST/PUT/DELETE, verificar Content-Type
+  // SEMPRE permitir - não bloquear nada
+  // Apenas logar se houver Content-Type inválido (mas não bloquear)
   const contentType = req.get('Content-Type');
-  
-  // Permitir JSON, form-data, e multipart (para uploads)
-  if (contentType && (
-    contentType.includes('application/json') ||
-    contentType.includes('application/x-www-form-urlencoded') ||
-    contentType.includes('multipart/form-data')
-  )) {
-    return next();
+  if (contentType && !contentType.includes('application/json') && 
+      !contentType.includes('application/x-www-form-urlencoded') && 
+      !contentType.includes('multipart/form-data') &&
+      req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    console.warn('[SECURITY] Content-Type não padrão:', contentType, req.path);
   }
   
-  // Se não tiver Content-Type mas for JSON, permitir (alguns clientes não enviam)
-  if (!contentType && req.body && typeof req.body === 'object') {
-    return next();
-  }
-  
-  // Caso contrário, retornar erro
-  return res.status(415).json({
-    error: 'Content-Type não suportado',
-    code: 'UNSUPPORTED_MEDIA_TYPE'
-  });
+  // SEMPRE permitir
+  next();
 };
 
 export default {
