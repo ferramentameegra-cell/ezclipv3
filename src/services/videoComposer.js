@@ -1271,7 +1271,36 @@ async function downloadVideoFromUrl(url, outputPath, maxRetries = 3) {
           }
           reject(new Error('Timeout na requisição (90s)'));
         });
-  });
+      });
+      
+      // Se chegou aqui, download foi bem-sucedido
+      console.log(`[COMPOSER] ✅ Download concluído com sucesso na tentativa ${attempt}`);
+      return;
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`[COMPOSER] ❌ Tentativa ${attempt}/${maxRetries} falhou: ${error.message}`);
+      
+      // Se não é a última tentativa, aguardar antes de tentar novamente
+      if (attempt < maxRetries) {
+        const waitTime = attempt * 2000; // Backoff exponencial: 2s, 4s, 6s
+        console.log(`[COMPOSER] ⏳ Aguardando ${waitTime}ms antes da próxima tentativa...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // Limpar arquivo parcial se existir
+        if (fs.existsSync(outputPath)) {
+          try {
+            fs.unlinkSync(outputPath);
+          } catch (e) {
+            // Ignorar erro ao remover
+          }
+        }
+      }
+    }
+  }
+  
+  // Se todas as tentativas falharam, lançar erro
+  throw new Error(`Falha ao baixar vídeo após ${maxRetries} tentativas. Último erro: ${lastError?.message || 'Erro desconhecido'}`);
 }
 
 export default composeFinalVideo;
