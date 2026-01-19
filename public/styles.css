@@ -2573,7 +2573,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled, a[disabled]
     pointer-events: auto !important;
 }
 
-/* Smooth scroll desativado - usuário controla rolagem */
-/* html {
+/* Smooth scroll global */
+html {
     scroll-behavior: smooth;
-} */
+}

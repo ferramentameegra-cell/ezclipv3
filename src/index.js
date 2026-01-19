@@ -5,15 +5,14 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-import helmet from "helmet";
 import cookieParser from "cookie-parser";
 
-// Inicializar Redis primeiro
+// Inicializar Redis primeiro (opcional)
 import { initRedis } from "./services/redisService.js";
-import { apiLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
-import loggerMiddleware from "./middleware/logger.js";
+// MIDDLEWARES DE SEGURANÇA REMOVIDOS TEMPORARIAMENTE
+// import { apiLimiter, heavyOperationLimiter } from "./middleware/rateLimiter.js";
+// import loggerMiddleware from "./middleware/logger.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
-import { helmetConfig } from "./config/security.js";
 
 import youtubeRoutes from "./routes/youtube.js";
 import authRoutes from "./routes/auth.js";
@@ -56,37 +55,27 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // =====================
-// MIDDLEWARES DE SEGURANÇA
+// MIDDLEWARES BÁSICOS (SEGURANÇA REMOVIDA)
 // =====================
-// Helmet - Headers de segurança HTTP (com tratamento de erro)
-try {
-  app.use(helmet(helmetConfig));
-} catch (error) {
-  console.error('[HELMET] Erro ao configurar Helmet, continuando sem ele:', error.message);
-  // Continuar sem Helmet se houver erro
-}
-
-// CORS (mais permissivo para desenvolvimento)
+// CORS - totalmente permissivo
 app.use(cors({
-  origin: '*', // Permitir todas as origens temporariamente
-  credentials: true
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Cookie parser (necessário para cookies HttpOnly)
+// Cookie parser
 app.use(cookieParser());
 
 // Body parser
-app.use(express.json({ limit: '100mb' })); // Aumentar limite para vídeos grandes
+app.use(express.json({ limit: '100mb' }));
 
-// Logger de auditoria (não bloqueia em caso de erro)
-app.use(loggerMiddleware);
+// Logger REMOVIDO - estava causando bloqueios
+// app.use(loggerMiddleware);
 
-// Rate limiting global (aplicar antes das rotas)
-// DESABILITADO TEMPORARIAMENTE para debug - reativar após verificar
+// Rate limiting REMOVIDO COMPLETAMENTE - estava bloqueando
 // app.use('/api/', apiLimiter);
-
-// Rate limiting para operações pesadas
-// DESABILITADO TEMPORARIAMENTE para debug - reativar após verificar
 // app.use('/api/download/youtube', heavyOperationLimiter);
 // app.use('/api/generate', heavyOperationLimiter);
 // app.use('/api/captions/generate', heavyOperationLimiter);
