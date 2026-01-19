@@ -36,7 +36,7 @@ export function setVideoStore(store) {
 // ===============================
 export const generateVideoSeries = async (job, jobsMap) => {
   try {
-    // Atualizar progresso inicial (0% -> 1%)
+    // Atualizar progresso inicial (1%)
     console.log('[PROCESSING] Iniciando geração de série...');
     if (typeof job.progress === 'function') {
       await job.progress(1);
@@ -44,6 +44,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
       job.progress = 1;
     }
     if (jobsMap) jobsMap.set(job.id, job);
+    
+    // Atualizar evento de progresso para o frontend
+    updateProgressEvent(job.id, {
+      status: 'processing',
+      progress: 1,
+      message: 'Iniciando processamento...',
+      totalClips: 0,
+      currentClip: 0
+    });
     
     // Extrair dados do job (pode estar em job.data ou diretamente em job)
     const jobData = job.data || job;

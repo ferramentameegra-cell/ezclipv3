@@ -3724,9 +3724,9 @@ async function generateSeries() {
         loadingOverlay.style.zIndex = '9999';
     }
     
-    // Inicializar progresso visual
-    if (progressFill) progressFill.style.width = '0%';
-    if (progressText) progressText.textContent = '0%';
+    // Inicializar progresso visual - começar em 1% para mostrar que iniciou
+    if (progressFill) progressFill.style.width = '1%';
+    if (progressText) progressText.textContent = '1%';
     if (progressMessage) progressMessage.textContent = 'Iniciando geração de clipes...';
     
     try {
@@ -3892,7 +3892,14 @@ async function monitorProgress(jobId) {
                 } = data;
                 
                 // Atualizar progresso percentual
-                const progressPercent = Math.min(100, Math.max(0, progress));
+                // Garantir que o progresso sempre seja pelo menos 1% se status for processing
+                let progressPercent = Math.min(100, Math.max(0, progress));
+                if (status === 'processing' && progressPercent === 0) {
+                    progressPercent = 1; // Mínimo 1% quando está processando
+                }
+                
+                // Log para debug
+                console.log(`[GENERATE-SSE] Atualizando progresso: ${progressPercent}% (status: ${status}, progress original: ${progress})`);
                 
                 if (progressFill) {
                     progressFill.style.width = `${progressPercent}%`;
@@ -3900,7 +3907,7 @@ async function monitorProgress(jobId) {
                 }
                 
                 if (progressText) {
-                    progressText.textContent = `${progressPercent}%`;
+                    progressText.textContent = `${Math.round(progressPercent)}%`;
                 }
                 
                 // Atualizar mensagem de status
@@ -3982,21 +3989,41 @@ async function monitorProgress(jobId) {
             try {
                 const { data } = await apiClient.get(`/api/generate/status/${jobId}`);
                 
-                const progress = data.progress || 0;
+                let progress = data.progress || 0;
                 const status = data.status || 'processing';
                 
-                if (progress !== lastProgress || status !== 'processing') {
-                    console.log(`[GENERATE-POLL] Progresso: ${lastProgress}% -> ${progress}% | Status: ${status}`);
-                    lastProgress = progress;
+                // Garantir que o progresso sempre seja pelo menos 1% se status for processing
+                if (status === 'processing' && progress === 0) {
+                    progress = 1; // Mínimo 1% quando está processando
+                }
+                
+                const progressPercent = Math.min(100, Math.max(1, progress)); // Mínimo 1%
+                
+                if (progressPercent !== lastProgress || status !== 'processing') {
+                    console.log(`[GENERATE-POLL] Progresso: ${lastProgress}% -> ${progressPercent}% | Status: ${status} (progress original: ${progress})`);
+                    lastProgress = progressPercent;
                 }
                 
                 // Atualizar UI
                 if (progressFill) {
-                    progressFill.style.width = `${progress}%`;
+                    progressFill.style.width = `${progressPercent}%`;
                     progressFill.style.transition = 'width 0.3s ease';
                 }
                 if (progressText) {
-                    progressText.textContent = `${progress}%`;
+                    progressText.textContent = `${Math.round(progressPercent)}%`;
+                }
+                
+                // Atualizar mensagem com informações do progresso
+                if (progressMessage) {
+                    const totalClips = data.totalClips || 0;
+                    const currentClip = data.currentClip || 0;
+                    if (totalClips > 0 && currentClip > 0) {
+                        progressMessage.textContent = `Gerando clipe ${currentClip} de ${totalClips}...`;
+                    } else if (data.message) {
+                        progressMessage.textContent = data.message;
+                    } else {
+                        progressMessage.textContent = 'Processando...';
+                    }
                 }
                 
                 // Mensagem genérica quando usando fallback
