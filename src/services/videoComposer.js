@@ -1028,31 +1028,77 @@ function getFontPath(fontName) {
  */
 async function downloadVideoFromUrl(url, outputPath) {
   return new Promise((resolve, reject) => {
+    console.log(`[COMPOSER] ⬇️ Iniciando download de: ${url}`);
+    console.log(`[COMPOSER] ⬇️ Salvando em: ${outputPath}`);
+    
     const file = fs.createWriteStream(outputPath);
     const protocol = url.startsWith('https') ? https : http;
     
-    protocol.get(url, (response) => {
-      // Verificar status code
-      if (response.statusCode !== 200) {
-        file.close();
-        fs.unlinkSync(outputPath);
-        return reject(new Error(`Erro ao baixar vídeo: HTTP ${response.statusCode}`));
-      }
-      
-      // Pipe response para arquivo
-      response.pipe(file);
-      
-      file.on('finish', () => {
-        file.close();
-        console.log(`[COMPOSER] ✅ Vídeo baixado: ${outputPath} (${fs.statSync(outputPath).size} bytes)`);
-        resolve();
-      });
-    }).on('error', (err) => {
+    // Timeout de 60 segundos
+    const timeout = setTimeout(() => {
       file.close();
       if (fs.existsSync(outputPath)) {
         fs.unlinkSync(outputPath);
       }
-      reject(err);
+      reject(new Error('Timeout ao baixar vídeo (60s)'));
+    }, 60000);
+    
+    protocol.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Referer': 'https://streamable.com/'
+      }
+    }, (response) => {
+      // Verificar status code
+      if (response.statusCode !== 200) {
+        clearTimeout(timeout);
+        file.close();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+        return reject(new Error(`Erro ao baixar vídeo: HTTP ${response.statusCode} - ${response.statusMessage}`));
+      }
+      
+      let downloadedBytes = 0;
+      const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+      
+      // Pipe response para arquivo
+      response.pipe(file);
+      
+      response.on('data', (chunk) => {
+        downloadedBytes += chunk.length;
+        if (totalBytes > 0) {
+          const percent = ((downloadedBytes / totalBytes) * 100).toFixed(1);
+          if (downloadedBytes % (1024 * 1024) < chunk.length) { // Log a cada MB
+            console.log(`[COMPOSER] ⬇️ Download: ${(downloadedBytes / 1024 / 1024).toFixed(2)} MB / ${(totalBytes / 1024 / 1024).toFixed(2)} MB (${percent}%)`);
+          }
+        }
+      });
+      
+      file.on('finish', () => {
+        clearTimeout(timeout);
+        file.close();
+        const stats = fs.statSync(outputPath);
+        console.log(`[COMPOSER] ✅ Vídeo baixado com sucesso: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+        resolve();
+      });
+      
+      file.on('error', (err) => {
+        clearTimeout(timeout);
+        file.close();
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+        reject(new Error(`Erro ao escrever arquivo: ${err.message}`));
+      });
+    }).on('error', (err) => {
+      clearTimeout(timeout);
+      file.close();
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+      reject(new Error(`Erro de conexão: ${err.message}`));
     });
   });
 }

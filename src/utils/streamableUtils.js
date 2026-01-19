@@ -35,10 +35,17 @@ export function convertStreamableToDirectUrl(streamableUrl) {
     
     // Streamable usa CDN para servir vídeos diretamente
     // Formato mais comum: https://cdn.streamable.com/video/mp4/{id}.mp4
-    // Alternativa: https://streamable.com/e/{id} (mas pode precisar de headers)
-    const directUrl = `https://cdn.streamable.com/video/mp4/${videoId}.mp4`;
+    // Tentar múltiplos formatos possíveis
+    const possibleUrls = [
+      `https://cdn.streamable.com/video/mp4/${videoId}.mp4`,
+      `https://cdn.streamable.com/video/mp4/${videoId}`,
+      `https://streamable.com/e/${videoId}`
+    ];
+    
+    // Retornar o primeiro formato (mais comum)
+    const directUrl = possibleUrls[0];
     console.log(`[STREAMABLE] Convertendo URL: ${streamableUrl} -> ${directUrl}`);
-    console.log(`[STREAMABLE] FFmpeg tentará usar esta URL diretamente. Se falhar, pode ser necessário download prévio.`);
+    console.log(`[STREAMABLE] URL será baixada antes de usar no FFmpeg`);
     return directUrl;
   }
 
