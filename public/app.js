@@ -324,8 +324,7 @@ function switchTab(tabName) {
     const panel = document.getElementById(`tab-${tabName}`);
     if (panel) panel.classList.add('active');
     
-    // NÃO fazer scroll automático - usuário controla a rolagem
-    // window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Permitir scroll natural - usuário controla a rolagem
 }
 
 // ========== PROGRESS STEPS INDICATOR ==========
@@ -1455,7 +1454,8 @@ function showLoginRequiredModal() {
     const modal = document.getElementById('login-required-modal');
     if (modal) {
         modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        // Não bloquear scroll do body - apenas do modal
+        // document.body.style.overflow = 'hidden';
     }
 }
 
@@ -1466,7 +1466,8 @@ function closeLoginRequiredModal() {
     const modal = document.getElementById('login-required-modal');
     if (modal) {
         modal.classList.add('hidden');
-        document.body.style.overflow = '';
+        // Restaurar scroll (já não estava bloqueado)
+        // document.body.style.overflow = '';
     }
 }
 
@@ -1601,7 +1602,8 @@ function openTermsModal() {
     const modal = document.getElementById('terms-modal');
     if (modal) {
         modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        // Não bloquear scroll do body - apenas do modal
+        // document.body.style.overflow = 'hidden';
     }
 }
 
@@ -1609,7 +1611,8 @@ function closeTermsModal() {
     const modal = document.getElementById('terms-modal');
     if (modal) {
         modal.classList.add('hidden');
-        document.body.style.overflow = '';
+        // Restaurar scroll (já não estava bloqueado)
+        // document.body.style.overflow = '';
     }
 }
 
