@@ -680,15 +680,20 @@ export async function composeFinalVideo({
       }
       
       if (retentionVideoPath) {
-        // VALIDAR que o arquivo existe e não está vazio
+        // VALIDAR que o arquivo existe e não está vazio (se não existir, continuar sem vídeo de retenção)
         if (!fs.existsSync(retentionVideoPath)) {
-          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}`));
+          console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+          retentionVideoPath = null; // Continuar sem vídeo de retenção
+        } else {
+          const retentionStats = fs.statSync(retentionVideoPath);
+          if (retentionStats.size === 0) {
+            console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+            retentionVideoPath = null; // Continuar sem vídeo de retenção
+          }
         }
-        
-        const retentionStats = fs.statSync(retentionVideoPath);
-        if (retentionStats.size === 0) {
-          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}`));
-        }
+      }
+      
+      if (retentionVideoPath) {
         
         console.log(`[COMPOSER] ✅ Vídeo de retenção validado: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
         // Se background existe, retention é input 2, senão é input 1
@@ -954,15 +959,19 @@ export async function composeFinalVideo({
         }
         
         if (!fs.existsSync(retentionVideoPath)) {
-          console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Arquivo de retenção não existe: ${retentionVideoPath}`);
-          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. O download deve ser concluído antes de usar no FFmpeg.`));
+          console.warn(`[COMPOSER] ⚠️ Arquivo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+          retentionVideoPath = null; // Continuar sem vídeo de retenção
+        } else {
+          // Validar tamanho do arquivo
+          const retentionStats = fs.statSync(retentionVideoPath);
+          if (retentionStats.size === 0) {
+            console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+            retentionVideoPath = null; // Continuar sem vídeo de retenção
+          }
         }
-        
-        // Validar tamanho do arquivo
-        const retentionStats = fs.statSync(retentionVideoPath);
-        if (retentionStats.size === 0) {
-          return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}`));
-        }
+      }
+      
+      if (retentionVideoPath) {
         
         // Adicionar input do vídeo de retenção
         // O vídeo será loopado automaticamente pelo FFmpeg no overlay se for mais curto
