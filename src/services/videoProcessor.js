@@ -117,7 +117,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
         console.log(`[PROCESSING] ✅ Vídeo adicionado ao videoStore: ${videoId}`);
       } else {
         // Se não encontrou arquivo, verificar se há youtubeVideoId no jobData para baixar
-        const youtubeVideoId = jobData.youtubeVideoId || (video && video.youtubeVideoId);
+        const youtubeVideoId = jobData.youtubeVideoId;
         if (youtubeVideoId) {
           console.log(`[PROCESSING] ⬇️ Vídeo não encontrado, iniciando download do YouTube: ${youtubeVideoId}`);
           // O download será feito abaixo na seção de download do YouTube
@@ -187,14 +187,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // DOWNLOAD YOUTUBE (SE NECESSÁRIO)
     // ===============================
     // Verificar se precisa baixar (vídeo do YouTube sem arquivo local)
-    if (video.youtubeVideoId && (!video.path || !fs.existsSync(video.path) || (fs.existsSync(video.path) && fs.statSync(video.path).size === 0))) {
+    const youtubeVideoId = video.youtubeVideoId || jobData.youtubeVideoId;
+    if (youtubeVideoId && (!video.path || !fs.existsSync(video.path) || (fs.existsSync(video.path) && fs.statSync(video.path).size === 0))) {
       const downloadPath = path.join(
         TMP_UPLOADS_DIR,
         `${videoId}_downloaded.mp4`
       );
 
-      // Download já foi verificado acima, continuar com o download
-      {
+      console.log(`[PROCESSING] Baixando vídeo do YouTube: ${youtubeVideoId}`);
         console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
 
       // Atualizar progresso usando função do BullMQ
@@ -216,7 +216,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
         // Importar downloadYouTubeVideo dinamicamente se necessário
         const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
-        await downloadYouTubeVideo(video.youtubeVideoId, downloadPath);
+        await downloadYouTubeVideo(youtubeVideoId, downloadPath);
 
         // VALIDAR DOWNLOAD
         if (!fs.existsSync(downloadPath)) {
