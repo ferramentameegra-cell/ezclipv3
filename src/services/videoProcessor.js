@@ -117,7 +117,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
         console.log(`[PROCESSING] ✅ Vídeo adicionado ao videoStore: ${videoId}`);
       } else {
         // Se não encontrou arquivo, verificar se há youtubeVideoId no jobData para baixar
-        const youtubeVideoId = jobData.youtubeVideoId;
+        const youtubeVideoId = jobData.youtubeVideoId || (video && video.youtubeVideoId);
         if (youtubeVideoId) {
           console.log(`[PROCESSING] ⬇️ Vídeo não encontrado, iniciando download do YouTube: ${youtubeVideoId}`);
           // O download será feito abaixo na seção de download do YouTube
@@ -128,7 +128,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
             path: null,
             downloaded: false
           };
-          };
+          videoStore.set(videoId, video);
         } else {
           throw new Error(`Vídeo ${videoId} não encontrado no videoStore e nenhum arquivo encontrado. Verifique se o download foi concluído.`);
         }
