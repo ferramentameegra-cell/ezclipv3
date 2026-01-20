@@ -671,11 +671,12 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: 1080x1920 (HARDCODED)`);
 
-      // 4. Adicionar vídeo de retenção (OBRIGATÓRIO se retentionVideoId foi especificado)
+      // 4. Adicionar vídeo de retenção (OPCIONAL - não bloquear geração se não disponível)
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
-      // VALIDAÇÃO: Se retentionVideoId foi especificado, retentionVideoPath DEVE existir
+      // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
       if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
-        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não encontrado: ${retentionVideoId}. O download falhou ou o arquivo não existe.`));
+        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não encontrado. Continuando sem vídeo de retenção.`);
+        retentionVideoPath = null; // Continuar sem vídeo de retenção
       }
       
       if (retentionVideoPath) {
@@ -730,8 +731,8 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ✅ Overlay preserva dimensões: 1080x1920 (HARDCODED)`);
         console.log(`[COMPOSER] ✅ OBRIGATÓRIO: Vídeo de retenção está presente e será incluído no arquivo final`);
       } else if (retentionVideoId && retentionVideoId !== 'none') {
-        // Se retentionVideoId foi especificado mas não há caminho, falhar ANTES de renderizar
-        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}. O render não será concluído sem o vídeo de retenção.`));
+        // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
+        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não foi encontrado. Continuando sem vídeo de retenção.`);
       }
 
       // 5. Adicionar headline (CENTRO VERTICAL do frame)
@@ -973,8 +974,8 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente durante toda a duração do vídeo principal`);
         console.log(`[COMPOSER] ✅ Vídeo de retenção será concatenado/sobreposto ao final da timeline durante todo o render`);
       } else if (retentionVideoId && retentionVideoId !== 'none') {
-        // Se retentionVideoId foi especificado mas não há caminho, falhar
-        return reject(new Error(`[COMPOSER] ❌ Vídeo de retenção obrigatório não foi encontrado: ${retentionVideoId}`));
+        // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
+        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não foi encontrado. Continuando sem vídeo de retenção.`);
       }
 
       // Aplicar filter_complex como string
@@ -1110,11 +1111,6 @@ export async function composeFinalVideo({
             return reject(new Error('Arquivo de saída está vazio'));
           }
           
-          // VALIDAR que vídeo de retenção está presente no arquivo final (se foi especificado)
-          if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
-            return reject(new Error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final.`));
-          }
-          
           // VALIDAR resolução final do vídeo gerado
           ffmpeg.ffprobe(outputPath, (err, metadata) => {
             if (!err && metadata?.streams) {
@@ -1135,15 +1131,13 @@ export async function composeFinalVideo({
                   console.log(`[COMPOSER] ✅ Vídeo principal mantém proporção 16:9 dentro do frame vertical`);
                 }
                 
-                // VALIDAR que vídeo de retenção está presente no arquivo final (OBRIGATÓRIO)
+                // Verificar se vídeo de retenção está presente (OPCIONAL - não bloquear se não estiver)
                 if (retentionVideoId && retentionVideoId !== 'none') {
                   if (retentionVideoPath) {
-                    console.log(`[COMPOSER] ✅ VALIDAÇÃO: Vídeo de retenção foi processado e está presente no arquivo final`);
+                    console.log(`[COMPOSER] ✅ Vídeo de retenção foi processado e está presente no arquivo final`);
                     console.log(`[COMPOSER] ✅ Arquivo final contém vídeo de retenção: ${retentionVideoPath}`);
-                    console.log(`[COMPOSER] ✅ Render concluído com sucesso - vídeo de retenção presente`);
                   } else {
-                    console.error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final`);
-                    return reject(new Error(`[COMPOSER] ❌ VALIDAÇÃO FALHOU: Vídeo de retenção obrigatório (${retentionVideoId}) não está presente no arquivo final. Render não pode ser considerado concluído.`));
+                    console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não está presente no arquivo final. Continuando normalmente.`);
                   }
                 }
               }

@@ -621,6 +621,20 @@ export const generateVideoSeries = async (job, jobsMap) => {
       message: `Iniciando composição de ${finalClips.length} clipes...`
     });
 
+    // Definir retentionVideoPath uma vez antes do loop (para evitar problemas de escopo)
+    let currentRetentionVideoPath = null;
+    try {
+      // Tentar obter caminho do vídeo de retenção se especificado
+      if (retentionVideoId && retentionVideoId !== 'none') {
+        const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
+        currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
+        console.log(`[PROCESSING] Vídeo de retenção para todos os clipes: ${currentRetentionVideoPath || 'não encontrado (continuando sem vídeo de retenção)'}`);
+      }
+    } catch (retentionError) {
+      console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção: ${retentionError.message}. Continuando sem vídeo de retenção.`);
+      currentRetentionVideoPath = null; // Garantir que seja null se houver erro
+    }
+
     for (let i = 0; i < finalClips.length; i++) {
       const clipPath = finalClips[i];
       const clipIndex = i + 1;
@@ -672,21 +686,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
         // Aplicar composição final
         // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
-        // Definir variável para armazenar retentionVideoPath (pode ser undefined se download falhar)
-        let currentRetentionVideoPath = null;
-        
-        try {
-          // Tentar obter caminho do vídeo de retenção se especificado
-          if (retentionVideoId && retentionVideoId !== 'none') {
-            const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
-            currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
-            console.log(`[PROCESSING] Vídeo de retenção para clip ${clipIndex}: ${currentRetentionVideoPath || 'não encontrado'}`);
-          }
-        } catch (retentionError) {
-          console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção: ${retentionError.message}`);
-          // Continuar sem vídeo de retenção se não conseguir obter
-        }
-        
+        // currentRetentionVideoPath já foi definido antes do loop
         await composeFinalVideo({
           clipPath,
           outputPath: finalClipPath,
@@ -754,17 +754,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
         try {
           console.log(`[PROCESSING] 🔄 Tentativa de recuperação: recompondo clip ${clipIndex}...`);
           
-          // Tentar obter retentionVideoPath novamente se necessário
-          let retryRetentionVideoPath = currentRetentionVideoPath;
-          if (!retryRetentionVideoPath && retentionVideoId && retentionVideoId !== 'none') {
-            try {
-              const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
-              retryRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
-            } catch (retentionError) {
-              console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção na recuperação: ${retentionError.message}`);
-            }
-          }
-          
+          // Usar currentRetentionVideoPath que já foi definido antes do loop
+          // Se não estiver disponível, continuar sem vídeo de retenção (não bloquear)
           const retryComposition = await composeFinalVideo({
             clipPath: clipPath,
             outputPath: finalClipPath,
