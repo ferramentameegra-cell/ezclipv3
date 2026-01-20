@@ -409,10 +409,31 @@ export async function downloadWithProgress(req, res) {
   
   // ESTRATÉGIAS MÚLTIPLAS PARA CONTORNAR ERRO 403
   // Tentar com diferentes clientes do YouTube em ordem de prioridade
-  // Ordem baseada em taxa de sucesso: iOS > Mweb > Android > TV > Web
-  const strategies = [
+  // Verificar se há cookies disponíveis para usar android_with_cookies (mais confiável)
+  const cookiesPathForCheck = createCookiesFile();
+  const hasCookies = cookiesPathForCheck && fs.existsSync(cookiesPathForCheck) && fs.statSync(cookiesPathForCheck).size > 0;
+  
+  // Ordem baseada em taxa de sucesso: android_with_cookies (se houver cookies) > iOS > Mweb > Android > TV > Web
+  const strategies = [];
+  
+  // Se houver cookies, adicionar android_with_cookies como primeira estratégia (mais confiável, evita bloqueios 403)
+  if (hasCookies) {
+    strategies.push({
+      name: 'Android with Cookies (Mais confiável com cookies)',
+      extractorArgs: 'youtube:player_client=android_with_cookies',
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+      additionalArgs: [],
+      requiresCookies: true
+    });
+    console.log('[DOWNLOAD] ✅ Cookies disponíveis - usando estratégia android_with_cookies como primeira opção');
+  } else {
+    console.warn('[DOWNLOAD] ⚠️ Nenhum cookie configurado - android_with_cookies não será usado');
+  }
+  
+  // Adicionar outras estratégias como fallback
+  strategies.push(
     {
-      name: 'iOS Client (Mais confiável)',
+      name: 'iOS Client',
       extractorArgs: 'youtube:player_client=ios',
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
       additionalArgs: []
@@ -447,7 +468,7 @@ export async function downloadWithProgress(req, res) {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       additionalArgs: []
     }
-  ];
+  );
   
   // Tentar cada estratégia sequencialmente
   let strategyIndex = 0;
