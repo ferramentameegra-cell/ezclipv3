@@ -4172,5 +4172,5 @@ async function downloadSeries() {
 }
 
 function openTikTokStudio() {
-    window.open('https://www.tiktok.com/studio', '_blank');
+    window.open('https://www.tiktok.com/tiktokstudio', '_blank');
 }
