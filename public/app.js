@@ -271,29 +271,19 @@ async function initializeApp() {
         });
         
         // Garantir que todos os elementos interativos estão funcionando
-        document.querySelectorAll('button, a, input, select, textarea').forEach(el => {
-            if (!el.disabled) {
+        document.querySelectorAll('button:not([disabled]), a:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [onclick], [data-tab]').forEach(el => {
+            const computed = window.getComputedStyle(el);
+            if (computed.display !== 'none' && computed.visibility !== 'hidden' && parseFloat(computed.opacity) > 0) {
                 el.style.pointerEvents = 'auto';
-                if (el.tagName === 'BUTTON' || el.tagName === 'A') {
+                if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick) {
                     el.style.cursor = 'pointer';
                 }
             }
         });
         
-        // Verificar se há elementos bloqueando cliques
-        const allElements = document.querySelectorAll('*');
-        allElements.forEach(el => {
-            const computedStyle = window.getComputedStyle(el);
-            // Se elemento está visível mas com pointer-events: none, verificar se deveria ter
-            if (computedStyle.display !== 'none' && 
-                computedStyle.visibility !== 'hidden' &&
-                computedStyle.pointerEvents === 'none' &&
-                (el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' || el.onclick)) {
-                // Elemento interativo com pointer-events: none - corrigir
-                if (!el.disabled) {
-                    el.style.pointerEvents = 'auto';
-                }
-            }
+        // Garantir que overlays escondidos não bloqueiem
+        document.querySelectorAll('#loading-overlay.hidden, .modal.hidden, #auth-section.hidden').forEach(el => {
+            el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important; position: fixed !important; top: -9999px !important; left: -9999px !important; width: 0 !important; height: 0 !important;';
         });
         
         console.log('[INIT] ✅ Interface inicializada e elementos interativos verificados');

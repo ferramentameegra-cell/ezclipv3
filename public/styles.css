@@ -2146,9 +2146,14 @@ body {
 .loading-overlay.hidden {
     display: none !important;
     pointer-events: none !important;
-    z-index: -1 !important;
+    z-index: -9999 !important;
     visibility: hidden !important;
     opacity: 0 !important;
+    position: fixed !important;
+    top: -9999px !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .loading-card {
@@ -2261,7 +2266,12 @@ body {
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
-    z-index: -1 !important;
+    z-index: -9999 !important;
+    position: fixed !important;
+    top: -9999px !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 .modal-content {
@@ -2755,11 +2765,19 @@ main.hidden {
 }
 
 /* Garantir que elementos interativos sempre funcionem */
-button:not(:disabled), a:not([disabled]), input:not(:disabled), select:not(:disabled), textarea:not(:disabled) {
+button:not(:disabled):not(.hidden), 
+a:not([disabled]):not(.hidden), 
+input:not(:disabled):not(.hidden), 
+select:not(:disabled):not(.hidden), 
+textarea:not(:disabled):not(.hidden),
+[onclick]:not(.hidden),
+[data-tab]:not(.hidden) {
     pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
-button:not(:disabled), a:not([disabled]) {
+button:not(:disabled):not(.hidden), 
+a:not([disabled]):not(.hidden) {
     cursor: pointer !important;
 }
 

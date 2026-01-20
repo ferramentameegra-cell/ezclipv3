@@ -73,24 +73,46 @@
         });
         
         // 6. Remover overlays invisíveis que possam estar bloqueando
-        document.querySelectorAll('.modal.hidden, .overlay.hidden, .loading-overlay.hidden, [class*="overlay"].hidden').forEach(el => {
-            el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important;';
+        document.querySelectorAll('.modal.hidden, .overlay.hidden, .loading-overlay.hidden, [class*="overlay"].hidden, #auth-section.hidden').forEach(el => {
+            el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important; position: fixed !important; top: -9999px !important; left: -9999px !important; width: 0 !important; height: 0 !important;';
+        });
+        
+        // 7. Verificar se há elementos com z-index alto bloqueando (mas que não deveriam estar visíveis)
+        document.querySelectorAll('*').forEach(el => {
+            const computed = window.getComputedStyle(el);
+            const zIndex = parseInt(computed.zIndex) || 0;
+            const display = computed.display;
+            const visibility = computed.visibility;
+            const opacity = parseFloat(computed.opacity) || 1;
+            const pointerEvents = computed.pointerEvents;
+            
+            // Se elemento tem z-index alto mas está invisível e com pointer-events: auto, corrigir
+            if (zIndex > 1000 && 
+                (display === 'none' || visibility === 'hidden' || opacity === 0) &&
+                pointerEvents === 'auto' &&
+                (el.id.includes('overlay') || el.id.includes('loading') || el.id.includes('modal') || el.id.includes('auth-section'))) {
+                el.style.pointerEvents = 'none';
+                el.style.zIndex = '-9999';
+            }
         });
     }
     
-    // Executar imediatamente
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', ensureInteractionsWork);
-    } else {
+    // Executar após DOM estar completamente carregado
+    function init() {
         ensureInteractionsWork();
+        
+        // Executar em intervalos para garantir (menos frequente para não interferir)
+        setTimeout(ensureInteractionsWork, 100);
+        setTimeout(ensureInteractionsWork, 500);
+        setTimeout(ensureInteractionsWork, 1000);
     }
     
-    // Executar em intervalos para garantir
-    setTimeout(ensureInteractionsWork, 50);
-    setTimeout(ensureInteractionsWork, 100);
-    setTimeout(ensureInteractionsWork, 300);
-    setTimeout(ensureInteractionsWork, 500);
-    setTimeout(ensureInteractionsWork, 1000);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        // DOM já carregado, executar após um pequeno delay para garantir que tudo está pronto
+        setTimeout(init, 50);
+    }
     
     // Listener global para detectar e corrigir cliques bloqueados em tempo real
     document.addEventListener('click', function(e) {
