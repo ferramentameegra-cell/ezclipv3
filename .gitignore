@@ -22,3 +22,8 @@ logs/
 CHAVES_STRIPE.txt
 *.key
 *.secret
+
+# Vídeos de retenção (opcional - descomente se não quiser versionar os arquivos de vídeo)
+# retention-library/*.mp4
+# retention-library/*.webm
+# retention-library/*.mov
