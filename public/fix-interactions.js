@@ -119,6 +119,48 @@
         const target = e.target;
         const computed = window.getComputedStyle(target);
         
+        // Verificar se há elemento sobreposto bloqueando
+        const rect = target.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const elementAtPoint = document.elementFromPoint(centerX, centerY);
+        
+        // Se o elemento no ponto do clique não é o target ou um filho dele
+        if (elementAtPoint && 
+            elementAtPoint !== target && 
+            !target.contains(elementAtPoint) &&
+            (target.tagName === 'BUTTON' || target.tagName === 'A' || target.onclick || target.getAttribute('data-tab'))) {
+            
+            const overlayComputed = window.getComputedStyle(elementAtPoint);
+            // Se o elemento sobreposto é um overlay invisível, remover bloqueio
+            if (overlayComputed.display === 'none' || 
+                overlayComputed.visibility === 'hidden' ||
+                parseFloat(overlayComputed.opacity) === 0 ||
+                elementAtPoint.classList.contains('hidden') ||
+                elementAtPoint.id.includes('overlay') ||
+                elementAtPoint.id.includes('loading') ||
+                (elementAtPoint.classList.contains('modal') && elementAtPoint.classList.contains('hidden'))) {
+                
+                console.warn('[FIX-INTERACTIONS] ⚠️ Overlay invisível bloqueando clique, removendo...', elementAtPoint);
+                elementAtPoint.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important;';
+                
+                // Tentar clicar novamente após remover bloqueio
+                setTimeout(() => {
+                    if (target.onclick) {
+                        target.onclick();
+                    } else if (target.getAttribute('data-tab')) {
+                        const tabName = target.getAttribute('data-tab');
+                        if (typeof switchTab === 'function') {
+                            switchTab(tabName);
+                        }
+                    } else if (target.tagName === 'BUTTON' || target.tagName === 'A') {
+                        target.click();
+                    }
+                }, 10);
+                return;
+            }
+        }
+        
         // Se clique foi em elemento que deveria ser clicável mas pointer-events está none
         if (computed.pointerEvents === 'none' && 
             (target.tagName === 'BUTTON' || 
