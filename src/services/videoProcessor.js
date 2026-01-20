@@ -662,8 +662,62 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
       } catch (compositionError) {
         console.error(`[PROCESSING] Erro ao compor clip ${clipIndex}:`, compositionError);
-        // Se composição falhar, manter clip original (já está em finalClips[i])
-        console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} devido a erro na composição`);
+        console.error(`[PROCESSING] Stack trace:`, compositionError.stack);
+        
+        // Se composição falhar, FORÇAR formato 1080x1920 no clip original
+        // NUNCA usar clip sem formato vertical forçado
+        try {
+          console.log(`[PROCESSING] ⚠️ Forçando formato 1080x1920 no clip original devido a erro na composição...`);
+          
+          const fallbackClipPath = path.join(
+            seriesPath,
+            `clip_${String(clipIndex).padStart(3, '0')}_fallback_1080x1920.mp4`
+          );
+          
+          // Forçar formato vertical 1080x1920 no clip original
+          await new Promise((resolve, reject) => {
+            ffmpeg(clipPath)
+              .outputOptions([
+                '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
+                '-s', '1080x1920',
+                '-aspect', '9:16',
+                '-c:v', 'libx264',
+                '-preset', 'medium',
+                '-crf', '23',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart'
+              ])
+              .output(fallbackClipPath)
+              .on('start', (cmd) => {
+                console.log(`[PROCESSING] Forçando formato 1080x1920 no fallback: ${cmd}`);
+              })
+              .on('end', () => {
+                if (!fs.existsSync(fallbackClipPath)) {
+                  return reject(new Error('Arquivo fallback não foi criado'));
+                }
+                const stats = fs.statSync(fallbackClipPath);
+                if (stats.size === 0) {
+                  return reject(new Error('Arquivo fallback está vazio'));
+                }
+                console.log(`[PROCESSING] ✅ Clip fallback criado em 1080x1920: ${fallbackClipPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                // Substituir clip original pelo clip com formato forçado
+                finalClips[i] = fallbackClipPath;
+                resolve();
+              })
+              .on('error', (err) => {
+                console.error(`[PROCESSING] ❌ Erro ao forçar formato no fallback: ${err.message}`);
+                reject(err);
+              })
+              .run();
+          });
+          
+          console.warn(`[PROCESSING] ⚠️ Usando clip com formato 1080x1920 forçado para clip ${clipIndex} devido a erro na composição`);
+        } catch (fallbackError) {
+          console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha ao forçar formato no fallback: ${fallbackError.message}`);
+          // Se até o fallback falhar, manter clip original mas logar aviso crítico
+          console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
+          console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
+        }
       }
 
       // Atualizar progresso geral após cada clip

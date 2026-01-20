@@ -24,11 +24,15 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
     // Frame-accurate cutting para clips sequenciais
     // Usar -ss antes de -i para seeking preciso (mais rápido)
     // Usar -t para duração exata
+    // FORÇAR formato vertical 1080x1920 (9:16) OBRIGATORIAMENTE
     ffmpeg(inputPath)
       .seekInput(startTime) // Seeking antes do input é mais preciso
       .output(outputPath)
       .outputOptions([
         '-t', duration.toString(), // Duração exata
+        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920', // FORÇAR 1080x1920 vertical
+        '-s', '1080x1920', // FORÇAR resolução 1080x1920
+        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 vertical
         '-c:v', 'libx264', // Forçar h264
         '-c:a', 'aac', // Forçar aac
         '-preset', 'veryfast', // Velocidade
@@ -39,7 +43,8 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
         '-fflags', '+genpts' // Regenerar timestamps precisos
       ])
       .on('start', cmd => {
-        console.log('[FFMPEG] Trim iniciado:', cmd);
+        console.log('[FFMPEG] Trim iniciado (FORÇANDO 1080x1920 vertical):', cmd);
+        console.log('[FFMPEG] ✅ Formato vertical 9:16 (1080x1920) OBRIGATÓRIO no trim');
       })
       .on('end', () => {
         if (!fs.existsSync(outputPath)) {
