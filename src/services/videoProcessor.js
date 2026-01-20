@@ -730,77 +730,106 @@ export const generateVideoSeries = async (job, jobsMap) => {
         });
 
       } catch (compositionError) {
-        console.error(`[PROCESSING] Erro ao compor clip ${clipIndex}:`, compositionError);
+        console.error(`[PROCESSING] ❌ ERRO ao compor clip ${clipIndex}:`, compositionError.message);
         console.error(`[PROCESSING] Stack trace:`, compositionError.stack);
+        console.error(`[PROCESSING] ⚠️ Tentando novamente a composição com tratamento de erro melhorado...`);
         
-        // Se composição falhar, FORÇAR formato 1080x1920 no clip original
-        // NUNCA usar clip sem formato vertical forçado
+        // Tentar composição novamente com tratamento de erro mais robusto
         try {
-          console.log(`[PROCESSING] ⚠️ Forçando formato 1080x1920 no clip original devido a erro na composição...`);
-          
-          const fallbackClipPath = path.join(
-            seriesPath,
-            `clip_${String(clipIndex).padStart(3, '0')}_fallback_1080x1920.mp4`
-          );
-          
-          // No fallback, manter vídeo principal em 16:9 e criar frame vertical 1080x1920
-          // Vídeo principal será posicionado no topo do frame vertical, mantendo proporção 16:9
-          await new Promise((resolve, reject) => {
-            // Criar frame vertical 1080x1920 com vídeo principal 16:9 posicionado no topo
-            // Vídeo principal será redimensionado para caber na largura 1080px mantendo proporção 16:9
-            const TOP_MARGIN_FALLBACK = 180; // Margem superior (mesma da composição)
-            const mainVideoHeight = Math.round(1080 * 9 / 16); // Altura para vídeo 16:9 com largura 1080px = 607px
-            const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600); // Máximo 1600px de altura
-            
-            ffmpeg(clipPath)
-              .complexFilter([
-                // Criar background preto 1080x1920
-                `color=c=black:s=1080x1920[bg]`,
-                // Redimensionar vídeo principal mantendo proporção 16:9
-                `[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled]`,
-                // Posicionar vídeo principal no topo do frame vertical (centralizado horizontalmente)
-                `[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`
-              ])
-              .outputOptions([
-                '-map', '[final]',
-                '-s', '1080x1920',
-                '-aspect', '9:16',
-                '-c:v', 'libx264',
-                '-preset', 'medium',
-                '-crf', '23',
-                '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart'
-              ])
-              .output(fallbackClipPath)
-              .on('start', (cmd) => {
-                console.log(`[PROCESSING] Criando fallback 1080x1920 com vídeo principal 16:9: ${cmd}`);
-              })
-              .on('end', () => {
-                if (!fs.existsSync(fallbackClipPath)) {
-                  return reject(new Error('Arquivo fallback não foi criado'));
-                }
-                const stats = fs.statSync(fallbackClipPath);
-                if (stats.size === 0) {
-                  return reject(new Error('Arquivo fallback está vazio'));
-                }
-                console.log(`[PROCESSING] ✅ Clip fallback criado: 1080x1920 com vídeo principal 16:9 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                // Substituir clip original pelo clip com formato forçado
-                finalClips[i] = fallbackClipPath;
-                resolve();
-              })
-              .on('error', (err) => {
-                console.error(`[PROCESSING] ❌ Erro ao criar fallback: ${err.message}`);
-                reject(err);
-              })
-              .run();
+          console.log(`[PROCESSING] 🔄 Tentativa de recuperação: recompondo clip ${clipIndex}...`);
+          const retryComposition = await composeFinalVideo({
+            clipPath: clipPath,
+            retentionVideoId: retentionVideoId,
+            retentionVideoPath: retentionVideoPath,
+            headline: headline,
+            headlineStyle: headlineStyle,
+            headlineText: headlineText,
+            captions: clipCaptions,
+            captionStyle: captionStyle,
+            backgroundColor: backgroundColor,
+            format: format,
+            platforms: platforms,
+            clipNumber: clipIndex + 1,
+            totalClips: finalClips.length
           });
           
-          console.warn(`[PROCESSING] ⚠️ Usando clip fallback 1080x1920 com vídeo principal 16:9 para clip ${clipIndex} devido a erro na composição`);
-        } catch (fallbackError) {
-          console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha ao forçar formato no fallback: ${fallbackError.message}`);
-          // Se até o fallback falhar, manter clip original mas logar aviso crítico
-          console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
-          console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
+          if (retryComposition && fs.existsSync(retryComposition) && fs.statSync(retryComposition).size > 0) {
+            console.log(`[PROCESSING] ✅ Recuperação bem-sucedida: clip ${clipIndex} recompondo com sucesso`);
+            finalClips[i] = retryComposition;
+          } else {
+            throw new Error('Composição de recuperação falhou ou arquivo inválido');
+          }
+        } catch (retryError) {
+          console.error(`[PROCESSING] ❌ Recuperação falhou: ${retryError.message}`);
+          console.log(`[PROCESSING] ⚠️ Usando fallback simplificado para clip ${clipIndex}...`);
+          
+          // Se composição falhar, FORÇAR formato 1080x1920 no clip original
+          // NUNCA usar clip sem formato vertical forçado
+          try {
+            const fallbackClipPath = path.join(
+              seriesPath,
+              `clip_${String(clipIndex).padStart(3, '0')}_fallback_1080x1920.mp4`
+            );
+            
+            // No fallback, manter vídeo principal em 16:9 e criar frame vertical 1080x1920
+            // Vídeo principal será posicionado no topo do frame vertical, mantendo proporção 16:9
+            await new Promise((resolve, reject) => {
+              // Criar frame vertical 1080x1920 com vídeo principal 16:9 posicionado no topo
+              // Vídeo principal será redimensionado para caber na largura 1080px mantendo proporção 16:9
+              const TOP_MARGIN_FALLBACK = 180; // Margem superior (mesma da composição)
+              const mainVideoHeight = Math.round(1080 * 9 / 16); // Altura para vídeo 16:9 com largura 1080px = 607px
+              const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600); // Máximo 1600px de altura
+              
+              ffmpeg(clipPath)
+                .complexFilter([
+                  // Criar background preto 1080x1920
+                  `color=c=black:s=1080x1920[bg]`,
+                  // Redimensionar vídeo principal mantendo proporção 16:9
+                  `[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled]`,
+                  // Posicionar vídeo principal no topo do frame vertical (centralizado horizontalmente)
+                  `[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`
+                ])
+                .outputOptions([
+                  '-map', '[final]',
+                  '-s', '1080x1920',
+                  '-aspect', '9:16',
+                  '-c:v', 'libx264',
+                  '-preset', 'medium',
+                  '-crf', '23',
+                  '-pix_fmt', 'yuv420p',
+                  '-movflags', '+faststart'
+                ])
+                .output(fallbackClipPath)
+                .on('start', (cmd) => {
+                  console.log(`[PROCESSING] Criando fallback 1080x1920 com vídeo principal 16:9: ${cmd}`);
+                })
+                .on('end', () => {
+                  if (!fs.existsSync(fallbackClipPath)) {
+                    return reject(new Error('Arquivo fallback não foi criado'));
+                  }
+                  const stats = fs.statSync(fallbackClipPath);
+                  if (stats.size === 0) {
+                    return reject(new Error('Arquivo fallback está vazio'));
+                  }
+                  console.log(`[PROCESSING] ✅ Clip fallback criado: 1080x1920 com vídeo principal 16:9 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                  // Substituir clip original pelo clip com formato forçado
+                  finalClips[i] = fallbackClipPath;
+                  resolve();
+                })
+                .on('error', (err) => {
+                  console.error(`[PROCESSING] ❌ Erro ao criar fallback: ${err.message}`);
+                  reject(err);
+                })
+                .run();
+            });
+            
+            console.warn(`[PROCESSING] ⚠️ Usando clip fallback 1080x1920 com vídeo principal 16:9 para clip ${clipIndex} devido a erro na composição`);
+          } catch (fallbackError) {
+            console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha ao forçar formato no fallback: ${fallbackError.message}`);
+            // Se até o fallback falhar, manter clip original mas logar aviso crítico
+            console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
+            console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
+          }
         }
       }
 
