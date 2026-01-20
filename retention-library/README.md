@@ -22,6 +22,8 @@ retention-library/
 ```
 
 ## Nota:
-- Em produção (Railway), os vídeos devem ser colocados em `/tmp/retention-library/`
+- **IMPORTANTE**: Os vídeos NÃO são commitados no Git (arquivos muito grandes)
+- Em produção (Railway), os vídeos DEVEM ser colocados manualmente em `/tmp/retention-library/`
 - Ou configure a variável de ambiente `RETENTION_LIBRARY_DIR` para um caminho personalizado
+- Para adicionar no Railway: use SFTP, Railway CLI, ou copie via volume persistente
 
