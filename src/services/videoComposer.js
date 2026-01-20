@@ -228,15 +228,71 @@ export async function composeFinalVideo({
     if (retentionVideoPath) {
       const isRetentionUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
       
-      // Se for URL (especialmente Streamable), baixar o vídeo primeiro
+      // Se for URL (Streamable ou YouTube), baixar o vídeo primeiro
       // FFmpeg pode ter problemas com URLs HTTP/HTTPS diretas
       if (isRetentionUrl) {
         try {
           console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção de URL: ${retentionVideoPath}`);
           
-          // Se for URL do Streamable, tentar múltiplas URLs possíveis
-          let streamableUrls = [retentionVideoPath];
-          if (isStreamableUrl(retentionVideoPath)) {
+          // Verificar se é URL do YouTube
+          const isYouTubeUrl = retentionVideoPath.includes('youtube.com') || retentionVideoPath.includes('youtu.be');
+          if (isYouTubeUrl) {
+            // Extrair ID do vídeo do YouTube
+            const youtubeMatch = retentionVideoPath.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
+            if (youtubeMatch) {
+              const youtubeVideoId = youtubeMatch[1];
+              console.log(`[COMPOSER] 🎥 Detectado vídeo do YouTube: ${youtubeVideoId}`);
+              
+              // Baixar vídeo para arquivo temporário usando yt-dlp
+              const tempDir = process.env.NODE_ENV === 'production' 
+                ? '/tmp/retention-downloads'
+                : path.join(process.cwd(), 'tmp', 'retention-downloads');
+              if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir, { recursive: true });
+              }
+              
+              const youtubeUrlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+              const tempVideoPath = path.join(tempDir, `retention_youtube_${youtubeVideoId}_${youtubeUrlHash}.mp4`);
+              
+              // Se já existe, usar o arquivo baixado
+              if (fs.existsSync(tempVideoPath)) {
+                const stats = fs.statSync(tempVideoPath);
+                if (stats.size > 0) {
+                  console.log(`[COMPOSER] ✅ Usando vídeo do YouTube já baixado: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                  retentionVideoPath = tempVideoPath;
+                } else {
+                  fs.unlinkSync(tempVideoPath);
+                }
+              }
+              
+              // Se ainda não tem arquivo válido, baixar do YouTube
+              if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+                console.log(`[COMPOSER] ⬇️ Baixando vídeo do YouTube usando yt-dlp: ${youtubeVideoId}`);
+                
+                // Importar função de download do YouTube
+                const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
+                await downloadYouTubeVideo(youtubeVideoId, tempVideoPath);
+                
+                // Validar que o arquivo foi baixado corretamente
+                if (!fs.existsSync(tempVideoPath)) {
+                  throw new Error(`Arquivo não foi criado após download do YouTube: ${tempVideoPath}`);
+                }
+                
+                const stats = fs.statSync(tempVideoPath);
+                if (stats.size === 0) {
+                  fs.unlinkSync(tempVideoPath);
+                  throw new Error(`Arquivo baixado do YouTube está vazio: ${tempVideoPath}`);
+                }
+                
+                console.log(`[COMPOSER] ✅ Vídeo do YouTube baixado com sucesso: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                retentionVideoPath = tempVideoPath;
+              }
+            } else {
+              throw new Error(`Não foi possível extrair ID do vídeo do YouTube da URL: ${retentionVideoPath}`);
+            }
+          } else if (isStreamableUrl(retentionVideoPath)) {
+            // Se for URL do Streamable, tentar múltiplas URLs possíveis
+            let streamableUrls = [retentionVideoPath];
             // Extrair ID do Streamable
             const streamableMatch = retentionVideoPath.match(/streamable\.com\/(?:e\/)?([a-z0-9]+)/i);
             if (streamableMatch) {
@@ -254,37 +310,34 @@ export async function composeFinalVideo({
               streamableUrls = [retentionVideoPath];
               console.log(`[COMPOSER] URL do Streamable convertida: ${retentionVideoPath}`);
             }
-          }
-          
-          // Baixar vídeo para arquivo temporário
-          // Em produção (Railway): usar /tmp/retention-downloads
-          // Em desenvolvimento: usar tmp/retention-downloads na raiz
-          const tempDir = process.env.NODE_ENV === 'production' 
-            ? '/tmp/retention-downloads'
-            : path.join(process.cwd(), 'tmp', 'retention-downloads');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          
-          // Usar hash baseado na URL original (não convertida) para cache
-          const originalUrlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-          const tempVideoPath = path.join(tempDir, `retention_${originalUrlHash}.mp4`);
-          
-          // Se já existe, usar o arquivo baixado
-          if (fs.existsSync(tempVideoPath)) {
-            const stats = fs.statSync(tempVideoPath);
-            if (stats.size > 0) {
-              console.log(`[COMPOSER] ✅ Usando vídeo de retenção já baixado: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-              retentionVideoPath = tempVideoPath;
-            } else {
-              // Arquivo existe mas está vazio, remover e baixar novamente
-              console.log(`[COMPOSER] ⚠️ Arquivo de cache está vazio, baixando novamente...`);
-              fs.unlinkSync(tempVideoPath);
+            
+            // Baixar vídeo para arquivo temporário (Streamable)
+            const tempDir = process.env.NODE_ENV === 'production' 
+              ? '/tmp/retention-downloads'
+              : path.join(process.cwd(), 'tmp', 'retention-downloads');
+            if (!fs.existsSync(tempDir)) {
+              fs.mkdirSync(tempDir, { recursive: true });
             }
-          }
-          
-          // Se ainda não tem arquivo válido, tentar baixar de cada URL
-          if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+            
+            // Usar hash baseado na URL original (não convertida) para cache
+            const originalUrlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+            const tempVideoPath = path.join(tempDir, `retention_${originalUrlHash}.mp4`);
+            
+            // Se já existe, usar o arquivo baixado
+            if (fs.existsSync(tempVideoPath)) {
+              const stats = fs.statSync(tempVideoPath);
+              if (stats.size > 0) {
+                console.log(`[COMPOSER] ✅ Usando vídeo de retenção já baixado: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+                retentionVideoPath = tempVideoPath;
+              } else {
+                // Arquivo existe mas está vazio, remover e baixar novamente
+                console.log(`[COMPOSER] ⚠️ Arquivo de cache está vazio, baixando novamente...`);
+                fs.unlinkSync(tempVideoPath);
+              }
+            }
+            
+            // Se ainda não tem arquivo válido, tentar baixar de cada URL do Streamable
+            if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
             let downloadSuccess = false;
             let lastDownloadError = null;
             
@@ -329,6 +382,47 @@ export async function composeFinalVideo({
             // Se nenhuma URL funcionou, lançar erro
             if (!downloadSuccess) {
               throw new Error(`Falha ao baixar vídeo de retenção de todas as URLs tentadas. Último erro: ${lastDownloadError?.message || 'Erro desconhecido'}`);
+            }
+          }
+          } else {
+            // URL não é YouTube nem Streamable - tentar download HTTP direto
+            console.log(`[COMPOSER] ⚠️ URL não reconhecida como YouTube ou Streamable, tentando download HTTP direto: ${retentionVideoPath}`);
+            
+            const tempDir = process.env.NODE_ENV === 'production' 
+              ? '/tmp/retention-downloads'
+              : path.join(process.cwd(), 'tmp', 'retention-downloads');
+            if (!fs.existsSync(tempDir)) {
+              fs.mkdirSync(tempDir, { recursive: true });
+            }
+            
+            const originalUrlHash = Buffer.from(retentionVideoPath).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+            const tempVideoPath = path.join(tempDir, `retention_${originalUrlHash}.mp4`);
+            
+            if (fs.existsSync(tempVideoPath)) {
+              const stats = fs.statSync(tempVideoPath);
+              if (stats.size > 0) {
+                console.log(`[COMPOSER] ✅ Usando vídeo já baixado: ${tempVideoPath}`);
+                retentionVideoPath = tempVideoPath;
+              } else {
+                fs.unlinkSync(tempVideoPath);
+              }
+            }
+            
+            if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+              await downloadVideoFromUrl(retentionVideoPath, tempVideoPath, 3);
+              
+              if (!fs.existsSync(tempVideoPath)) {
+                throw new Error(`Arquivo não foi criado após download: ${tempVideoPath}`);
+              }
+              
+              const stats = fs.statSync(tempVideoPath);
+              if (stats.size === 0) {
+                fs.unlinkSync(tempVideoPath);
+                throw new Error(`Arquivo baixado está vazio: ${tempVideoPath}`);
+              }
+              
+              console.log(`[COMPOSER] ✅ Vídeo baixado com sucesso: ${tempVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              retentionVideoPath = tempVideoPath;
             }
           }
         } catch (downloadError) {
