@@ -446,30 +446,25 @@ function advanceToNextStep() {
 
 /**
  * Faz scroll suave até um card específico
+ * DESABILITADO - usuário controla a rolagem manualmente
  */
 function scrollToCard(stepName) {
+    // Scroll automático desabilitado - usuário controla a rolagem
+    console.log('[SCROLL] scrollToCard chamado mas desabilitado:', stepName);
+    
+    // Apenas garantir que o card esteja visível (sem scroll)
     const card = document.querySelector(`[data-step-card="${stepName}"]`);
-    if (card) {
-        // Garantir que o card esteja visível
-        if (card.style.display === 'none') {
-            card.style.display = 'block';
-        }
-        
-        // Fazer scroll suave até o card
-        setTimeout(() => {
-            const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
-            const offset = 100; // Offset para navbar
-            
-            window.scrollTo({
-                top: Math.max(0, cardPosition - offset),
-                behavior: 'smooth'
-            });
-        }, 100);
+    if (card && card.style.display === 'none') {
+        card.style.display = 'block';
     }
+    
+    return;
 }
 
 function scrollToTool() {
-    scrollToCard('youtube');
+    // Scroll automático desabilitado
+    console.log('[SCROLL] scrollToTool chamado mas desabilitado');
+    return;
 }
 
 // ========== AUTHENTICATION ==========
