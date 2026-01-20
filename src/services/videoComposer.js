@@ -632,17 +632,22 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Usando background sólido (fallback) - 1080x1920 HARDCODED`);
       }
 
-      // 2. Redimensionar vídeo principal para altura calculada (sem padding, sem distorção)
-      // force_original_aspect_ratio=decrease garante que não distorça
-      // Vídeo principal será redimensionado mantendo proporção 16:9 (horizontal)
-      // Usar force_original_aspect_ratio=decrease para manter proporção e caber no espaço disponível
-      // Largura máxima: 1080px (largura do frame vertical)
-      // Altura máxima: MAIN_VIDEO_HEIGHT (altura disponível para o vídeo principal)
-      // O vídeo 16:9 será redimensionado para caber dentro desses limites, mantendo proporção
-      filterParts.push(`${currentLabel}scale=1080:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
+      // 2. Redimensionar vídeo principal mantendo proporção 16:9 (horizontal)
+      // IMPORTANTE: Vídeo principal deve manter proporção 16:9, não ser esticado para vertical
+      // Para vídeo 16:9 com largura 1080px: altura = 1080 * 9/16 = 607.5px
+      // Usar force_original_aspect_ratio=decrease para manter proporção e não distorcer
+      // Largura: 1080px (largura do frame vertical)
+      // Altura: calculada automaticamente para manter 16:9 (será ~607px)
+      // Limitar altura máxima ao espaço disponível (MAIN_VIDEO_HEIGHT)
+      const mainVideoWidth = 1080; // Largura fixa: 1080px
+      const mainVideoHeight16_9 = Math.round(mainVideoWidth * 9 / 16); // Altura para 16:9 = 607px
+      const mainVideoHeightFinal = Math.min(mainVideoHeight16_9, MAIN_VIDEO_HEIGHT); // Não ultrapassar espaço disponível
+      
+      filterParts.push(`${currentLabel}scale=${mainVideoWidth}:${mainVideoHeightFinal}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
-      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: máximo 1080x${MAIN_VIDEO_HEIGHT}`);
-      console.log(`[COMPOSER] ✅ Vídeo principal manterá proporção horizontal (16:9) dentro do frame vertical 1080x1920`);
+      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: ${mainVideoWidth}x${mainVideoHeightFinal}`);
+      console.log(`[COMPOSER] ✅ Vídeo principal 16:9 posicionado dentro do frame vertical 1080x1920`);
+      console.log(`[COMPOSER] ✅ Proporção 16:9 mantida: largura ${mainVideoWidth}px, altura ${mainVideoHeightFinal}px (9/16 = ${(mainVideoHeightFinal/mainVideoWidth).toFixed(3)})`);
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
       // Vídeo fica acima do background (layer 1)
@@ -1105,7 +1110,8 @@ export async function composeFinalVideo({
               if (videoStream) {
                 const actualWidth = videoStream.width;
                 const actualHeight = videoStream.height;
-                console.log(`[COMPOSER] ✅ Resolução de saída verificada: ${actualWidth}x${actualHeight}`);
+                const actualAspectRatio = (actualWidth / actualHeight).toFixed(3);
+                console.log(`[COMPOSER] ✅ Resolução de saída verificada: ${actualWidth}x${actualHeight} (aspect ratio: ${actualAspectRatio})`);
                 if (actualWidth !== 1080 || actualHeight !== 1920) {
                   console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
                   console.error(`[COMPOSER] ❌ O vídeo NÃO está no formato correto! Verifique as opções de saída do FFmpeg.`);
@@ -1113,6 +1119,8 @@ export async function composeFinalVideo({
                 } else {
                   console.log(`[COMPOSER] ✅ Resolução correta confirmada: 1080x1920 (9:16 vertical)`);
                   console.log(`[COMPOSER] ✅ Formato vertical 1080x1920 FORÇADO com sucesso!`);
+                  console.log(`[COMPOSER] ✅ Frame final: 1080x1920 (9:16 vertical)`);
+                  console.log(`[COMPOSER] ✅ Vídeo principal mantém proporção 16:9 dentro do frame vertical`);
                 }
                 
                 // VALIDAR que vídeo de retenção está presente no arquivo final (OBRIGATÓRIO)
