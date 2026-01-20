@@ -6,11 +6,21 @@
 
 import { supabaseAdmin } from '../config/supabase.js';
 
+// Verificar se Supabase está configurado
+if (!supabaseAdmin) {
+  console.error('[CREDITS] ❌ Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.');
+}
+
 /**
  * Obter créditos do usuário
  */
 export async function getUserCredits(userId) {
   try {
+    if (!supabaseAdmin) {
+      console.error('[CREDITS] Supabase não configurado');
+      return 0;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('users')
       .select('creditos')
@@ -50,6 +60,10 @@ export async function hasCredits(userId) {
  */
 export async function decrementCredits(userId) {
   try {
+    if (!supabaseAdmin) {
+      throw new Error('Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.');
+    }
+
     // Buscar créditos atuais
     const { data: userData, error: fetchError } = await supabaseAdmin
       .from('users')
@@ -105,6 +119,10 @@ export async function decrementCredits(userId) {
  */
 export async function addCredits(userId, amount) {
   try {
+    if (!supabaseAdmin) {
+      throw new Error('Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.');
+    }
+
     if (amount <= 0) {
       throw new Error('Quantidade de créditos deve ser maior que zero');
     }

@@ -5,12 +5,24 @@
 
 import { supabaseAdmin } from '../config/supabase.js';
 
+// Verificar se Supabase está configurado
+if (!supabaseAdmin) {
+  console.error('[AUTH] ❌ Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.');
+}
+
 /**
  * POST /api/auth/register
  * Registrar novo usuário via Supabase Auth
  */
 export const register = async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
+        code: 'AUTH_NOT_CONFIGURED'
+      });
+    }
+
     const { name, email, password } = req.body;
 
     // Validações
@@ -126,6 +138,13 @@ export const register = async (req, res) => {
  */
 export const login = async (req, res) => {
   try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
+        code: 'AUTH_NOT_CONFIGURED'
+      });
+    }
+
     const { email, password } = req.body;
 
     // Validações

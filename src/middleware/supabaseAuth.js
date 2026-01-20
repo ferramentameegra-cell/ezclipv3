@@ -11,6 +11,14 @@ import { supabaseAdmin } from '../config/supabase.js';
  */
 export const requireSupabaseAuth = async (req, res, next) => {
   try {
+    // Verificar se o cliente Supabase está disponível
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY.',
+        code: 'AUTH_NOT_CONFIGURED'
+      });
+    }
+
     // Obter token do header Authorization ou cookie
     const authHeader = req.headers.authorization;
     let token = null;
@@ -85,6 +93,11 @@ export const requireSupabaseAuth = async (req, res, next) => {
  */
 export const optionalSupabaseAuth = async (req, res, next) => {
   try {
+    // Se o cliente não estiver disponível, continuar sem autenticação
+    if (!supabaseAdmin) {
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
     let token = null;
 
