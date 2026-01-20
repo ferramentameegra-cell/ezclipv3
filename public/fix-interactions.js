@@ -1,6 +1,6 @@
 /**
- * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES FUNCIONAREM
- * Remove TODOS os bloqueios e força execução de cliques
+ * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES E SCROLL FUNCIONAREM
+ * Remove TODOS os bloqueios e força execução
  * EXECUTA PRIMEIRO para não ser bloqueado por outros scripts
  */
 
@@ -12,15 +12,21 @@
     // Executar IMEDIATAMENTE, antes de qualquer outro script
     function forceEnableAllClicks() {
         try {
-            // 1. FORÇAR body e html
+            // 1. FORÇAR body e html - REMOVER TODOS OS BLOQUEIOS
             if (document.body) {
                 document.body.style.setProperty('pointer-events', 'auto', 'important');
                 document.body.style.setProperty('overflow', '', 'important');
+                document.body.style.setProperty('overflow-x', '', 'important');
+                document.body.style.setProperty('overflow-y', '', 'important');
                 document.body.style.setProperty('position', 'relative', 'important');
+                document.body.style.setProperty('touch-action', 'auto', 'important');
             }
             if (document.documentElement) {
                 document.documentElement.style.setProperty('pointer-events', 'auto', 'important');
                 document.documentElement.style.setProperty('overflow', '', 'important');
+                document.documentElement.style.setProperty('overflow-x', '', 'important');
+                document.documentElement.style.setProperty('overflow-y', '', 'important');
+                document.documentElement.style.setProperty('touch-action', 'auto', 'important');
             }
             
             // 2. FORÇAR main
@@ -30,6 +36,7 @@
                 main.style.setProperty('z-index', '1', 'important');
                 main.style.setProperty('position', 'relative', 'important');
                 main.style.setProperty('display', 'block', 'important');
+                main.style.setProperty('overflow', '', 'important');
             }
             
             // 3. REMOVER COMPLETAMENTE overlays hidden
@@ -217,6 +224,41 @@
         }
     }
     
+    // REMOVER preventDefault e stopPropagation de TODOS os listeners de clique
+    // Interceptar addEventListener para remover bloqueios
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, listener, options) {
+        if (type === 'click' || type === 'mousedown' || type === 'mouseup') {
+            const wrappedListener = function(e) {
+                // NUNCA bloquear cliques - remover preventDefault e stopPropagation
+                if (e && typeof e.preventDefault === 'function') {
+                    const originalPreventDefault = e.preventDefault;
+                    e.preventDefault = function() {
+                        console.warn('[FIX-INTERACTIONS] 🚫 preventDefault bloqueado em:', this.target);
+                        // Não fazer nada - permitir comportamento padrão
+                    };
+                }
+                if (e && typeof e.stopPropagation === 'function') {
+                    const originalStopPropagation = e.stopPropagation;
+                    e.stopPropagation = function() {
+                        console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation bloqueado em:', this.target);
+                        // Não fazer nada - permitir propagação
+                    };
+                }
+                if (e && typeof e.stopImmediatePropagation === 'function') {
+                    const originalStopImmediatePropagation = e.stopImmediatePropagation;
+                    e.stopImmediatePropagation = function() {
+                        console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation bloqueado em:', this.target);
+                        // Não fazer nada - permitir propagação
+                    };
+                }
+                return listener.call(this, e);
+            };
+            return originalAddEventListener.call(this, type, wrappedListener, options);
+        }
+        return originalAddEventListener.call(this, type, listener, options);
+    };
+    
     // Listener ULTRA AGRESSIVO - captura TODOS os cliques e FORÇA execução
     // Usar capture phase com PRIORIDADE MÁXIMA
     document.addEventListener('click', function(e) {
@@ -224,6 +266,23 @@
         const computed = window.getComputedStyle(target);
         
         console.log('[FIX-INTERACTIONS] 🖱️ Clique detectado em:', target.tagName, target.id || target.className || target.textContent?.substring(0, 30));
+        
+        // NUNCA bloquear - remover preventDefault e stopPropagation
+        if (e.preventDefault) {
+            e.preventDefault = function() {
+                console.warn('[FIX-INTERACTIONS] 🚫 preventDefault ignorado');
+            };
+        }
+        if (e.stopPropagation) {
+            e.stopPropagation = function() {
+                console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation ignorado');
+            };
+        }
+        if (e.stopImmediatePropagation) {
+            e.stopImmediatePropagation = function() {
+                console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation ignorado');
+            };
+        }
         
         // Verificar elemento no ponto do clique
         try {
@@ -249,8 +308,6 @@
                     
                     // Forçar clique no target original
                     setTimeout(() => executeClick(target, e), 5);
-                    e.stopImmediatePropagation(); // Impedir outros listeners
-                    e.preventDefault(); // Impedir comportamento padrão que pode bloquear
                     return false;
                 }
             }
@@ -278,10 +335,7 @@
                 
                 // Re-disparar clique
                 setTimeout(() => {
-                    if (executeClick(target, e)) {
-                        e.stopImmediatePropagation();
-                        e.preventDefault();
-                    }
+                    executeClick(target, e);
                 }, 5);
                 return false;
             }
@@ -318,7 +372,7 @@
         }
     }, false); // Bubble phase como backup
     
-    // BLOQUEAR scroll automático
+    // BLOQUEAR scroll automático MAS PERMITIR scroll manual
     const originalScrollTo = window.scrollTo;
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     
@@ -347,4 +401,5 @@
     
     console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
     console.log('[FIX-INTERACTIONS] 🚫 Scroll automático bloqueado');
+    console.log('[FIX-INTERACTIONS] 🚫 preventDefault/stopPropagation bloqueados');
 })();
