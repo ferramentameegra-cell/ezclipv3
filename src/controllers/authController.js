@@ -1,21 +1,13 @@
 /**
- * CONTROLLER DE AUTENTICAÇÃO
- * Gerencia registro, login e recuperação de senha
+ * CONTROLLER DE AUTENTICAÇÃO - SUPABASE
+ * Gerencia registro, login e verificação usando Supabase Auth
  */
 
-import { createUser, getUserByEmail, verifyPassword } from '../models/users.js';
-import { generateToken } from '../services/authService.js';
-import { jwtConfig } from '../config/security.js';
-// Logger removido temporariamente
-// import { logLoginAttempt, logSecurityError } from '../middleware/logger.js';
-
-// Funções mockadas para não quebrar código
-const logLoginAttempt = () => {}; // Não fazer nada
-const logSecurityError = () => {}; // Não fazer nada
+import { supabaseAdmin } from '../config/supabase.js';
 
 /**
  * POST /api/auth/register
- * Registrar novo usuário
+ * Registrar novo usuário via Supabase Auth
  */
 export const register = async (req, res) => {
   try {
@@ -26,6 +18,13 @@ export const register = async (req, res) => {
       return res.status(400).json({
         error: 'Todos os campos são obrigatórios',
         code: 'MISSING_FIELDS'
+      });
+    }
+
+    if (name.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Nome não pode estar vazio',
+        code: 'EMPTY_NAME'
       });
     }
 
@@ -45,54 +44,75 @@ export const register = async (req, res) => {
       });
     }
 
-    // Criar usuário
-    const user = await createUser({ name, email, password });
-
-    // Gerar token
-    const token = generateToken(user);
-
-    // Configurar cookie HttpOnly (mais seguro que localStorage)
-    res.cookie(jwtConfig.cookieName, token, {
-      httpOnly: jwtConfig.httpOnly,
-      secure: jwtConfig.secure,
-      sameSite: jwtConfig.sameSite,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias (mesmo que JWT_EXPIRES_IN)
+    // Criar usuário no Supabase Auth
+    const { data: authData, error: authError } = await supabaseAdmin.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password: password,
+      options: {
+        data: {
+          nome: name.trim()
+        },
+        emailRedirectTo: `${req.protocol}://${req.get('host')}/auth/confirm`
+      }
     });
 
-    // Registrar login bem-sucedido (registro = login automático)
-    logLoginAttempt({
-      email: user.email,
-      success: true,
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent'),
-      userId: user.id
-    });
+    if (authError) {
+      console.error('[AUTH] Erro ao criar usuário no Supabase:', authError);
+      
+      // Tratar erros específicos do Supabase
+      if (authError.message.includes('already registered') || authError.message.includes('already exists')) {
+        return res.status(400).json({
+          error: 'Email já cadastrado',
+          code: 'EMAIL_EXISTS'
+        });
+      }
 
-    console.log(`[AUTH] Novo usuário registrado: ${user.email} (ID: ${user.id}) - Plano: ${user.plan_id || 'free'}`);
+      if (authError.message.includes('Password')) {
+        return res.status(400).json({
+          error: 'Senha muito fraca. Use pelo menos 6 caracteres.',
+          code: 'WEAK_PASSWORD'
+        });
+      }
 
-    res.status(201).json({
-      message: 'Conta criada com sucesso',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan_id: user.plan_id,
-        videos_used: user.videos_used || 0,
-        videos_limit: user.videos_limit || 1,
-        role: user.role || 'user'
-      },
-      token // Manter token no JSON para compatibilidade com frontend existente
-    });
-  } catch (error) {
-    console.error('[AUTH] Erro ao registrar:', error);
-    
-    if (error.message === 'Email já cadastrado') {
       return res.status(400).json({
-        error: error.message,
-        code: 'EMAIL_EXISTS'
+        error: authError.message || 'Erro ao criar conta',
+        code: 'REGISTER_ERROR'
       });
     }
 
+    if (!authData || !authData.user) {
+      return res.status(500).json({
+        error: 'Erro ao criar conta - dados não retornados',
+        code: 'REGISTER_ERROR'
+      });
+    }
+
+    // O trigger do Supabase criará automaticamente o registro na tabela users
+    // Aguardar um pouco para garantir que o trigger foi executado
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Buscar dados do usuário criado na tabela users
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    console.log(`[AUTH] Novo usuário registrado: ${email} (ID: ${authData.user.id})`);
+
+    // NÃO logar automaticamente - usuário deve confirmar email primeiro
+    res.status(201).json({
+      message: 'Conta criada com sucesso. Verifique seu email para confirmar a conta.',
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        email_confirmed_at: authData.user.email_confirmed_at,
+        creditos: userData?.creditos || 1
+      },
+      requiresEmailConfirmation: true
+    });
+  } catch (error) {
+    console.error('[AUTH] Erro ao registrar:', error);
     res.status(500).json({
       error: 'Erro ao criar conta',
       code: 'REGISTER_ERROR'
@@ -102,127 +122,102 @@ export const register = async (req, res) => {
 
 /**
  * POST /api/auth/login
- * Login de usuário
+ * Login via Supabase Auth
  */
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log('[AUTH] ========================================');
-    console.log('[AUTH] 🔐 TENTATIVA DE LOGIN RECEBIDA');
-    console.log('[AUTH] Email:', email ? email.substring(0, 5) + '***' : 'VAZIO');
-    console.log('[AUTH] IP:', req.ip || req.connection.remoteAddress);
-    console.log('[AUTH] User-Agent:', req.get('user-agent') || 'N/A');
-    console.log('[AUTH] ========================================');
-
     // Validações
     if (!email || !password) {
-      console.log('[AUTH] ❌ Campos faltando:', { email: !!email, password: !!password });
       return res.status(400).json({
         error: 'Email e senha são obrigatórios',
         code: 'MISSING_FIELDS'
       });
     }
 
-    // Buscar usuário
-    console.log('[AUTH] 🔍 Buscando usuário no banco...');
-    const user = getUserByEmail(email);
-    const ipAddress = req.ip;
-    const userAgent = req.get('user-agent');
-
-    console.log('[AUTH] Usuário encontrado:', user ? '✅ SIM' : '❌ NÃO');
-    if (user) {
-      console.log('[AUTH]   ID:', user.id);
-      console.log('[AUTH]   Email:', user.email);
-      console.log('[AUTH]   Role:', user.role);
-      console.log('[AUTH]   Tem password_hash:', !!user.password_hash);
-    } else {
-      console.log('[AUTH] ❌ Usuário não encontrado para email:', email);
-    }
-
-    if (!user) {
-      // Registrar tentativa de login falha
-      logLoginAttempt({
-        email: email,
-        success: false,
-        ipAddress,
-        userAgent
-      });
-
-      console.log('[AUTH] ❌ LOGIN FALHOU: Usuário não encontrado');
-      console.log('[AUTH] ========================================\n');
-      return res.status(401).json({
-        error: 'Email ou senha incorretos',
-        code: 'INVALID_CREDENTIALS'
-      });
-    }
-
-    // Verificar senha
-    console.log('[AUTH] 🔐 Verificando senha...');
-    const isValidPassword = await verifyPassword(user, password);
-    console.log('[AUTH] Senha válida:', isValidPassword ? '✅ SIM' : '❌ NÃO');
-    
-    if (!isValidPassword) {
-      // Registrar tentativa de login falha
-      logLoginAttempt({
-        email: email,
-        success: false,
-        ipAddress,
-        userAgent,
-        userId: user.id
-      });
-
-      console.log('[AUTH] ❌ LOGIN FALHOU: Senha incorreta');
-      console.log('[AUTH] ========================================\n');
-      return res.status(401).json({
-        error: 'Email ou senha incorretos',
-        code: 'INVALID_CREDENTIALS'
-      });
-    }
-
-    // Gerar token
-    const token = generateToken(user);
-
-    // Configurar cookie HttpOnly (mais seguro que localStorage)
-    res.cookie(jwtConfig.cookieName, token, {
-      httpOnly: jwtConfig.httpOnly,
-      secure: jwtConfig.secure,
-      sameSite: jwtConfig.sameSite,
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dias
+    // Fazer login no Supabase
+    const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password: password
     });
 
-    // Registrar login bem-sucedido
-    logLoginAttempt({
-      email: user.email,
-      success: true,
-      ipAddress,
-      userAgent,
-      userId: user.id
-    });
+    if (authError) {
+      console.error('[AUTH] Erro no login:', authError);
+      
+      if (authError.message.includes('Invalid login credentials') || authError.message.includes('Invalid')) {
+        return res.status(401).json({
+          error: 'Email ou senha incorretos',
+          code: 'INVALID_CREDENTIALS'
+        });
+      }
 
-    console.log('[AUTH] ✅ LOGIN BEM-SUCEDIDO!');
-    console.log('[AUTH]   Usuário:', user.email);
-    console.log('[AUTH]   ID:', user.id);
-    console.log('[AUTH]   Role:', user.role);
-    console.log('[AUTH]   Plano:', user.plan_id);
-    console.log('[AUTH] ========================================\n');
+      return res.status(401).json({
+        error: authError.message || 'Erro ao fazer login',
+        code: 'LOGIN_ERROR'
+      });
+    }
 
-    const responseData = {
+    if (!authData || !authData.user) {
+      return res.status(401).json({
+        error: 'Erro ao fazer login - dados não retornados',
+        code: 'LOGIN_ERROR'
+      });
+    }
+
+    // Verificar se email foi confirmado
+    if (!authData.user.email_confirmed_at) {
+      // Fazer logout para não manter sessão não confirmada
+      await supabaseAdmin.auth.signOut();
+      
+      return res.status(403).json({
+        error: 'Email não confirmado. Verifique sua caixa de entrada e confirme seu email antes de fazer login.',
+        code: 'EMAIL_NOT_CONFIRMED'
+      });
+    }
+
+    // Buscar dados do usuário na tabela users
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (userError || !userData) {
+      console.error('[AUTH] Erro ao buscar dados do usuário:', userError);
+      return res.status(500).json({
+        error: 'Erro ao buscar dados do usuário',
+        code: 'USER_DATA_ERROR'
+      });
+    }
+
+    // Configurar cookie com token de acesso (opcional - frontend pode usar session)
+    if (authData.session) {
+      res.cookie('sb-access-token', authData.session.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: authData.session.expires_in * 1000 // Converter segundos para milissegundos
+      });
+    }
+
+    console.log(`[AUTH] Login bem-sucedido: ${email} (ID: ${authData.user.id})`);
+
+    res.json({
       message: 'Login realizado com sucesso',
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan_id: user.plan_id,
-        videos_used: user.videos_used || 0,
-        videos_limit: user.videos_limit || null,
-        role: user.role || 'user'
+        id: authData.user.id,
+        email: authData.user.email,
+        nome: userData.nome || authData.user.user_metadata?.nome,
+        creditos: userData.creditos || 1,
+        email_confirmed_at: authData.user.email_confirmed_at
       },
-      token // Manter token no JSON para compatibilidade com frontend existente
-    };
-
-    console.log('[AUTH] 📤 Enviando resposta de sucesso ao frontend');
-    res.json(responseData);
+      session: {
+        access_token: authData.session?.access_token,
+        refresh_token: authData.session?.refresh_token,
+        expires_at: authData.session?.expires_at
+      }
+    });
   } catch (error) {
     console.error('[AUTH] Erro ao fazer login:', error);
     res.status(500).json({
@@ -233,10 +228,73 @@ export const login = async (req, res) => {
 };
 
 /**
- * POST /api/auth/forgot-password
- * Recuperação de senha (mockado)
+ * POST /api/auth/logout
+ * Logout via Supabase
  */
-export const forgotPassword = async (req, res) => {
+export const logout = async (req, res) => {
+  try {
+    // Obter token do header ou cookie
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith('Bearer ') 
+      ? authHeader.substring(7) 
+      : req.cookies?.['sb-access-token'];
+
+    if (token) {
+      // Fazer logout no Supabase
+      await supabaseAdmin.auth.signOut(token);
+    }
+
+    // Limpar cookie
+    res.clearCookie('sb-access-token');
+
+    res.json({
+      message: 'Logout realizado com sucesso'
+    });
+  } catch (error) {
+    console.error('[AUTH] Erro ao fazer logout:', error);
+    res.json({
+      message: 'Logout realizado'
+    });
+  }
+};
+
+/**
+ * GET /api/auth/me
+ * Obter dados do usuário autenticado
+ */
+export const getMe = async (req, res) => {
+  try {
+    // req.user já foi preenchido pelo middleware requireSupabaseAuth
+    if (!req.user) {
+      return res.status(401).json({
+        error: 'Não autenticado',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
+
+    res.json({
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        nome: req.user.nome,
+        creditos: req.user.creditos || 1,
+        email_confirmed_at: req.user.email_confirmed_at
+      }
+    });
+  } catch (error) {
+    console.error('[AUTH] Erro ao buscar dados do usuário:', error);
+    res.status(500).json({
+      error: 'Erro ao buscar dados do usuário',
+      code: 'USER_DATA_ERROR'
+    });
+  }
+};
+
+/**
+ * POST /api/auth/verify-email
+ * Reenviar email de confirmação
+ */
+export const resendConfirmationEmail = async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -247,57 +305,26 @@ export const forgotPassword = async (req, res) => {
       });
     }
 
-    // Verificar se email existe
-    const user = getUserByEmail(email);
-    
-    // SEMPRE retornar sucesso (por segurança, não revelar se email existe)
-    // Em produção, enviar email de recuperação
-    res.json({
-      message: 'Se o email existir, você receberá instruções para redefinir sua senha',
-      code: 'EMAIL_SENT'
+    const { error } = await supabaseAdmin.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase()
     });
-  } catch (error) {
-    console.error('[AUTH] Erro ao solicitar recuperação:', error);
-    res.status(500).json({
-      error: 'Erro ao processar solicitação',
-      code: 'FORGOT_PASSWORD_ERROR'
-    });
-  }
-};
 
-/**
- * GET /api/auth/me
- * Obter informações do usuário autenticado
- */
-export const getMe = async (req, res) => {
-  try {
-    const user = req.user;
-
-    if (!user) {
-      return res.status(401).json({
-        error: 'Usuário não autenticado',
-        code: 'NOT_AUTHENTICATED'
+    if (error) {
+      return res.status(400).json({
+        error: error.message || 'Erro ao reenviar email',
+        code: 'RESEND_ERROR'
       });
     }
 
     res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        plan_id: user.plan_id,
-        videos_used: user.videos_used || 0,
-        videos_limit: user.videos_limit || null,
-        role: user.role || 'user',
-        created_at: user.created_at,
-        updated_at: user.updated_at
-      }
+      message: 'Email de confirmação reenviado com sucesso'
     });
   } catch (error) {
-    console.error('[AUTH] Erro ao obter informações do usuário:', error);
+    console.error('[AUTH] Erro ao reenviar email:', error);
     res.status(500).json({
-      error: 'Erro ao obter informações do usuário',
-      code: 'GET_ME_ERROR'
+      error: 'Erro ao reenviar email de confirmação',
+      code: 'RESEND_ERROR'
     });
   }
 };

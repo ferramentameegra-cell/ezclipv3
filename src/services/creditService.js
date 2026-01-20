@@ -1,142 +1,184 @@
 /**
- * SERVIÇO DE CRÉDITOS
- * Gerencia consumo e débito de créditos
+ * SERVIÇO DE CONTROLE DE CRÉDITOS
+ * Gerencia créditos dos usuários (1 crédito = 1 vídeo)
+ * Usa Supabase para persistência
  */
 
-import { getUserById, updateUser, getTotalCredits, hasEnoughCredits, isAdmin } from '../models/users.js';
-import { createUsageLog } from '../models/usageLogs.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 /**
- * Verificar e debitar créditos para geração de clipes
- * Prioriza free trial antes dos créditos pagos
- * Admin não consome créditos
+ * Obter créditos do usuário
  */
-export async function consumeCreditsForClips(userId, clipCount, seriesId = null) {
-  const user = getUserById(userId);
-  if (!user) {
-    throw new Error('Usuário não encontrado');
+export async function getUserCredits(userId) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('creditos')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      console.error('[CREDITS] Erro ao buscar créditos:', error);
+      return 0;
+    }
+
+    return data.creditos || 0;
+  } catch (error) {
+    console.error('[CREDITS] Erro ao buscar créditos:', error);
+    return 0;
   }
-
-  // Admin não consome créditos - permitir diretamente
-  if (isAdmin(userId)) {
-    console.log(`[CREDITS] Admin ${user.email} gerando ${clipCount} clipes sem débito de créditos`);
-    return {
-      totalDebited: 0,
-      freeTrialUsed: 0,
-      paidCreditsUsed: 0,
-      remainingFreeTrial: null,
-      remainingPaid: null,
-      isAdmin: true
-    };
-  }
-
-  // Verificar se tem créditos suficientes
-  if (!hasEnoughCredits(userId, clipCount)) {
-    throw new Error(`Créditos insuficientes. Necessário: ${clipCount}, Disponível: ${getTotalCredits(userId)}`);
-  }
-
-  let remainingToDebit = clipCount;
-  let freeTrialUsed = 0;
-  let paidCreditsUsed = 0;
-
-  // Primeiro: consumir free trial credits
-  if (user.free_trial_credits > 0 && remainingToDebit > 0) {
-    const freeTrialDebit = Math.min(user.free_trial_credits, remainingToDebit);
-    freeTrialUsed = freeTrialDebit;
-    remainingToDebit -= freeTrialDebit;
-
-    // Atualizar free trial credits
-    updateUser(userId, {
-      free_trial_credits: user.free_trial_credits - freeTrialDebit
-    });
-  }
-
-  // Depois: consumir credits_balance
-  if (remainingToDebit > 0 && user.credits_balance > 0) {
-    const paidDebit = Math.min(user.credits_balance, remainingToDebit);
-    paidCreditsUsed = paidDebit;
-    remainingToDebit -= paidDebit;
-
-    // Atualizar credits_balance
-    const updatedUser = getUserById(userId);
-    updateUser(userId, {
-      credits_balance: updatedUser.credits_balance - paidDebit
-    });
-  }
-
-  // Registrar logs de uso
-  if (freeTrialUsed > 0) {
-    createUsageLog({
-      userId,
-      creditsUsed: freeTrialUsed,
-      type: 'free_trial',
-      clipCount: freeTrialUsed,
-      seriesId
-    });
-  }
-
-  if (paidCreditsUsed > 0) {
-    createUsageLog({
-      userId,
-      creditsUsed: paidCreditsUsed,
-      type: 'paid',
-      clipCount: paidCreditsUsed,
-      seriesId
-    });
-  }
-
-  console.log(`[CREDITS] Créditos debitados para usuário ${userId}: ${clipCount} clipes (${freeTrialUsed} free trial + ${paidCreditsUsed} pagos)`);
-
-  return {
-    totalDebited: clipCount,
-    freeTrialUsed,
-    paidCreditsUsed,
-    remainingFreeTrial: getUserById(userId).free_trial_credits,
-    remainingPaid: getUserById(userId).credits_balance
-  };
 }
 
 /**
- * Verificar créditos disponíveis antes de gerar
- * Admin sempre tem acesso ilimitado
+ * Verificar se usuário tem créditos disponíveis
+ * Retorna true se creditos > 0 ou creditos = -1 (ilimitado)
  */
-export function checkCreditsBeforeGeneration(userId, requiredClips) {
-  const user = getUserById(userId);
-  if (!user) {
-    return {
-      allowed: false,
-      reason: 'Usuário não encontrado'
-    };
+export async function hasCredits(userId) {
+  const creditos = await getUserCredits(userId);
+  
+  // -1 = créditos ilimitados
+  if (creditos === -1) {
+    return true;
   }
+  
+  return creditos > 0;
+}
 
-  // Admin sempre tem acesso ilimitado
-  if (isAdmin(userId)) {
+/**
+ * Decrementar 1 crédito do usuário
+ * IMPORTANTE: Só deve ser chamado pelo backend após geração bem-sucedida
+ */
+export async function decrementCredits(userId) {
+  try {
+    // Buscar créditos atuais
+    const { data: userData, error: fetchError } = await supabaseAdmin
+      .from('users')
+      .select('creditos')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError || !userData) {
+      throw new Error('Usuário não encontrado');
+    }
+
+    const currentCredits = userData.creditos || 0;
+
+    // Se for ilimitado (-1), não decrementar
+    if (currentCredits === -1) {
+      console.log(`[CREDITS] Usuário ${userId} tem créditos ilimitados. Não decrementando.`);
+      return { creditos: -1, decremented: false };
+    }
+
+    // Se não tiver créditos, não decrementar (não deve chegar aqui se validação estiver correta)
+    if (currentCredits <= 0) {
+      throw new Error('Usuário não tem créditos disponíveis');
+    }
+
+    // Decrementar 1 crédito
+    const newCredits = currentCredits - 1;
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ creditos: newCredits })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Erro ao atualizar créditos: ${error.message}`);
+    }
+
+    console.log(`[CREDITS] Crédito decrementado para usuário ${userId}: ${currentCredits} -> ${newCredits}`);
+
+    return {
+      creditos: newCredits,
+      decremented: true
+    };
+  } catch (error) {
+    console.error('[CREDITS] Erro ao decrementar créditos:', error);
+    throw error;
+  }
+}
+
+/**
+ * Adicionar créditos ao usuário (para compras, etc)
+ */
+export async function addCredits(userId, amount) {
+  try {
+    if (amount <= 0) {
+      throw new Error('Quantidade de créditos deve ser maior que zero');
+    }
+
+    // Buscar créditos atuais
+    const { data: userData, error: fetchError } = await supabaseAdmin
+      .from('users')
+      .select('creditos')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError || !userData) {
+      throw new Error('Usuário não encontrado');
+    }
+
+    const currentCredits = userData.creditos || 0;
+
+    // Se for ilimitado (-1), não adicionar
+    if (currentCredits === -1) {
+      console.log(`[CREDITS] Usuário ${userId} tem créditos ilimitados. Não adicionando.`);
+      return { creditos: -1, added: false };
+    }
+
+    const newCredits = currentCredits + amount;
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ creditos: newCredits })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Erro ao adicionar créditos: ${error.message}`);
+    }
+
+    console.log(`[CREDITS] ${amount} crédito(s) adicionado(s) para usuário ${userId}: ${currentCredits} -> ${newCredits}`);
+
+    return {
+      creditos: newCredits,
+      added: true
+    };
+  } catch (error) {
+    console.error('[CREDITS] Erro ao adicionar créditos:', error);
+    throw error;
+  }
+}
+
+/**
+ * Verificar se usuário pode gerar vídeo
+ */
+export async function canGenerateVideo(userId) {
+  const creditos = await getUserCredits(userId);
+  
+  // -1 = ilimitado
+  if (creditos === -1) {
     return {
       allowed: true,
-      availableCredits: null, // null = ilimitado
-      requiredCredits: requiredClips,
-      freeTrialCredits: null,
-      paidCredits: null,
-      isAdmin: true
+      creditos: -1,
+      reason: null
     };
   }
-
-  const totalCredits = getTotalCredits(userId);
   
-  if (totalCredits < requiredClips) {
+  if (creditos <= 0) {
     return {
       allowed: false,
-      reason: `Créditos insuficientes. Você tem ${totalCredits} créditos disponíveis, mas precisa de ${requiredClips} para gerar ${requiredClips} clipe(s).`,
-      availableCredits: totalCredits,
-      requiredCredits: requiredClips
+      creditos: creditos,
+      reason: 'Créditos esgotados. Compre mais créditos para continuar gerando vídeos.'
     };
   }
-
+  
   return {
     allowed: true,
-    availableCredits: totalCredits,
-    requiredCredits: requiredClips,
-    freeTrialCredits: user.free_trial_credits,
-    paidCredits: user.credits_balance
+    creditos: creditos,
+    reason: null
   };
 }

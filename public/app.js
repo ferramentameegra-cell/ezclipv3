@@ -131,14 +131,28 @@ class ApiClient {
     }
   }
 
-  getAuthHeaders() {
-    const token = localStorage.getItem('ezv2_token');
+  async getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json'
     };
+    
+    // Tentar obter token do Supabase primeiro
+    try {
+      const supabase = window.SupabaseAuth?.getSession ? await window.SupabaseAuth.getSession() : null;
+      if (supabase?.session?.access_token) {
+        headers['Authorization'] = `Bearer ${supabase.session.access_token}`;
+        return headers;
+      }
+    } catch (error) {
+      console.warn('[API] Erro ao obter sessão Supabase:', error);
+    }
+    
+    // Fallback: token antigo (compatibilidade)
+    const token = localStorage.getItem('ezv2_token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    
     return headers;
   }
 
@@ -150,12 +164,22 @@ class ApiClient {
 
   async post(endpoint, body, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
-    const headers = { ...this.getAuthHeaders(), ...options.headers };
+    const headers = { ...(await this.getAuthHeaders()), ...options.headers };
     return this.fetchWithRetry(url, {
       ...options,
       method: 'POST',
       headers,
       body: JSON.stringify(body)
+    });
+  }
+  
+  async get(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = { ...(await this.getAuthHeaders()), ...options.headers };
+    return this.fetchWithRetry(url, {
+      ...options,
+      method: 'GET',
+      headers
     });
   }
 }
@@ -189,6 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initializeApp() {
+    // Inicializar Supabase se ainda não foi inicializado
+    if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.init) {
+        window.SUPABASE_CONFIG.init();
+    }
+    
     // CRÍTICO: Garantir que conteúdo principal está visível e interativo (nunca bloquear)
     showMainContent();
     
@@ -414,6 +443,66 @@ function scrollToTool() {
  * Apenas carrega dados do usuário se houver token válido
  */
 async function checkAuth() {
+  // Verificar sessão Supabase
+  try {
+    const session = await window.SupabaseAuth?.getSession();
+    if (session && session.user) {
+      // Usuário autenticado
+      updateUserUI(session.user);
+      return session.user;
+    }
+  } catch (error) {
+    console.warn('[AUTH] Erro ao verificar sessão Supabase:', error);
+  }
+  
+  // Fallback: verificar token antigo (compatibilidade)
+  const token = localStorage.getItem('ezv2_token');
+  if (token) {
+    try {
+      const { data } = await apiClient.get('/api/auth/me');
+      if (data && data.user) {
+        updateUserUI(data.user);
+        return data.user;
+      }
+    } catch (error) {
+      // Token inválido, limpar
+      localStorage.removeItem('ezv2_token');
+    }
+  }
+  
+  // Não autenticado
+  return null;
+}
+
+// Função auxiliar para atualizar UI do usuário
+function updateUserUI(user) {
+  const userMenu = document.getElementById('user-menu');
+  const navLoginBtn = document.getElementById('nav-login-btn');
+  const userNameDropdown = document.getElementById('user-name-dropdown');
+  const userEmailDropdown = document.getElementById('user-email-dropdown');
+  const userCredits = document.getElementById('user-credits');
+  const userCreditsDropdown = document.getElementById('user-credits-dropdown');
+  const userInitial = document.getElementById('user-initial');
+  
+  if (userMenu) userMenu.classList.remove('hidden');
+  if (navLoginBtn) navLoginBtn.classList.add('hidden');
+  
+  if (userNameDropdown) userNameDropdown.textContent = user.nome || user.name || user.email;
+  if (userEmailDropdown) userEmailDropdown.textContent = user.email;
+  
+  const creditos = user.creditos || 0;
+  const creditosText = creditos === -1 ? 'Ilimitados' : `${creditos} crédito${creditos !== 1 ? 's' : ''}`;
+  if (userCredits) userCredits.textContent = creditosText;
+  if (userCreditsDropdown) userCreditsDropdown.textContent = creditosText;
+  
+  if (userInitial) {
+    const initial = (user.nome || user.name || user.email || 'U').charAt(0).toUpperCase();
+    userInitial.textContent = initial;
+  }
+}
+
+// Função antiga checkAuth (manter para compatibilidade)
+async function checkAuthOld() {
     const token = localStorage.getItem('ezv2_token');
     const user = localStorage.getItem('ezv2_user');
     
@@ -528,23 +617,23 @@ async function loadUserVideos() {
     if (!appState.currentUser) return;
     
     try {
+        // Buscar créditos do backend
         const { data } = await apiClient.get('/api/credits/balance');
         if (data) {
-            appState.userVideos = {
-                videos_used: data.videos_used || 0,
-                videos_limit: data.videos_limit,
-                videos_remaining: data.videos_remaining,
-                is_unlimited: data.is_unlimited || false,
-                plan_id: data.plan_id || null,
-                plan_name: data.plan_name || 'Sem plano',
-                total_videos_processed: data.total_videos_processed || 0
-            };
+            appState.userCredits = data.creditos || 1;
+            appState.isUnlimited = data.is_unlimited || (data.creditos === -1);
             updateVideosUI();
-            updateGenerateButtonState(); // Atualizar botão após carregar vídeos
-            console.log('[VIDEOS] Informações de vídeos carregadas:', appState.userVideos);
+            updateGenerateButtonState(); // Atualizar botão após carregar créditos
+            console.log('[CREDITS] Créditos carregados:', { creditos: appState.userCredits, isUnlimited: appState.isUnlimited });
         }
     } catch (error) {
-        console.error('[VIDEOS] Erro ao carregar informações de vídeos:', error);
+        console.error('[CREDITS] Erro ao carregar créditos:', error);
+        // Se houver erro, usar créditos do user object se disponível
+        if (appState.currentUser && appState.currentUser.creditos !== undefined) {
+            appState.userCredits = appState.currentUser.creditos || 1;
+            appState.isUnlimited = appState.currentUser.creditos === -1;
+            updateVideosUI();
+        }
     }
 }
 
@@ -601,28 +690,37 @@ function updateVideosUI() {
     }
 }
 
-function updateUserUI() {
+function updateUserUI(user) {
     const navLoginBtn = document.getElementById('nav-login-btn');
     const userMenu = document.getElementById('user-menu');
     const userInitial = document.getElementById('user-initial');
     const userNameDropdown = document.getElementById('user-name-dropdown');
     const userEmailDropdown = document.getElementById('user-email-dropdown');
     
-    if (appState.currentUser) {
+    // Usar user passado como parâmetro ou appState.currentUser
+    const currentUser = user || appState.currentUser;
+    
+    if (currentUser) {
         if (navLoginBtn) navLoginBtn.classList.add('hidden');
         if (userMenu) userMenu.classList.remove('hidden');
         if (userInitial) {
-            const name = appState.currentUser.name || appState.currentUser.email;
+            const name = currentUser.nome || currentUser.name || currentUser.email || 'U';
             userInitial.textContent = name.charAt(0).toUpperCase();
         }
-        if (userNameDropdown) userNameDropdown.textContent = appState.currentUser.name || 'Usuário';
-        if (userEmailDropdown) userEmailDropdown.textContent = appState.currentUser.email;
+        if (userNameDropdown) userNameDropdown.textContent = currentUser.nome || currentUser.name || 'Usuário';
+        if (userEmailDropdown) userEmailDropdown.textContent = currentUser.email;
+        
+        // Atualizar créditos se disponível
+        if (currentUser.creditos !== undefined) {
+            appState.userCredits = currentUser.creditos;
+            appState.isUnlimited = currentUser.creditos === -1;
+        }
     } else {
         if (navLoginBtn) navLoginBtn.classList.remove('hidden');
         if (userMenu) userMenu.classList.add('hidden');
     }
     
-    // Atualizar vídeos na UI
+    // Atualizar créditos na UI
     updateVideosUI();
     
     // Atualizar estado do botão de gerar
@@ -957,20 +1055,12 @@ async function handleLogin(event) {
         event.stopPropagation();
     }
     
-    // Buscar elementos na nova estrutura
+    // Buscar elementos
     const emailInput = document.getElementById('auth-login-email');
     const passwordInput = document.getElementById('auth-login-password');
     const btnText = document.getElementById('auth-login-btn-text');
     const btnSpinner = document.getElementById('auth-login-btn-spinner');
     const statusMsg = document.getElementById('auth-login-status');
-    
-    console.log('[AUTH] Elementos encontrados:', { 
-        emailInput: !!emailInput, 
-        passwordInput: !!passwordInput,
-        btnText: !!btnText,
-        btnSpinner: !!btnSpinner,
-        statusMsg: !!statusMsg
-    });
     
     if (!emailInput || !passwordInput) {
         console.error('[AUTH] ❌ Campos de login não encontrados');
@@ -998,64 +1088,19 @@ async function handleLogin(event) {
     }
     
     try {
-        console.log('[AUTH] 🔐 Tentando fazer login...', { 
-            email: email.substring(0, 5) + '***', 
-            apiBase: API_BASE,
-            timestamp: new Date().toISOString()
-        });
+        console.log('[AUTH] 🔐 Tentando fazer login via Supabase...');
         
-        const loginPayload = { email, password };
-        console.log('[AUTH] 📤 Enviando requisição:', {
-            url: `${API_BASE}/api/auth/login`,
-            method: 'POST',
-            hasEmail: !!email,
-            hasPassword: !!password
-        });
+        // Usar Supabase Auth diretamente
+        const result = await window.SupabaseAuth.signIn(email, password);
         
-        const response = await fetch(`${API_BASE}/api/auth/login`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(loginPayload),
-            credentials: 'include', // Importante para cookies
-            mode: 'cors' // Garantir CORS
-        });
-        
-        console.log('[AUTH] Resposta recebida:', { status: response.status, statusText: response.statusText, ok: response.ok });
-        
-        let data;
-        try {
-            const text = await response.text();
-            console.log('[AUTH] Resposta texto (primeiros 200 chars):', text.substring(0, 200));
-            data = JSON.parse(text);
-        } catch (parseError) {
-            console.error('[AUTH] Erro ao parsear resposta:', parseError);
-            throw new Error('Resposta inválida do servidor');
-        }
-        
-        console.log('[AUTH] Dados parseados:', { hasUser: !!data.user, hasToken: !!data.token, error: data.error });
-        
-        if (!response.ok) {
-            // Mostrar erro
-            if (statusMsg) {
-                statusMsg.textContent = data.error || 'Erro ao fazer login';
-                statusMsg.className = 'auth-status-message error';
-                statusMsg.classList.remove('hidden');
-            }
-            if (btnText) btnText.classList.remove('hidden');
-            if (btnSpinner) btnSpinner.classList.add('hidden');
-            return;
-        }
-        
-        if (data.user && data.token) {
+        if (result.success && result.user) {
             console.log('[AUTH] ✅ Login realizado com sucesso!');
             
-            appState.currentUser = data.user;
-            appState.userToken = data.token;
-            localStorage.setItem('ezv2_user', JSON.stringify(data.user));
-            localStorage.setItem('ezv2_token', data.token);
+            appState.currentUser = result.user;
+            if (result.session) {
+                localStorage.setItem('supabase_session', JSON.stringify(result.session));
+            }
+            localStorage.setItem('ezv2_user', JSON.stringify(result.user));
             
             if (statusMsg) {
                 statusMsg.textContent = 'Login realizado com sucesso!';
@@ -1067,7 +1112,7 @@ async function handleLogin(event) {
             if (btnText) btnText.classList.remove('hidden');
             if (btnSpinner) btnSpinner.classList.add('hidden');
             
-            updateUserUI();
+            updateUserUI(result.user);
             
             // Carregar créditos
             await loadUserVideos();
@@ -1081,35 +1126,33 @@ async function handleLogin(event) {
             // Retomar geração se estava pendente
             if (appState.pendingGeneration) {
                 console.log('[AUTH] Retomando geração após login...');
-                // Restaurar estado
                 Object.assign(appState, appState.pendingGeneration);
                 appState.pendingGeneration = null;
                 
-                // Verificar vídeos e continuar geração
                 setTimeout(() => {
                     proceedToGenerate();
                 }, 500);
                 return;
             }
             
-            // Se não havia geração pendente, apenas atualizar UI
             setTimeout(() => {
                 switchTab('home');
             }, 500);
-        } else {
-            console.error('[AUTH] Resposta inválida:', data);
-            if (statusMsg) {
-                statusMsg.textContent = data.error || 'Erro ao fazer login - resposta inválida';
-                statusMsg.className = 'auth-status-message error';
-                statusMsg.classList.remove('hidden');
-            }
-            if (btnText) btnText.classList.remove('hidden');
-            if (btnSpinner) btnSpinner.classList.add('hidden');
         }
     } catch (error) {
         console.error('[AUTH] Erro no login:', error);
+        
+        let errorMessage = 'Erro ao fazer login';
+        if (error.message === 'EMAIL_NOT_CONFIRMED') {
+            errorMessage = 'Email não confirmado. Verifique sua caixa de entrada e confirme seu email antes de fazer login.';
+        } else if (error.message.includes('Invalid')) {
+            errorMessage = 'Email ou senha incorretos';
+        } else {
+            errorMessage = error.message || 'Erro ao conectar com o servidor. Verifique sua conexão.';
+        }
+        
         if (statusMsg) {
-            statusMsg.textContent = error.message || 'Erro ao conectar com o servidor. Verifique sua conexão.';
+            statusMsg.textContent = errorMessage;
             statusMsg.className = 'auth-status-message error';
             statusMsg.classList.remove('hidden');
         }
@@ -1124,7 +1167,7 @@ async function handleRegister(event) {
         event.stopPropagation();
     }
     
-    // Buscar elementos na nova estrutura
+    // Buscar elementos
     const nameInput = document.getElementById('auth-register-name');
     const emailInput = document.getElementById('auth-register-email');
     const passwordInput = document.getElementById('auth-register-password');
@@ -1132,19 +1175,122 @@ async function handleRegister(event) {
     const btnSpinner = document.getElementById('auth-register-btn-spinner');
     const statusMsg = document.getElementById('auth-register-status');
     
-    console.log('[AUTH] Elementos de registro encontrados:', { 
-        nameInput: !!nameInput,
-        emailInput: !!emailInput, 
-        passwordInput: !!passwordInput,
-        btnText: !!btnText,
-        btnSpinner: !!btnSpinner,
-        statusMsg: !!statusMsg
-    });
-    
     if (!nameInput || !emailInput || !passwordInput) {
         console.error('[AUTH] ❌ Campos de registro não encontrados');
         alert('Erro: Campos de registro não encontrados. Recarregue a página.');
         return;
+    }
+    
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (btnText) btnText.classList.add('hidden');
+    if (btnSpinner) btnSpinner.classList.remove('hidden');
+    if (statusMsg) statusMsg.classList.add('hidden');
+    
+    // Validações
+    if (!name || !email || !password) {
+        if (statusMsg) {
+            statusMsg.textContent = 'Por favor, preencha todos os campos';
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
+        return;
+    }
+    
+    if (name.length === 0) {
+        if (statusMsg) {
+            statusMsg.textContent = 'Nome não pode estar vazio';
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
+        return;
+    }
+    
+    if (password.length < 6) {
+        if (statusMsg) {
+            statusMsg.textContent = 'A senha deve ter no mínimo 6 caracteres';
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
+        return;
+    }
+    
+    try {
+        console.log('[AUTH] 📝 Tentando criar conta via Supabase...');
+        
+        // Usar Supabase Auth diretamente
+        const result = await window.SupabaseAuth.signUp(name, email, password);
+        
+        if (result.success) {
+            console.log('[AUTH] ✅ Conta criada com sucesso!');
+            
+            if (statusMsg) {
+                if (result.requiresEmailConfirmation) {
+                    statusMsg.textContent = 'Conta criada! Confirme seu email para acessar a conta. Verifique sua caixa de entrada.';
+                    statusMsg.className = 'auth-status-message success';
+                } else {
+                    statusMsg.textContent = 'Conta criada com sucesso!';
+                    statusMsg.className = 'auth-status-message success';
+                }
+                statusMsg.classList.remove('hidden');
+            }
+            
+            // Restaurar botões
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
+            
+            // NÃO fazer login automático - usuário deve confirmar email
+            // Limpar campos
+            if (nameInput) nameInput.value = '';
+            if (emailInput) emailInput.value = '';
+            if (passwordInput) passwordInput.value = '';
+            
+            // Se não precisar confirmar email (improvável), fazer login
+            if (!result.requiresEmailConfirmation && result.user) {
+                appState.currentUser = result.user;
+                updateUserUI(result.user);
+                await loadUserVideos();
+                setTimeout(() => {
+                    switchTab('home');
+                }, 500);
+            } else {
+                // Mostrar mensagem de confirmação e trocar para tela de login
+                setTimeout(() => {
+                    // Trocar para tela de login após 2 segundos
+                    const loginCard = document.getElementById('login-card');
+                    const registerCard = document.getElementById('register-card');
+                    if (loginCard) loginCard.classList.remove('hidden');
+                    if (registerCard) registerCard.classList.add('hidden');
+                }, 2000);
+            }
+        }
+    } catch (error) {
+        console.error('[AUTH] Erro no registro:', error);
+        
+        let errorMessage = 'Erro ao criar conta';
+        if (error.message.includes('already registered') || error.message.includes('already exists') || error.message.includes('já cadastrado')) {
+            errorMessage = 'Email já cadastrado';
+        } else if (error.message.includes('Password') || error.message.includes('senha')) {
+            errorMessage = 'Senha muito fraca. Use pelo menos 6 caracteres.';
+        } else {
+            errorMessage = error.message || 'Erro ao criar conta';
+        }
+        
+        if (statusMsg) {
+            statusMsg.textContent = errorMessage;
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
     }
     
     const name = nameInput.value.trim();
@@ -1346,7 +1492,31 @@ function openLoginFromModal() {
     }, 100);
 }
 
-function logout() {
+async function logout() {
+    try {
+        // Fazer logout no Supabase
+        await window.SupabaseAuth?.signOut();
+    } catch (error) {
+        console.error('[AUTH] Erro ao fazer logout no Supabase:', error);
+    }
+    
+    // Limpar estado local
+    clearAuth();
+    
+    // Atualizar UI
+    updateUserUI();
+    
+    // Garantir que conteúdo principal está visível
+    showMainContent();
+    
+    // Voltar para home
+    switchTab('home');
+    
+    console.log('[AUTH] Logout realizado com sucesso');
+}
+
+// Função antiga logout (manter para compatibilidade)
+function logoutOld() {
     clearAuth();
     // Após logout, mostrar conteúdo principal (não bloquear acesso)
     showMainContent();

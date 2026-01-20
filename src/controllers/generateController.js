@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
-import { canUserProcessVideo, registerVideoProcessed } from '../services/videoService.js';
+import { canGenerateVideo, decrementCredits } from '../services/creditService.js';
 
 const BASE_TMP_DIR = '/tmp/uploads';
 const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
@@ -50,16 +50,13 @@ export const generateSeries = async (req, res) => {
     // Calcular quantidade de clipes que serão gerados
     const finalClipsCount = clipsQuantity || numberOfCuts;
 
-    // Verificar se pode processar vídeo ANTES de iniciar processamento
-    const videoCheck = canUserProcessVideo(req.userId, videoId);
-    if (!videoCheck.allowed) {
+    // Verificar se usuário tem créditos disponíveis ANTES de iniciar processamento
+    const creditCheck = await canGenerateVideo(req.userId);
+    if (!creditCheck.allowed) {
       return res.status(402).json({
-        error: videoCheck.reason,
-        code: 'VIDEO_LIMIT_REACHED',
-        videos_used: videoCheck.videos_used,
-        videos_limit: videoCheck.videos_limit,
-        plan_name: videoCheck.plan_name,
-        needsUpgrade: videoCheck.needsUpgrade || false
+        error: creditCheck.reason || 'Créditos esgotados',
+        code: 'NO_CREDITS',
+        creditos: creditCheck.creditos
       });
     }
 
@@ -73,30 +70,14 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
-    // REGISTRAR PROCESSAMENTO DE VÍDEO ANTES de adicionar à fila
-    // Se o vídeo já foi processado antes, não incrementa contador (cortes ilimitados)
-    let videoRegistered = false;
-    try {
-      const registerResult = registerVideoProcessed(req.userId, videoId);
-      videoRegistered = true;
-      
-      if (registerResult.isNewVideo) {
-        console.log(`[GENERATE] Novo vídeo registrado: ${videoId}. Total: ${registerResult.videos_used}/${registerResult.videos_limit || 'ilimitado'}`);
-      } else {
-        console.log(`[GENERATE] Vídeo ${videoId} já processado antes. Permitindo cortes ilimitados.`);
-      }
-    } catch (videoError) {
-      console.error('[GENERATE] Erro ao registrar vídeo:', videoError);
-      // Se falhar ao registrar, não permitir geração
-      return res.status(500).json({
-        error: videoError.message || 'Erro ao processar vídeo',
-        code: 'VIDEO_REGISTRATION_ERROR'
-      });
-    }
+    // Créditos já foram verificados acima
+    // O crédito será decrementado APÓS a geração bem-sucedida (no worker)
+    console.log(`[GENERATE] Usuário ${req.userId} tem ${creditCheck.creditos} crédito(s) disponível(is). Iniciando geração...`);
 
     // Obter posição na fila antes de adicionar
     const waitingCount = await videoProcessQueue.getWaitingCount ? await videoProcessQueue.getWaitingCount() : 0;
     
+    // Adicionar userId ao job data para decrementar créditos após geração
     const job = await videoProcessQueue.add(
       'generate-video-series',
       {

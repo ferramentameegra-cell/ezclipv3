@@ -1,5 +1,6 @@
 import { videoProcessQueue } from '../queue/queue.js';
 import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
+import { decrementCredits } from '../services/creditService.js';
 
 // VideoStore será injetado quando o servidor iniciar
 let videoStoreInstance = null;
@@ -38,6 +39,26 @@ videoProcessQueue.process('generate-video-series', CONCURRENCY, async (job) => {
     
     console.log(`[WORKER] Job ${job.id} concluído com sucesso: ${result.clipsCount} clips gerados`);
     console.log(`[WORKER] Resultado:`, JSON.stringify({ ...result, clips: `[${result.clips?.length || 0} clips]` }));
+    
+    // DECREMENTAR 1 CRÉDITO após geração bem-sucedida
+    // IMPORTANTE: Só decrementa se a geração foi bem-sucedida
+    const userId = job.data?.userId;
+    if (userId) {
+      try {
+        const creditResult = await decrementCredits(userId);
+        if (creditResult.decremented) {
+          console.log(`[WORKER] ✅ Crédito decrementado para usuário ${userId}. Créditos restantes: ${creditResult.creditos}`);
+        } else {
+          console.log(`[WORKER] ℹ️ Usuário ${userId} tem créditos ilimitados. Não decrementado.`);
+        }
+      } catch (creditError) {
+        console.error(`[WORKER] ❌ Erro ao decrementar créditos:`, creditError);
+        // Não falhar o job se houver erro ao decrementar créditos (já foi gerado)
+        // Mas logar o erro para investigação
+      }
+    } else {
+      console.warn(`[WORKER] ⚠️ userId não encontrado no job.data. Créditos não foram decrementados.`);
+    }
     
     // Retornar resultado que será armazenado em job.returnvalue
     const returnValue = {
