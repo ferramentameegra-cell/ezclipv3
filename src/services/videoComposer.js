@@ -634,12 +634,15 @@ export async function composeFinalVideo({
 
       // 2. Redimensionar vídeo principal para altura calculada (sem padding, sem distorção)
       // force_original_aspect_ratio=decrease garante que não distorça
-      // Vídeo será redimensionado para caber exatamente em MAIN_VIDEO_HEIGHT
-      // HARDCODED: largura sempre 1080, altura sempre MAIN_VIDEO_HEIGHT (máximo 1920-180-140=1600px)
-      // FORÇAR formato vertical: largura fixa 1080px
+      // Vídeo principal será redimensionado mantendo proporção 16:9 (horizontal)
+      // Usar force_original_aspect_ratio=decrease para manter proporção e caber no espaço disponível
+      // Largura máxima: 1080px (largura do frame vertical)
+      // Altura máxima: MAIN_VIDEO_HEIGHT (altura disponível para o vídeo principal)
+      // O vídeo 16:9 será redimensionado para caber dentro desses limites, mantendo proporção
       filterParts.push(`${currentLabel}scale=1080:${MAIN_VIDEO_HEIGHT}:force_original_aspect_ratio=decrease[main_scaled]`);
       currentLabel = '[main_scaled]';
-      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado para: 1080x${MAIN_VIDEO_HEIGHT} (formato vertical forçado)`);
+      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: máximo 1080x${MAIN_VIDEO_HEIGHT}`);
+      console.log(`[COMPOSER] ✅ Vídeo principal manterá proporção horizontal (16:9) dentro do frame vertical 1080x1920`);
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
       // Vídeo fica acima do background (layer 1)

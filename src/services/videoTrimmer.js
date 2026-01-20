@@ -24,15 +24,13 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
     // Frame-accurate cutting para clips sequenciais
     // Usar -ss antes de -i para seeking preciso (mais rápido)
     // Usar -t para duração exata
-    // FORÇAR formato vertical 1080x1920 (9:16) OBRIGATORIAMENTE
+    // IMPORTANTE: NÃO forçar formato aqui - vídeo principal mantém proporção original (16:9)
+    // O formato 1080x1920 será forçado apenas na composição final
     ffmpeg(inputPath)
       .seekInput(startTime) // Seeking antes do input é mais preciso
       .output(outputPath)
       .outputOptions([
         '-t', duration.toString(), // Duração exata
-        '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920', // FORÇAR 1080x1920 vertical
-        '-s', '1080x1920', // FORÇAR resolução 1080x1920
-        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 vertical
         '-c:v', 'libx264', // Forçar h264
         '-c:a', 'aac', // Forçar aac
         '-preset', 'veryfast', // Velocidade
@@ -43,8 +41,8 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
         '-fflags', '+genpts' // Regenerar timestamps precisos
       ])
       .on('start', cmd => {
-        console.log('[FFMPEG] Trim iniciado (FORÇANDO 1080x1920 vertical):', cmd);
-        console.log('[FFMPEG] ✅ Formato vertical 9:16 (1080x1920) OBRIGATÓRIO no trim');
+        console.log('[FFMPEG] Trim iniciado (mantendo proporção original do vídeo):', cmd);
+        console.log('[FFMPEG] ✅ Vídeo principal manterá proporção original (16:9) - formato 1080x1920 será aplicado na composição');
       })
       .on('end', () => {
         if (!fs.existsSync(outputPath)) {
@@ -56,25 +54,20 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
           return reject(new Error('Arquivo de saída vazio'));
         }
 
-        // VALIDAR que o formato é 1080x1920 (OBRIGATÓRIO)
+        // Validar resolução (apenas para log - não forçar formato aqui)
         ffmpeg.ffprobe(outputPath, (err, metadata) => {
           if (!err && metadata?.streams) {
             const videoStream = metadata.streams.find(s => s.codec_type === 'video');
             if (videoStream) {
               const actualWidth = videoStream.width;
               const actualHeight = videoStream.height;
-              if (actualWidth !== 1080 || actualHeight !== 1920) {
-                console.error(`[FFMPEG] ❌ ERRO: Trim não resultou em 1080x1920! Obtido: ${actualWidth}x${actualHeight}`);
-                console.error(`[FFMPEG] ❌ O vídeo NÃO está no formato vertical correto após trim!`);
-              } else {
-                console.log(`[FFMPEG] ✅ Validação: Trim resultou em 1080x1920 (formato vertical correto)`);
-              }
+              console.log(`[FFMPEG] ✅ Trim concluído: ${actualWidth}x${actualHeight} (proporção original mantida)`);
+              console.log(`[FFMPEG] ✅ Formato 1080x1920 será aplicado na composição final`);
             }
           }
         });
 
         console.log(`[FFMPEG] Trim concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-        console.log(`[FFMPEG] ✅ Formato vertical 1080x1920 FORÇADO no trim`);
         resolve(outputPath);
       })
       .on('error', err => {
