@@ -267,11 +267,12 @@ export async function composeFinalVideo({
               
               // Se ainda não tem arquivo válido, baixar do YouTube
               if (!fs.existsSync(tempVideoPath)) {
-                console.log(`[COMPOSER] ⬇️ Baixando vídeo do YouTube usando yt-dlp: ${youtubeVideoId}`);
+                console.log(`[COMPOSER] ⬇️ Baixando vídeo de retenção do YouTube usando yt-dlp com estratégia android_with_cookies: ${youtubeVideoId}`);
                 
                 // Importar função de download do YouTube
+                // Usar estratégia android_with_cookies para vídeos de retenção (mais confiável, evita bloqueios 403)
                 const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
-                await downloadYouTubeVideo(youtubeVideoId, tempVideoPath);
+                await downloadYouTubeVideo(youtubeVideoId, tempVideoPath, 'android_with_cookies');
                 
                 // Validar que o arquivo foi baixado corretamente
                 if (!fs.existsSync(tempVideoPath)) {

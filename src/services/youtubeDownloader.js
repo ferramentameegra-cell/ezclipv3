@@ -39,13 +39,18 @@ function createCookiesFile() {
  * Suporta cookies para evitar detecção de bot
  * @param {string} videoId
  * @param {string} outputPath
+ * @param {string} strategy - Estratégia de player client ('web' ou 'android_with_cookies')
  */
-export function downloadYouTubeVideo(videoId, outputPath) {
+export function downloadYouTubeVideo(videoId, outputPath, strategy = 'web') {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     
     // Criar arquivo de cookies se disponível
     const cookiesPath = createCookiesFile();
+    
+    // Determinar estratégia de player client
+    // android_with_cookies é mais confiável para evitar bloqueios 403
+    const playerClient = strategy === 'android_with_cookies' ? 'android_with_cookies' : 'web';
     
     // Construir comando com múltiplas estratégias
     const baseArgs = [
@@ -58,10 +63,10 @@ export function downloadYouTubeVideo(videoId, outputPath) {
       '--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"',
       // Referer para parecer mais legítimo
       '--referer "https://www.youtube.com/"',
-      // Cookies se disponível
+      // Cookies se disponível (OBRIGATÓRIO para android_with_cookies)
       ...(cookiesPath ? [`--cookies "${cookiesPath}"`] : []),
-      // Outras opções para evitar detecção
-      '--extractor-args "youtube:player_client=web"',
+      // Estratégia de player client (android_with_cookies é mais confiável)
+      `--extractor-args "youtube:player_client=${playerClient}"`,
       '--geo-bypass',
       '--no-check-certificate',
       `-o "${outputPath}"`,
@@ -70,11 +75,16 @@ export function downloadYouTubeVideo(videoId, outputPath) {
     
     const cmd = baseArgs.join(' ');
 
-    console.log('[YT-DLP] Download:', cmd);
+    console.log(`[YT-DLP] Download usando estratégia: ${playerClient}`);
+    console.log('[YT-DLP] Comando:', cmd);
     if (cookiesPath) {
       console.log('[YT-DLP] ✅ Usando cookies de variável de ambiente');
     } else {
-      console.warn('[YT-DLP] ⚠️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+      if (playerClient === 'android_with_cookies') {
+        console.warn('[YT-DLP] ⚠️ AVISO: android_with_cookies requer cookies. Configure YTDLP_COOKIES para evitar bloqueios 403.');
+      } else {
+        console.warn('[YT-DLP] ⚠️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
+      }
     }
 
     exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
@@ -99,7 +109,7 @@ export function downloadYouTubeVideo(videoId, outputPath) {
         console.log('[YT-DLP] stderr:', stderr);
       }
       
-      console.log('[YT-DLP] Download concluído');
+      console.log(`[YT-DLP] ✅ Download concluído usando ${playerClient}`);
       resolve(true);
     });
   });
