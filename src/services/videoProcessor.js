@@ -85,15 +85,87 @@ export const generateVideoSeries = async (job, jobsMap) => {
       throw new Error('VideoStore não foi configurado');
     }
 
-    const video = videoStore.get(videoId);
+    let video = videoStore.get(videoId);
+    
+    // Se vídeo não está no store, tentar aguardar download ou baixar
     if (!video) {
-      throw new Error(`Vídeo ${videoId} não encontrado`);
+      console.log(`[PROCESSING] ⚠️ Vídeo ${videoId} não encontrado no videoStore, verificando download...`);
+      
+      // Verificar se há arquivo baixado mesmo sem estar no store
+      const possibleDownloadPath = path.join(TMP_UPLOADS_DIR, `${videoId}_downloaded.mp4`);
+      const possibleUploadPath = path.join(process.cwd(), 'uploads', `${videoId}.mp4`);
+      
+      // Tentar encontrar arquivo existente
+      let foundPath = null;
+      if (fs.existsSync(possibleDownloadPath) && fs.statSync(possibleDownloadPath).size > 0) {
+        foundPath = possibleDownloadPath;
+        console.log(`[PROCESSING] ✅ Arquivo encontrado em: ${foundPath}`);
+      } else if (fs.existsSync(possibleUploadPath) && fs.statSync(possibleUploadPath).size > 0) {
+        foundPath = possibleUploadPath;
+        console.log(`[PROCESSING] ✅ Arquivo encontrado em: ${foundPath}`);
+      }
+      
+      // Se encontrou arquivo, criar entrada no videoStore
+      if (foundPath) {
+        video = {
+          id: videoId,
+          path: foundPath,
+          downloaded: true,
+          fileSize: fs.statSync(foundPath).size
+        };
+        videoStore.set(videoId, video);
+        console.log(`[PROCESSING] ✅ Vídeo adicionado ao videoStore: ${videoId}`);
+      } else {
+        // Se não encontrou arquivo, verificar se há youtubeVideoId no jobData para baixar
+        const youtubeVideoId = jobData.youtubeVideoId;
+        if (youtubeVideoId) {
+          console.log(`[PROCESSING] ⬇️ Vídeo não encontrado, iniciando download do YouTube: ${youtubeVideoId}`);
+          // O download será feito abaixo na seção de download do YouTube
+          // Criar entrada temporária no videoStore
+          video = {
+            id: videoId,
+            youtubeVideoId: youtubeVideoId,
+            path: null,
+            downloaded: false
+          };
+          };
+        } else {
+          throw new Error(`Vídeo ${videoId} não encontrado no videoStore e nenhum arquivo encontrado. Verifique se o download foi concluído.`);
+        }
+      }
     }
 
-    // Verificar estado do vídeo
+    // Verificar estado do vídeo (se existir)
     const videoState = getVideoState(videoId);
-    if (!videoState || videoState.state !== VIDEO_STATES.READY) {
-      throw new Error(`Vídeo não está pronto para processamento. Estado: ${videoState?.state || 'unknown'}`);
+    if (videoState && videoState.state === VIDEO_STATES.DOWNLOADING) {
+      console.log(`[PROCESSING] ⏳ Vídeo está sendo baixado, aguardando conclusão...`);
+      // Aguardar até 60 segundos pelo download
+      let waitCount = 0;
+      const maxWait = 60; // 60 tentativas de 1 segundo = 60 segundos
+      while (waitCount < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Aguardar 1 segundo
+        const currentState = getVideoState(videoId);
+        const currentVideo = videoStore.get(videoId);
+        
+        if (currentState?.state === VIDEO_STATES.READY && currentVideo?.path && fs.existsSync(currentVideo.path)) {
+          video = currentVideo;
+          console.log(`[PROCESSING] ✅ Download concluído após ${waitCount + 1} segundos`);
+          break;
+        }
+        
+        waitCount++;
+        if (waitCount % 10 === 0) {
+          console.log(`[PROCESSING] ⏳ Aguardando download... (${waitCount}s/${maxWait}s)`);
+        }
+      }
+      
+      // Verificar novamente após aguardar
+      if (!video.path || !fs.existsSync(video.path)) {
+        throw new Error(`Vídeo ${videoId} ainda não está pronto após aguardar ${maxWait} segundos. Estado: ${getVideoState(videoId)?.state || 'unknown'}`);
+      }
+    } else if (videoState && videoState.state !== VIDEO_STATES.READY && videoState.state !== VIDEO_STATES.IDLE) {
+      console.warn(`[PROCESSING] ⚠️ Estado do vídeo: ${videoState.state} (esperado: READY ou IDLE)`);
+      // Continuar mesmo assim se o arquivo existir
     }
 
     // ===============================
@@ -114,16 +186,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // DOWNLOAD YOUTUBE (SE NECESSÁRIO)
     // ===============================
-    if (video.youtubeVideoId) {
+    // Verificar se precisa baixar (vídeo do YouTube sem arquivo local)
+    if (video.youtubeVideoId && (!video.path || !fs.existsSync(video.path) || (fs.existsSync(video.path) && fs.statSync(video.path).size === 0))) {
       const downloadPath = path.join(
         TMP_UPLOADS_DIR,
         `${videoId}_downloaded.mp4`
       );
 
-      const needsDownload =
-        !sourceVideoPath || !fs.existsSync(sourceVideoPath) || (fs.existsSync(sourceVideoPath) && fs.statSync(sourceVideoPath).size === 0);
-
-      if (needsDownload) {
+      // Download já foi verificado acima, continuar com o download
+      {
         console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
 
       // Atualizar progresso usando função do BullMQ
