@@ -1524,7 +1524,8 @@ function openLoginFromModal() {
     // Scroll para a seção de auth
     setTimeout(() => {
         if (authSection) {
-            authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Scroll automático desabilitado
+            // authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }, 100);
 }
@@ -1661,7 +1662,8 @@ function focusTermsCheckbox() {
         checkboxContainer.style.display = 'block';
         // Scroll suave até o checkbox
         setTimeout(() => {
-            checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Scroll automático desabilitado
+            // checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 100);
     }
     
@@ -2080,7 +2082,8 @@ async function handleYouTubeSubmit() {
             termsAlert.style.display = 'flex';
             // Scroll suave até o alerta
             setTimeout(() => {
-                termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Scroll automático desabilitado
+                // termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 100);
         }
         
@@ -3755,7 +3758,8 @@ function proceedToGenerate() {
         switchTab('login');
         
         // Scroll suave para o topo da página
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // Scroll automático desabilitado
+        // window.scrollTo({ top: 0, behavior: 'smooth' });
         
         // Aguardar um pouco para garantir que a aba foi trocada e mostrar modal de planos
         setTimeout(() => {

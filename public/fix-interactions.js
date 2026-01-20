@@ -318,5 +318,33 @@
         }
     }, false); // Bubble phase como backup
     
+    // BLOQUEAR scroll automático
+    const originalScrollTo = window.scrollTo;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    
+    // Sobrescrever window.scrollTo para bloquear scroll automático
+    window.scrollTo = function(...args) {
+        // Permitir apenas scroll manual (sem behavior: 'smooth' ou quando chamado pelo usuário)
+        const hasSmooth = args.some(arg => arg && typeof arg === 'object' && arg.behavior === 'smooth');
+        if (hasSmooth) {
+            console.log('[FIX-INTERACTIONS] 🚫 Scroll automático bloqueado:', args);
+            return; // Bloquear scroll automático
+        }
+        // Permitir scroll instantâneo se necessário
+        return originalScrollTo.apply(this, args);
+    };
+    
+    // Sobrescrever scrollIntoView para bloquear scroll automático
+    Element.prototype.scrollIntoView = function(...args) {
+        const hasSmooth = args.some(arg => arg && typeof arg === 'object' && arg.behavior === 'smooth');
+        if (hasSmooth) {
+            console.log('[FIX-INTERACTIONS] 🚫 scrollIntoView automático bloqueado:', this);
+            return; // Bloquear scroll automático
+        }
+        // Permitir scroll instantâneo se necessário
+        return originalScrollIntoView.apply(this, args);
+    };
+    
     console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
+    console.log('[FIX-INTERACTIONS] 🚫 Scroll automático bloqueado');
 })();
