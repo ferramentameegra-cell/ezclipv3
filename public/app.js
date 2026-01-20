@@ -322,24 +322,45 @@ async function initializeApp() {
 
 // ========== TAB NAVIGATION ==========
 function switchTab(tabName) {
-    // Atualizar estado
-    appState.currentTab = tabName;
+    console.log('[TAB] switchTab chamado:', tabName);
     
-    // Atualizar tabs visuais
-    document.querySelectorAll('.nav-item').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    const navLink = document.querySelector(`[data-tab="${tabName}"]`);
-    if (navLink) navLink.classList.add('active');
-    
-    // Mostrar conteúdo da tab
-    document.querySelectorAll('.tab-content').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    const panel = document.getElementById(`tab-${tabName}`);
-    if (panel) panel.classList.add('active');
-    
-    // Permitir scroll natural - usuário controla a rolagem
+    try {
+        // Atualizar estado
+        appState.currentTab = tabName;
+        
+        // Atualizar tabs visuais
+        document.querySelectorAll('.nav-item').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        const navLink = document.querySelector(`[data-tab="${tabName}"]`);
+        if (navLink) {
+            navLink.classList.add('active');
+            console.log('[TAB] Tab ativada:', tabName);
+        } else {
+            console.warn('[TAB] Tab não encontrada:', tabName);
+        }
+        
+        // Mostrar conteúdo da tab
+        document.querySelectorAll('.tab-content').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        const panel = document.getElementById(`tab-${tabName}`);
+        if (panel) {
+            panel.classList.add('active');
+            console.log('[TAB] Painel ativado:', `tab-${tabName}`);
+        } else {
+            console.warn('[TAB] Painel não encontrado:', `tab-${tabName}`);
+        }
+        
+        // Permitir scroll natural - usuário controla a rolagem
+    } catch (error) {
+        console.error('[TAB] Erro ao trocar tab:', error);
+    }
+}
+
+// Tornar switchTab globalmente acessível
+if (typeof window !== 'undefined') {
+    window.switchTab = switchTab;
 }
 
 // ========== PROGRESS STEPS INDICATOR ==========

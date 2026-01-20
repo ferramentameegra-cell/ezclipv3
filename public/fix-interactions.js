@@ -231,8 +231,13 @@
                         }
                     } else if (target.getAttribute('data-tab')) {
                         const tabName = target.getAttribute('data-tab');
+                        console.log('[FIX-INTERACTIONS] Tentando trocar tab:', tabName);
                         if (typeof window.switchTab === 'function') {
                             window.switchTab(tabName);
+                        } else if (typeof switchTab === 'function') {
+                            switchTab(tabName);
+                        } else {
+                            console.error('[FIX-INTERACTIONS] Função switchTab não encontrada!');
                         }
                     } else {
                         const newEvent = new MouseEvent('click', {
