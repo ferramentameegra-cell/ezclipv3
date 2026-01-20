@@ -96,7 +96,7 @@ export const RETENTION_VIDEOS = {
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
     description: 'Vídeo 1 de prensa hidráulica comprimindo objetos',
     source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://streamable.com/zzzw81' // URL do Streamable
+    url: 'https://www.youtube.com/watch?v=zeguhXoUghI' // URL do YouTube
   },
   'hydraulic-press-2': {
     id: 'hydraulic-press-2',
@@ -104,7 +104,7 @@ export const RETENTION_VIDEOS = {
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
     description: 'Vídeo 2 de prensa hidráulica comprimindo objetos',
     source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://streamable.com/ysd8dp' // URL do Streamable
+    url: 'https://www.youtube.com/watch?v=oSowoPWuK90' // URL do YouTube
   },
   'hydraulic-press-3': {
     id: 'hydraulic-press-3',
@@ -112,7 +112,7 @@ export const RETENTION_VIDEOS = {
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
     description: 'Vídeo 3 de prensa hidráulica comprimindo objetos',
     source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://streamable.com/yb8j7c' // URL do Streamable
+    url: 'https://www.youtube.com/watch?v=vwzoYf1dAQc' // URL do YouTube
   },
   'satisfying-loops': {
     id: 'satisfying-loops',
