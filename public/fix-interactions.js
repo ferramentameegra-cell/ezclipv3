@@ -1,5 +1,5 @@
 /**
- * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES E SCROLL FUNCIONAREM
+ * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES FUNCIONAREM
  * Remove TODOS os bloqueios e força execução
  * EXECUTA PRIMEIRO para não ser bloqueado por outros scripts
  */
@@ -156,6 +156,8 @@
         setTimeout(forceEnableAllClicks, 500);
         setTimeout(forceEnableAllClicks, 1000);
         setTimeout(forceEnableAllClicks, 2000);
+        setTimeout(forceEnableAllClicks, 3000);
+        setTimeout(forceEnableAllClicks, 5000);
     }
     
     // Executar IMEDIATAMENTE, mesmo antes do DOM estar pronto
@@ -224,41 +226,6 @@
         }
     }
     
-    // REMOVER preventDefault e stopPropagation de TODOS os listeners de clique
-    // Interceptar addEventListener para remover bloqueios
-    const originalAddEventListener = EventTarget.prototype.addEventListener;
-    EventTarget.prototype.addEventListener = function(type, listener, options) {
-        if (type === 'click' || type === 'mousedown' || type === 'mouseup') {
-            const wrappedListener = function(e) {
-                // NUNCA bloquear cliques - remover preventDefault e stopPropagation
-                if (e && typeof e.preventDefault === 'function') {
-                    const originalPreventDefault = e.preventDefault;
-                    e.preventDefault = function() {
-                        console.warn('[FIX-INTERACTIONS] 🚫 preventDefault bloqueado em:', this.target);
-                        // Não fazer nada - permitir comportamento padrão
-                    };
-                }
-                if (e && typeof e.stopPropagation === 'function') {
-                    const originalStopPropagation = e.stopPropagation;
-                    e.stopPropagation = function() {
-                        console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation bloqueado em:', this.target);
-                        // Não fazer nada - permitir propagação
-                    };
-                }
-                if (e && typeof e.stopImmediatePropagation === 'function') {
-                    const originalStopImmediatePropagation = e.stopImmediatePropagation;
-                    e.stopImmediatePropagation = function() {
-                        console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation bloqueado em:', this.target);
-                        // Não fazer nada - permitir propagação
-                    };
-                }
-                return listener.call(this, e);
-            };
-            return originalAddEventListener.call(this, type, wrappedListener, options);
-        }
-        return originalAddEventListener.call(this, type, listener, options);
-    };
-    
     // Listener ULTRA AGRESSIVO - captura TODOS os cliques e FORÇA execução
     // Usar capture phase com PRIORIDADE MÁXIMA
     document.addEventListener('click', function(e) {
@@ -266,23 +233,6 @@
         const computed = window.getComputedStyle(target);
         
         console.log('[FIX-INTERACTIONS] 🖱️ Clique detectado em:', target.tagName, target.id || target.className || target.textContent?.substring(0, 30));
-        
-        // NUNCA bloquear - remover preventDefault e stopPropagation
-        if (e.preventDefault) {
-            e.preventDefault = function() {
-                console.warn('[FIX-INTERACTIONS] 🚫 preventDefault ignorado');
-            };
-        }
-        if (e.stopPropagation) {
-            e.stopPropagation = function() {
-                console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation ignorado');
-            };
-        }
-        if (e.stopImmediatePropagation) {
-            e.stopImmediatePropagation = function() {
-                console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation ignorado');
-            };
-        }
         
         // Verificar elemento no ponto do clique
         try {
@@ -372,34 +322,11 @@
         }
     }, false); // Bubble phase como backup
     
-    // BLOQUEAR scroll automático MAS PERMITIR scroll manual
-    const originalScrollTo = window.scrollTo;
-    const originalScrollIntoView = Element.prototype.scrollIntoView;
-    
-    // Sobrescrever window.scrollTo para bloquear scroll automático
-    window.scrollTo = function(...args) {
-        // Permitir apenas scroll manual (sem behavior: 'smooth' ou quando chamado pelo usuário)
-        const hasSmooth = args.some(arg => arg && typeof arg === 'object' && arg.behavior === 'smooth');
-        if (hasSmooth) {
-            console.log('[FIX-INTERACTIONS] 🚫 Scroll automático bloqueado:', args);
-            return; // Bloquear scroll automático
-        }
-        // Permitir scroll instantâneo se necessário
-        return originalScrollTo.apply(this, args);
-    };
-    
-    // Sobrescrever scrollIntoView para bloquear scroll automático
-    Element.prototype.scrollIntoView = function(...args) {
-        const hasSmooth = args.some(arg => arg && typeof arg === 'object' && arg.behavior === 'smooth');
-        if (hasSmooth) {
-            console.log('[FIX-INTERACTIONS] 🚫 scrollIntoView automático bloqueado:', this);
-            return; // Bloquear scroll automático
-        }
-        // Permitir scroll instantâneo se necessário
-        return originalScrollIntoView.apply(this, args);
-    };
+    // Executar correção continuamente para garantir que sempre funcione
+    setInterval(() => {
+        forceEnableAllClicks();
+    }, 2000); // A cada 2 segundos
     
     console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
-    console.log('[FIX-INTERACTIONS] 🚫 Scroll automático bloqueado');
-    console.log('[FIX-INTERACTIONS] 🚫 preventDefault/stopPropagation bloqueados');
+    console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 2 segundos');
 })();

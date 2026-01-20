@@ -446,25 +446,30 @@ function advanceToNextStep() {
 
 /**
  * Faz scroll suave até um card específico
- * DESABILITADO - usuário controla a rolagem manualmente
  */
 function scrollToCard(stepName) {
-    // Scroll automático desabilitado - usuário controla a rolagem
-    console.log('[SCROLL] scrollToCard chamado mas desabilitado:', stepName);
-    
-    // Apenas garantir que o card esteja visível (sem scroll)
     const card = document.querySelector(`[data-step-card="${stepName}"]`);
-    if (card && card.style.display === 'none') {
-        card.style.display = 'block';
+    if (card) {
+        // Garantir que o card esteja visível
+        if (card.style.display === 'none') {
+            card.style.display = 'block';
+        }
+        
+        // Fazer scroll suave até o card
+        setTimeout(() => {
+            const cardPosition = card.getBoundingClientRect().top + window.pageYOffset;
+            const offset = 100; // Offset para navbar
+            
+            window.scrollTo({
+                top: Math.max(0, cardPosition - offset),
+                behavior: 'smooth'
+            });
+        }, 100);
     }
-    
-    return;
 }
 
 function scrollToTool() {
-    // Scroll automático desabilitado
-    console.log('[SCROLL] scrollToTool chamado mas desabilitado');
-    return;
+    scrollToCard('youtube');
 }
 
 // ========== AUTHENTICATION ==========
@@ -1519,8 +1524,7 @@ function openLoginFromModal() {
     // Scroll para a seção de auth
     setTimeout(() => {
         if (authSection) {
-            // Scroll automático desabilitado
-            // authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            authSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }, 100);
 }
@@ -1657,8 +1661,7 @@ function focusTermsCheckbox() {
         checkboxContainer.style.display = 'block';
         // Scroll suave até o checkbox
         setTimeout(() => {
-            // Scroll automático desabilitado
-            // checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            checkboxContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 100);
     }
     
@@ -2077,8 +2080,7 @@ async function handleYouTubeSubmit() {
             termsAlert.style.display = 'flex';
             // Scroll suave até o alerta
             setTimeout(() => {
-                // Scroll automático desabilitado
-                // termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                termsAlert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 100);
         }
         
@@ -3753,8 +3755,7 @@ function proceedToGenerate() {
         switchTab('login');
         
         // Scroll suave para o topo da página
-        // Scroll automático desabilitado
-        // window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         
         // Aguardar um pouco para garantir que a aba foi trocada e mostrar modal de planos
         setTimeout(() => {
