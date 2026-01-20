@@ -69,7 +69,7 @@
                     const computed = window.getComputedStyle(el);
                     const isVisible = computed.display !== 'none' && 
                                     computed.visibility !== 'hidden' &&
-                                    parseFloat(computed.opacity) > 0) &&
+                                    parseFloat(computed.opacity) > 0 &&
                                     el.offsetParent !== null;
                     
                     if (isVisible && !el.disabled) {
