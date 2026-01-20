@@ -195,7 +195,6 @@ export const generateVideoSeries = async (job, jobsMap) => {
       );
 
       console.log(`[PROCESSING] Baixando vídeo do YouTube: ${youtubeVideoId}`);
-        console.log(`[PROCESSING] Baixando vídeo do YouTube: ${video.youtubeVideoId}`);
 
       // Atualizar progresso usando função do BullMQ
       if (typeof job.progress === 'function') {
@@ -209,33 +208,33 @@ export const generateVideoSeries = async (job, jobsMap) => {
       updateProgressEvent(job.id, {
         status: 'processing',
         progress: 5,
-        message: 'Validando vídeo...',
+        message: 'Baixando vídeo do YouTube...',
         totalClips: 0,
         currentClip: 0
       });
 
-        // Importar downloadYouTubeVideo dinamicamente se necessário
-        const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
-        await downloadYouTubeVideo(youtubeVideoId, downloadPath);
+      // Importar downloadYouTubeVideo dinamicamente se necessário
+      const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
+      await downloadYouTubeVideo(youtubeVideoId, downloadPath);
 
-        // VALIDAR DOWNLOAD
-        if (!fs.existsSync(downloadPath)) {
-          throw new Error('Download não criou o arquivo');
-        }
+      // VALIDAR DOWNLOAD
+      if (!fs.existsSync(downloadPath)) {
+        throw new Error('Download não criou o arquivo');
+      }
 
-        const stats = fs.statSync(downloadPath);
-        if (stats.size === 0) {
-          throw new Error('Arquivo baixado está vazio');
-        }
+      const stats = fs.statSync(downloadPath);
+      if (stats.size === 0) {
+        throw new Error('Arquivo baixado está vazio');
+      }
 
-        // Atualizar store
-        video.path = downloadPath;
-        video.downloaded = true;
-        video.fileSize = stats.size;
-        video.downloadCompletedAt = new Date();
-        videoStore.set(videoId, video);
+      // Atualizar store
+      video.path = downloadPath;
+      video.downloaded = true;
+      video.fileSize = stats.size;
+      video.downloadCompletedAt = new Date();
+      videoStore.set(videoId, video);
 
-        sourceVideoPath = downloadPath;
+      sourceVideoPath = downloadPath;
 
       // Atualizar progresso usando função do BullMQ
       if (typeof job.progress === 'function') {
@@ -249,11 +248,10 @@ export const generateVideoSeries = async (job, jobsMap) => {
       updateProgressEvent(job.id, {
         status: 'processing',
         progress: 20,
-        message: 'Preparando vídeo...',
+        message: 'Download concluído, validando...',
         totalClips: 0,
         currentClip: 0
       });
-      }
     }
 
     // ===============================
