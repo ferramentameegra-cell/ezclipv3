@@ -266,7 +266,7 @@ export async function composeFinalVideo({
               }
               
               // Se ainda não tem arquivo válido, baixar do YouTube
-              if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+              if (!fs.existsSync(tempVideoPath)) {
                 console.log(`[COMPOSER] ⬇️ Baixando vídeo do YouTube usando yt-dlp: ${youtubeVideoId}`);
                 
                 // Importar função de download do YouTube
@@ -337,7 +337,7 @@ export async function composeFinalVideo({
             }
             
             // Se ainda não tem arquivo válido, tentar baixar de cada URL do Streamable
-            if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+            if (!fs.existsSync(tempVideoPath)) {
             let downloadSuccess = false;
             let lastDownloadError = null;
             
@@ -408,7 +408,7 @@ export async function composeFinalVideo({
               }
             }
             
-            if (!fs.existsSync(tempVideoPath) || fs.statSync(tempVideoPath).size === 0) {
+            if (!fs.existsSync(tempVideoPath)) {
               await downloadVideoFromUrl(retentionVideoPath, tempVideoPath, 3);
               
               if (!fs.existsSync(tempVideoPath)) {
