@@ -183,9 +183,20 @@
             const onclickAttr = target.getAttribute('onclick');
             if (onclickAttr) {
                 console.log('[FIX-INTERACTIONS] 📝 Executando onclick inline:', onclickAttr);
-                const func = new Function('event', onclickAttr);
-                func(originalEvent || new MouseEvent('click', { bubbles: true, cancelable: true }));
-                return true;
+                try {
+                    const func = new Function('event', onclickAttr);
+                    func(originalEvent || new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    return true;
+                } catch (err) {
+                    console.error('[FIX-INTERACTIONS] Erro ao executar onclick:', err);
+                    // Tentar eval como fallback
+                    try {
+                        eval(onclickAttr);
+                        return true;
+                    } catch (e) {
+                        console.error('[FIX-INTERACTIONS] Erro ao executar eval:', e);
+                    }
+                }
             }
             
             // 2. Se tem data-tab, chamar switchTab
@@ -206,25 +217,70 @@
             // 3. Tentar click() nativo
             if (target.tagName === 'BUTTON' || target.tagName === 'A') {
                 console.log('[FIX-INTERACTIONS] 🖱️ Disparando click() nativo');
-                target.click();
-                return true;
+                try {
+                    target.click();
+                    return true;
+                } catch (err) {
+                    console.error('[FIX-INTERACTIONS] Erro ao clicar:', err);
+                }
             }
             
             // 4. Disparar evento manualmente
             console.log('[FIX-INTERACTIONS] ⚡ Disparando evento manual');
-            const clickEvent = new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window,
-                detail: 1
-            });
-            target.dispatchEvent(clickEvent);
-            return true;
+            try {
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    detail: 1
+                });
+                target.dispatchEvent(clickEvent);
+                return true;
+            } catch (err) {
+                console.error('[FIX-INTERACTIONS] Erro ao disparar evento:', err);
+            }
+            
+            return false;
         } catch (err) {
             console.error('[FIX-INTERACTIONS] ❌ Erro ao executar clique:', err);
             return false;
         }
     }
+    
+    // INTERCEPTAR preventDefault e stopPropagation GLOBALMENTE
+    const originalPreventDefault = Event.prototype.preventDefault;
+    const originalStopPropagation = Event.prototype.stopPropagation;
+    const originalStopImmediatePropagation = Event.prototype.stopImmediatePropagation;
+    
+    // Sobrescrever preventDefault para não bloquear cliques
+    Event.prototype.preventDefault = function() {
+        // Permitir preventDefault apenas para eventos que não são cliques
+        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
+            console.warn('[FIX-INTERACTIONS] 🚫 preventDefault bloqueado para:', this.type, this.target);
+            return; // Não fazer nada - permitir comportamento padrão
+        }
+        return originalPreventDefault.call(this);
+    };
+    
+    // Sobrescrever stopPropagation para não bloquear cliques
+    Event.prototype.stopPropagation = function() {
+        // Permitir stopPropagation apenas para eventos que não são cliques
+        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
+            console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation bloqueado para:', this.type, this.target);
+            return; // Não fazer nada - permitir propagação
+        }
+        return originalStopPropagation.call(this);
+    };
+    
+    // Sobrescrever stopImmediatePropagation para não bloquear cliques
+    Event.prototype.stopImmediatePropagation = function() {
+        // Permitir stopImmediatePropagation apenas para eventos que não são cliques
+        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
+            console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation bloqueado para:', this.type, this.target);
+            return; // Não fazer nada - permitir propagação
+        }
+        return originalStopImmediatePropagation.call(this);
+    };
     
     // Listener ULTRA AGRESSIVO - captura TODOS os cliques e FORÇA execução
     // Usar capture phase com PRIORIDADE MÁXIMA
@@ -325,8 +381,9 @@
     // Executar correção continuamente para garantir que sempre funcione
     setInterval(() => {
         forceEnableAllClicks();
-    }, 2000); // A cada 2 segundos
+    }, 1000); // A cada 1 segundo (mais frequente)
     
     console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
-    console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 2 segundos');
+    console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 1 segundo');
+    console.log('[FIX-INTERACTIONS] 🚫 preventDefault/stopPropagation bloqueados para cliques');
 })();
