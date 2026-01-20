@@ -44,19 +44,7 @@ export function getRetentionVideoPath(retentionVideoId) {
     return null;
   }
 
-  // PRIORIDADE 1: Se o vídeo tem URL externa configurada, usar ela
-  if (videoMeta.url && (videoMeta.url.startsWith('http://') || videoMeta.url.startsWith('https://'))) {
-    // Se for URL do Streamable, converter para URL direta do vídeo
-    if (isStreamableUrl(videoMeta.url)) {
-      const directUrl = convertStreamableToDirectUrl(videoMeta.url);
-      console.log(`[RETENTION] Usando URL do Streamable para ${retentionVideoId}: ${videoMeta.url} -> ${directUrl}`);
-      return directUrl;
-    }
-    console.log(`[RETENTION] Usando URL externa para ${retentionVideoId}: ${videoMeta.url}`);
-    return videoMeta.url;
-  }
-
-  // PRIORIDADE 2: Tentar encontrar arquivo local
+  // PRIORIDADE 1: Tentar encontrar arquivo local (URLs foram removidas - apenas arquivos locais)
   const possibleNames = [
     `${retentionVideoId}.mp4`,
     `${retentionVideoId}.webm`,

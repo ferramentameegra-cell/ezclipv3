@@ -94,25 +94,19 @@ export const RETENTION_VIDEOS = {
     id: 'hydraulic-press-1',
     name: 'Prensa Hidráulica #1',
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
-    description: 'Vídeo 1 de prensa hidráulica comprimindo objetos',
-    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://www.youtube.com/watch?v=zeguhXoUghI' // URL do YouTube
+    description: 'Vídeo 1 de prensa hidráulica comprimindo objetos'
   },
   'hydraulic-press-2': {
     id: 'hydraulic-press-2',
     name: 'Prensa Hidráulica #2',
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
-    description: 'Vídeo 2 de prensa hidráulica comprimindo objetos',
-    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://www.youtube.com/watch?v=oSowoPWuK90' // URL do YouTube
+    description: 'Vídeo 2 de prensa hidráulica comprimindo objetos'
   },
   'hydraulic-press-3': {
     id: 'hydraulic-press-3',
     name: 'Prensa Hidráulica #3',
     tags: ['Alta retenção', 'Hipnótico', 'Seguro para TikTok'],
-    description: 'Vídeo 3 de prensa hidráulica comprimindo objetos',
-    source: 'https://drive.google.com/drive/folders/1kdiGFY604ETx4CalQUdc1zhmFomscjne',
-    url: 'https://www.youtube.com/watch?v=vwzoYf1dAQc' // URL do YouTube
+    description: 'Vídeo 3 de prensa hidráulica comprimindo objetos'
   },
   'satisfying-loops': {
     id: 'satisfying-loops',
