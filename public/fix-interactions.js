@@ -1,5 +1,5 @@
 /**
- * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES FUNCIONAREM
+ * SCRIPT ULTRA AGRESSIVO PARA FORÇAR CLIQUES E SCROLL FUNCIONAREM
  * Remove TODOS os bloqueios e força execução
  * EXECUTA PRIMEIRO para não ser bloqueado por outros scripts
  */
@@ -386,4 +386,5 @@
     console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
     console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 1 segundo');
     console.log('[FIX-INTERACTIONS] 🚫 preventDefault/stopPropagation bloqueados para cliques');
+    console.log('[FIX-INTERACTIONS] ✅ Scroll automático habilitado');
 })();
