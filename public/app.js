@@ -271,22 +271,47 @@ async function initializeApp() {
         });
         
         // Garantir que todos os elementos interativos estão funcionando
-        document.querySelectorAll('button:not([disabled]), a:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [onclick], [data-tab]').forEach(el => {
+        const interactiveElements = document.querySelectorAll('button:not([disabled]), a:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [onclick], [data-tab], label');
+        let fixedCount = 0;
+        
+        interactiveElements.forEach(el => {
             const computed = window.getComputedStyle(el);
-            if (computed.display !== 'none' && computed.visibility !== 'hidden' && parseFloat(computed.opacity) > 0) {
-                el.style.pointerEvents = 'auto';
-                if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick) {
-                    el.style.cursor = 'pointer';
+            const isVisible = computed.display !== 'none' && 
+                            computed.visibility !== 'hidden' && 
+                            parseFloat(computed.opacity) > 0 &&
+                            el.offsetParent !== null;
+            
+            if (isVisible && !el.disabled) {
+                // Verificar se não é um overlay
+                const isOverlay = el.classList.contains('overlay') || 
+                                 el.classList.contains('modal-backdrop') ||
+                                 el.id.includes('overlay') ||
+                                 el.id.includes('loading') ||
+                                 (el.classList.contains('modal') && !el.classList.contains('hidden'));
+                
+                if (!isOverlay) {
+                    if (computed.pointerEvents === 'none') {
+                        el.style.pointerEvents = 'auto';
+                        fixedCount++;
+                    }
+                    if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick || el.getAttribute('data-tab')) {
+                        el.style.cursor = 'pointer';
+                    }
                 }
             }
         });
         
         // Garantir que overlays escondidos não bloqueiem
-        document.querySelectorAll('#loading-overlay.hidden, .modal.hidden, #auth-section.hidden').forEach(el => {
+        const hiddenOverlays = document.querySelectorAll('#loading-overlay.hidden, .modal.hidden, #auth-section.hidden, #success-modal.hidden, #terms-modal.hidden, #login-required-modal.hidden');
+        hiddenOverlays.forEach(el => {
             el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important; position: fixed !important; top: -9999px !important; left: -9999px !important; width: 0 !important; height: 0 !important;';
         });
         
-        console.log('[INIT] ✅ Interface inicializada e elementos interativos verificados');
+        if (fixedCount > 0) {
+            console.log(`[INIT] ✅ Interface inicializada - ${fixedCount} elemento(s) interativo(s) corrigido(s)`);
+        } else {
+            console.log('[INIT] ✅ Interface inicializada e elementos interativos verificados');
+        }
     }, 100);
     
     updateProgressSteps('youtube'); // Etapa 1
