@@ -1158,8 +1158,20 @@ export async function composeFinalVideo({
           resolve(outputPath);
         })
         .on('error', (err) => {
-          console.error('[COMPOSER] Erro:', err.message);
-          reject(err);
+          console.error('[COMPOSER] ❌ ERRO CRÍTICO no FFmpeg:', err.message);
+          console.error('[COMPOSER] Stack trace completo:', err.stack);
+          console.error('[COMPOSER] Código de saída:', err.code);
+          console.error('[COMPOSER] Signal:', err.signal);
+          console.error('[COMPOSER] Output path:', outputPath);
+          console.error('[COMPOSER] Filter complex (primeiros 1000 chars):', filterComplex.substring(0, 1000));
+          if (filterComplex.length > 1000) {
+            console.error('[COMPOSER] Filter complex (restante):', filterComplex.substring(1000));
+          }
+          console.error('[COMPOSER] Total de inputs:', inputCount);
+          console.error('[COMPOSER] Background fixo:', fixedBackgroundPath || 'NÃO');
+          console.error('[COMPOSER] Vídeo de retenção:', retentionVideoPath || 'NÃO');
+          console.error('[COMPOSER] Headline:', (headlineText || (headline && headline.text)) || 'NÃO');
+          reject(new Error(`[COMPOSER] Erro no FFmpeg: ${err.message}. Verifique os logs acima para detalhes.`));
         })
         .save(outputPath);
     });
