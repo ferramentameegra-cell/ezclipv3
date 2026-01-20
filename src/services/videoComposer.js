@@ -428,9 +428,20 @@ export async function composeFinalVideo({
           }
         } catch (downloadError) {
           console.error(`[COMPOSER] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
-          console.error(`[COMPOSER] ❌ Download do vídeo de retenção é OBRIGATÓRIO. Falhando composição.`);
-          // FALHAR composição se download falhar - vídeo de retenção é obrigatório
-          return reject(new Error(`Erro ao baixar vídeo de retenção: ${downloadError.message}. O vídeo de retenção é obrigatório e deve estar presente no arquivo final.`));
+          
+          // Se o erro for relacionado a vídeo privado ou falta de cookies, tentar continuar sem vídeo de retenção
+          const isPrivateVideoError = downloadError.message.includes('Private video') || downloadError.message.includes('Sign in');
+          const isCookieError = downloadError.message.includes('cookies') || downloadError.message.includes('authentication');
+          
+          if (isPrivateVideoError || isCookieError) {
+            console.warn(`[COMPOSER] ⚠️ Vídeo de retenção privado ou requer autenticação. Continuando sem vídeo de retenção.`);
+            console.warn(`[COMPOSER] ⚠️ Configure YTDLP_COOKIES no Railway para baixar vídeos privados.`);
+            retentionVideoPath = null; // Continuar sem vídeo de retenção
+          } else {
+            console.error(`[COMPOSER] ❌ Download do vídeo de retenção falhou. Falhando composição.`);
+            // FALHAR composição se download falhar por outros motivos
+            return reject(new Error(`Erro ao baixar vídeo de retenção: ${downloadError.message}. O vídeo de retenção é obrigatório e deve estar presente no arquivo final.`));
+          }
         }
       }
       

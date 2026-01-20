@@ -672,6 +672,21 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
         // Aplicar composição final
         // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
+        // Definir variável para armazenar retentionVideoPath (pode ser undefined se download falhar)
+        let currentRetentionVideoPath = null;
+        
+        try {
+          // Tentar obter caminho do vídeo de retenção se especificado
+          if (retentionVideoId && retentionVideoId !== 'none') {
+            const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
+            currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
+            console.log(`[PROCESSING] Vídeo de retenção para clip ${clipIndex}: ${currentRetentionVideoPath || 'não encontrado'}`);
+          }
+        } catch (retentionError) {
+          console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção: ${retentionError.message}`);
+          // Continuar sem vídeo de retenção se não conseguir obter
+        }
+        
         await composeFinalVideo({
           clipPath,
           outputPath: finalClipPath,
@@ -681,6 +696,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           headlineStyle: headlineStyleObj,
           headlineText: headlineText,
           retentionVideoId,
+          retentionVideoPath: currentRetentionVideoPath, // Passar caminho explícito
           nicheId,
           backgroundColor,
           format: '9:16', // FORÇAR formato vertical 9:16 (1080x1920)
@@ -737,18 +753,32 @@ export const generateVideoSeries = async (job, jobsMap) => {
         // Tentar composição novamente com tratamento de erro mais robusto
         try {
           console.log(`[PROCESSING] 🔄 Tentativa de recuperação: recompondo clip ${clipIndex}...`);
+          
+          // Tentar obter retentionVideoPath novamente se necessário
+          let retryRetentionVideoPath = currentRetentionVideoPath;
+          if (!retryRetentionVideoPath && retentionVideoId && retentionVideoId !== 'none') {
+            try {
+              const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
+              retryRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
+            } catch (retentionError) {
+              console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção na recuperação: ${retentionError.message}`);
+            }
+          }
+          
           const retryComposition = await composeFinalVideo({
             clipPath: clipPath,
+            outputPath: finalClipPath,
             retentionVideoId: retentionVideoId,
-            retentionVideoPath: retentionVideoPath,
-            headline: headline,
-            headlineStyle: headlineStyle,
+            retentionVideoPath: retryRetentionVideoPath, // Usar variável definida
+            headline: clipHeadline,
+            headlineStyle: headlineStyleObj,
             headlineText: headlineText,
             captions: clipCaptions,
-            captionStyle: captionStyle,
+            captionStyle: captionStyleObj,
             backgroundColor: backgroundColor,
-            format: format,
-            platforms: platforms,
+            format: '9:16',
+            platforms: { tiktok: true, reels: true, shorts: true },
+            safeMargins: 10,
             clipNumber: clipIndex + 1,
             totalClips: finalClips.length
           });
