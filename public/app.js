@@ -808,7 +808,7 @@ async function showCreditsPurchaseModal() {
             if (e.target === modal) {
                 closeCreditsModal();
             }
-        });
+        }, { capture: false }); // Não usar capture para não interferir com outros cliques
     } catch (error) {
         console.error('[PLANS] Erro ao carregar planos:', error);
         alert('Erro ao carregar planos. Tente novamente.');

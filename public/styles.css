@@ -2143,18 +2143,20 @@ body {
     pointer-events: auto;
 }
 
+/* FORÇAR que loading-overlay hidden NUNCA bloqueie */
 .loading-overlay.hidden {
     display: none !important;
     pointer-events: none !important;
-    z-index: -9999 !important;
+    z-index: -99999 !important;
     visibility: hidden !important;
     opacity: 0 !important;
     position: fixed !important;
-    top: -9999px !important;
-    left: -9999px !important;
+    top: -99999px !important;
+    left: -99999px !important;
     width: 0 !important;
     height: 0 !important;
 }
+
 
 .loading-card {
     background: var(--bg-card);
@@ -2261,18 +2263,20 @@ body {
     opacity: 1;
 }
 
+/* FORÇAR que modais hidden NUNCA bloqueiem */
 .modal.hidden {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
-    z-index: -9999 !important;
+    z-index: -99999 !important;
     position: fixed !important;
-    top: -9999px !important;
-    left: -9999px !important;
+    top: -99999px !important;
+    left: -99999px !important;
     width: 0 !important;
     height: 0 !important;
 }
+
 
 .modal-content {
     background: var(--bg-card);
