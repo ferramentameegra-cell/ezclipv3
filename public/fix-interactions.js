@@ -247,40 +247,9 @@
         }
     }
     
-    // INTERCEPTAR preventDefault e stopPropagation GLOBALMENTE
-    const originalPreventDefault = Event.prototype.preventDefault;
-    const originalStopPropagation = Event.prototype.stopPropagation;
-    const originalStopImmediatePropagation = Event.prototype.stopImmediatePropagation;
-    
-    // Sobrescrever preventDefault para não bloquear cliques
-    Event.prototype.preventDefault = function() {
-        // Permitir preventDefault apenas para eventos que não são cliques
-        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
-            console.warn('[FIX-INTERACTIONS] 🚫 preventDefault bloqueado para:', this.type, this.target);
-            return; // Não fazer nada - permitir comportamento padrão
-        }
-        return originalPreventDefault.call(this);
-    };
-    
-    // Sobrescrever stopPropagation para não bloquear cliques
-    Event.prototype.stopPropagation = function() {
-        // Permitir stopPropagation apenas para eventos que não são cliques
-        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
-            console.warn('[FIX-INTERACTIONS] 🚫 stopPropagation bloqueado para:', this.type, this.target);
-            return; // Não fazer nada - permitir propagação
-        }
-        return originalStopPropagation.call(this);
-    };
-    
-    // Sobrescrever stopImmediatePropagation para não bloquear cliques
-    Event.prototype.stopImmediatePropagation = function() {
-        // Permitir stopImmediatePropagation apenas para eventos que não são cliques
-        if (this.type === 'click' || this.type === 'mousedown' || this.type === 'mouseup') {
-            console.warn('[FIX-INTERACTIONS] 🚫 stopImmediatePropagation bloqueado para:', this.type, this.target);
-            return; // Não fazer nada - permitir propagação
-        }
-        return originalStopImmediatePropagation.call(this);
-    };
+    // REMOVIDO: Sobrescrita global de Event.prototype estava quebrando funcionalidades legítimas
+    // (formulários, drag-and-drop, trim handles precisam de preventDefault)
+    // A correção de pointer-events e overlays é suficiente para resolver os problemas de cliques
     
     // Listener ULTRA AGRESSIVO - captura TODOS os cliques e FORÇA execução
     // Usar capture phase com PRIORIDADE MÁXIMA
@@ -347,21 +316,9 @@
             }
         }
         
-        // SEMPRE tentar executar onclick inline se existir, mesmo que pointer-events esteja ok
-        // Isso garante que o clique será executado mesmo se outros listeners bloquearem
-        const onclickAttr = target.getAttribute('onclick');
-        const dataTab = target.getAttribute('data-tab');
-        
-        if (onclickAttr || dataTab) {
-            // Marcar para evitar execução duplicada
-            if (!target.dataset.clickExecuted) {
-                target.dataset.clickExecuted = 'true';
-                setTimeout(() => {
-                    executeClick(target, e);
-                    setTimeout(() => delete target.dataset.clickExecuted, 100);
-                }, 0);
-            }
-        }
+        // REMOVIDO: Execução automática duplicada estava causando cliques duplos
+        // O clique já é processado normalmente pelos handlers existentes
+        // Apenas corrigimos pointer-events quando necessário, sem re-executar
     }, true); // Capture phase - pega ANTES de qualquer coisa
     
     // Listener adicional no bubble phase como backup
@@ -378,13 +335,13 @@
         }
     }, false); // Bubble phase como backup
     
-    // Executar correção continuamente para garantir que sempre funcione
+    // Executar correção periodicamente (menos frequente para não sobrecarregar)
     setInterval(() => {
         forceEnableAllClicks();
-    }, 1000); // A cada 1 segundo (mais frequente)
+    }, 5000); // A cada 5 segundos (reduzido de 1 segundo)
     
-    console.log('[FIX-INTERACTIONS] ✅ Correção ULTRA AGRESSIVA ativada');
-    console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 1 segundo');
-    console.log('[FIX-INTERACTIONS] 🚫 preventDefault/stopPropagation bloqueados para cliques');
+    console.log('[FIX-INTERACTIONS] ✅ Correção ativada');
+    console.log('[FIX-INTERACTIONS] 🔄 Executando correção contínua a cada 5 segundos');
+    console.log('[FIX-INTERACTIONS] ✅ Correção de pointer-events e overlays ativa');
     console.log('[FIX-INTERACTIONS] ✅ Scroll automático habilitado');
 })();
