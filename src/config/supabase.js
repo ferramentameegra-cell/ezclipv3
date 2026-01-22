@@ -7,12 +7,12 @@ import { createClient } from '@supabase/supabase-js';
 
 // Obter variáveis de ambiente (com fallback para valores padrão)
 const supabaseUrl = process.env.SUPABASE_URL || 'https://wrsefdlvqprxjelxkvee.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc2VmZGx2cXByeGplbHhrdmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MjExNjIsImV4cCI6MjA4NDQ5NzE2Mn0.gY7SYyAh0g6fjGbaFw9VT_h35Slq6NZysCf9gcd4CQI';
+const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc2VmZGx2cXByeGplbHhrdmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MjExNjIsImV4cCI6MjA4NDQ5NzE2Mn0.gY7SYyAh0g6fjGbaFw9VT_h35Slq6NZysCf9gcd4CQI').trim();
 
-// Verificar se as chaves estão configuradas
-const hasServiceKey = supabaseServiceKey && supabaseServiceKey.trim() !== '';
-const hasAnonKey = supabaseAnonKey && supabaseAnonKey.trim() !== '';
+// Verificar se as chaves estão configuradas (verificar se não está vazio e tem tamanho mínimo)
+const hasServiceKey = supabaseServiceKey && supabaseServiceKey.length > 20; // JWT tokens têm pelo menos 20 caracteres
+const hasAnonKey = supabaseAnonKey && supabaseAnonKey.length > 20;
 
 if (!hasServiceKey) {
   console.warn('[SUPABASE] ⚠️ SUPABASE_SERVICE_ROLE_KEY não configurada. Algumas funcionalidades podem não funcionar.');

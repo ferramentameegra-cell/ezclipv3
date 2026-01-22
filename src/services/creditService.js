@@ -8,7 +8,7 @@ import { supabaseAdmin } from '../config/supabase.js';
 
 // Verificar se Supabase está configurado
 if (!supabaseAdmin) {
-  console.error('[CREDITS] ❌ Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.');
+  console.warn('[CREDITS] ⚠️ Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway. Funcionalidades de créditos podem não funcionar.');
 }
 
 /**
