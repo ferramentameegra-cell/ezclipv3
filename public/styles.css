@@ -52,6 +52,11 @@ body {
     color: var(--text-primary);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    pointer-events: auto !important;
+    overflow: auto !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    height: auto !important;
 }
 
 /* ============================================
@@ -2808,5 +2813,11 @@ button:disabled, input:disabled, select:disabled, textarea:disabled, a[disabled]
 
 /* Smooth scroll global */
 html {
+    pointer-events: auto !important;
+    overflow: auto !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    height: auto !important;
+}
     scroll-behavior: smooth;
 }

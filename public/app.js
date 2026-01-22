@@ -259,10 +259,11 @@ async function initializeApp() {
     
     // Mostrar TODOS os cards desde o início (sempre acessíveis e editáveis)
     // IMPORTANTE: Todos os cards devem permanecer visíveis durante todo o processo
+    // NOTA: fix-interactions.js já cuida das correções de pointer-events, então apenas mostramos os cards
     setTimeout(() => {
         document.querySelectorAll('[data-step-card]').forEach(card => {
             card.style.display = 'block';
-            card.style.pointerEvents = 'auto';
+            // fix-interactions.js já força pointer-events: auto, então não sobrescrevemos
             card.classList.remove('hidden');
             // Garantir que está visível e interativo
             if (card.style.display === 'none') {
@@ -270,48 +271,17 @@ async function initializeApp() {
             }
         });
         
-        // Garantir que todos os elementos interativos estão funcionando
-        const interactiveElements = document.querySelectorAll('button:not([disabled]), a:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [onclick], [data-tab], label');
-        let fixedCount = 0;
-        
-        interactiveElements.forEach(el => {
-            const computed = window.getComputedStyle(el);
-            const isVisible = computed.display !== 'none' && 
-                            computed.visibility !== 'hidden' && 
-                            parseFloat(computed.opacity) > 0 &&
-                            el.offsetParent !== null;
-            
-            if (isVisible && !el.disabled) {
-                // Verificar se não é um overlay
-                const isOverlay = el.classList.contains('overlay') || 
-                                 el.classList.contains('modal-backdrop') ||
-                                 el.id.includes('overlay') ||
-                                 el.id.includes('loading') ||
-                                 (el.classList.contains('modal') && !el.classList.contains('hidden'));
-                
-                if (!isOverlay) {
-                    if (computed.pointerEvents === 'none') {
-                        el.style.pointerEvents = 'auto';
-                        fixedCount++;
-                    }
-                    if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick || el.getAttribute('data-tab')) {
-                        el.style.cursor = 'pointer';
-                    }
-                }
+        // fix-interactions.js já cuida de todos os elementos interativos
+        // Apenas garantir que overlays escondidos não bloqueiem (compatibilidade)
+        const hiddenOverlays = document.querySelectorAll('#loading-overlay.hidden, .modal.hidden, #auth-section.hidden, #success-modal.hidden, #terms-modal.hidden, #login-required-modal.hidden');
+        hiddenOverlays.forEach(el => {
+            // fix-interactions.js já faz isso, mas garantimos aqui também
+            if (el.style.pointerEvents !== 'none') {
+                el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important; position: fixed !important; top: -9999px !important; left: -9999px !important; width: 0 !important; height: 0 !important;';
             }
         });
         
-        // Garantir que overlays escondidos não bloqueiem
-        const hiddenOverlays = document.querySelectorAll('#loading-overlay.hidden, .modal.hidden, #auth-section.hidden, #success-modal.hidden, #terms-modal.hidden, #login-required-modal.hidden');
-        hiddenOverlays.forEach(el => {
-            el.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -9999 !important; position: fixed !important; top: -9999px !important; left: -9999px !important; width: 0 !important; height: 0 !important;';
-        });
-        
-        if (fixedCount > 0) {
-            console.log(`[INIT] ✅ Interface inicializada - ${fixedCount} elemento(s) interativo(s) corrigido(s)`);
-        } else {
-            console.log('[INIT] ✅ Interface inicializada e elementos interativos verificados');
-        }
+        console.log('[INIT] ✅ Interface inicializada - fix-interactions.js cuida das correções de cliques');
     }, 100);
     
     updateProgressSteps('youtube'); // Etapa 1
@@ -586,63 +556,67 @@ function clearAuth() {
  * Apenas quando usuário explicitamente precisa fazer login
  */
 function showAuthRequired() {
-    const mainContent = document.querySelector('main');
+    // REMOVIDO: Esta função não deve mais bloquear o conteúdo principal
+    // A plataforma funciona SEM login - apenas mostra opção de login
+    console.log('[AUTH] showAuthRequired chamado - mas não bloqueando mais');
+    
+    // Apenas mostrar seção de auth se necessário, mas SEM bloquear main
     const authSection = document.getElementById('auth-section');
-    
-    if (mainContent) {
-        mainContent.style.display = 'none';
-        mainContent.style.pointerEvents = 'none';
-    }
     if (authSection) {
-        authSection.style.display = 'flex';
-        authSection.style.pointerEvents = 'auto';
-        authSection.style.zIndex = '1000';
-        authSection.classList.remove('hidden');
+        // Não bloquear - apenas mostrar se necessário via tab
+        // authSection.style.display = 'flex';
+        // authSection.style.pointerEvents = 'auto';
+        // authSection.style.zIndex = '1000';
+        // authSection.classList.remove('hidden');
     }
     
-    // Garantir que login está visível
-    const loginCard = document.getElementById('login-card');
-    const registerCard = document.getElementById('register-card');
-    if (loginCard) loginCard.classList.remove('hidden');
-    if (registerCard) registerCard.classList.add('hidden');
+    // NUNCA esconder main - sempre manter interativo
+    showMainContent();
 }
 
 /**
  * Mostrar conteúdo principal (sempre visível - não bloqueia acesso)
+ * GARANTE que cliques funcionem SEMPRE, mesmo sem login
  */
 function showMainContent() {
     const mainContent = document.querySelector('main');
     const authSection = document.getElementById('auth-section');
     
-    // Sempre esconder seção de auth (não é a página inicial)
+    // SEMPRE esconder seção de auth (não é a página inicial)
     // Usar display: none E pointer-events: none para garantir que não bloqueie cliques
     if (authSection) {
-        authSection.style.display = 'none';
-        authSection.style.pointerEvents = 'none';
-        authSection.style.zIndex = '-1';
-        authSection.style.visibility = 'hidden';
-        authSection.style.opacity = '0';
+        authSection.style.cssText = 'display: none !important; pointer-events: none !important; z-index: -99999 !important; position: fixed !important; top: -99999px !important; left: -99999px !important; width: 0 !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important;';
         authSection.classList.add('hidden');
     }
     
-    // Sempre mostrar conteúdo principal e garantir interatividade
+    // SEMPRE mostrar conteúdo principal e garantir interatividade
     if (mainContent) {
-        mainContent.style.display = 'block';
-        mainContent.style.pointerEvents = 'auto';
-        mainContent.style.zIndex = '1';
-        mainContent.style.visibility = 'visible';
-        mainContent.style.opacity = '1';
+        mainContent.style.cssText = 'display: block !important; pointer-events: auto !important; z-index: 1 !important; visibility: visible !important; opacity: 1 !important; position: relative !important;';
         mainContent.classList.remove('hidden');
         
-        // Garantir que todos os elementos filhos também sejam interativos
-        const interactiveElements = mainContent.querySelectorAll('button, a, input, select, textarea, [onclick]');
+        // FORÇAR todos os elementos filhos a serem interativos
+        const interactiveElements = mainContent.querySelectorAll('button:not([disabled]), a:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [onclick], [data-tab], [data-step-card]');
         interactiveElements.forEach(el => {
             if (!el.disabled) {
-                el.style.pointerEvents = 'auto';
-                el.style.cursor = 'pointer';
+                el.style.setProperty('pointer-events', 'auto', 'important');
+                if (el.tagName === 'BUTTON' || el.tagName === 'A' || el.onclick || el.getAttribute('data-tab') || el.getAttribute('data-step-card')) {
+                    el.style.setProperty('cursor', 'pointer', 'important');
+                }
             }
         });
     }
+    
+    // GARANTIR que body e html também estejam interativos
+    if (document.body) {
+        document.body.style.setProperty('pointer-events', 'auto', 'important');
+        document.body.style.setProperty('overflow', 'auto', 'important');
+    }
+    if (document.documentElement) {
+        document.documentElement.style.setProperty('pointer-events', 'auto', 'important');
+        document.documentElement.style.setProperty('overflow', 'auto', 'important');
+    }
+    
+    console.log('[SHOW-MAIN] ✅ Conteúdo principal forçado a ser interativo');
 }
 
 /**
@@ -1085,10 +1059,11 @@ async function verifyPaymentLinkPurchase(planId) {
 async function handleLogin(event) {
     console.log('[AUTH] handleLogin chamado', event);
     
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
+    // REMOVIDO: preventDefault e stopPropagation que bloqueavam interações
+    // if (event) {
+    //     event.preventDefault();
+    //     event.stopPropagation();
+    // }
     
     // Buscar elementos
     const emailInput = document.getElementById('auth-login-email');
@@ -1197,10 +1172,11 @@ async function handleLogin(event) {
 }
 
 async function handleRegister(event) {
-    if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-    }
+    // REMOVIDO: preventDefault e stopPropagation que bloqueavam interações
+    // if (event) {
+    //     event.preventDefault();
+    //     event.stopPropagation();
+    // }
     
     // Buscar elementos
     const nameInput = document.getElementById('auth-register-name');
@@ -2024,8 +2000,10 @@ function setupUploadDragDrop() {
     });
     
     function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
+        // REMOVIDO: preventDefault e stopPropagation bloqueavam interações
+        // Permitir comportamento padrão para drag and drop funcionar
+        // e.preventDefault();
+        // e.stopPropagation();
     }
     
     // Highlight quando arrastar sobre
@@ -2849,28 +2827,32 @@ function initializeTimeline(duration) {
     // Drag handle start
     let isDraggingStart = false;
     handleStart.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        // Permitir preventDefault apenas para drag handles (funcionalidade específica)
+        // e.preventDefault();
+        // e.stopPropagation();
         isDraggingStart = true;
     });
     
     handleStart.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        // Permitir preventDefault apenas para drag handles (funcionalidade específica)
+        // e.preventDefault();
+        // e.stopPropagation();
         isDraggingStart = true;
     });
     
     // Drag handle end
     let isDraggingEnd = false;
     handleEnd.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        // Permitir preventDefault apenas para drag handles (funcionalidade específica)
+        // e.preventDefault();
+        // e.stopPropagation();
         isDraggingEnd = true;
     });
     
     handleEnd.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        // Permitir preventDefault apenas para drag handles (funcionalidade específica)
+        // e.preventDefault();
+        // e.stopPropagation();
         isDraggingEnd = true;
     });
     
@@ -2891,7 +2873,8 @@ function initializeTimeline(duration) {
     
     const touchmoveHandler = (e) => {
         if (isDraggingStart || isDraggingEnd) {
-            e.preventDefault();
+            // Permitir preventDefault apenas durante drag ativo (funcionalidade específica)
+            // e.preventDefault();
             const percent = getPercentFromEvent(e);
             
             if (isDraggingStart) {
