@@ -3732,38 +3732,7 @@ function goBackToHeadline() {
 
 function proceedToGenerate() {
     // REMOVIDO: Autenticação não é mais obrigatória - permitir geração sem login
-    // if (!appState.currentUser || !appState.userToken) {
-    //     // Salvar estado atual para retomar após login
-    //     appState.pendingGeneration = {
-    //         videoId: appState.videoId,
-    //         nicheId: appState.nicheId,
-    //         numberOfCuts: appState.numberOfCuts,
-    //         trimStart: appState.trimStart,
-    //         trimEnd: appState.trimEnd,
-    //         cutDuration: appState.cutDuration,
-    //         headlineStyle: appState.headlineStyle,
-    //         headlineText: appState.headlineText,
-    //         headlineSize: appState.headlineSize,
-    //         headlineColor: appState.headlineColor,
-    //         font: appState.font,
-    //         backgroundColor: appState.backgroundColor,
-            retentionVideoId: appState.retentionVideoId,
-            configurations: { ...appState.configurations }
-        };
-        
-        // Redirecionar para aba de login
-        switchTab('login');
-        
-        // Scroll suave para o topo da página
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // Aguardar um pouco para garantir que a aba foi trocada e mostrar modal de planos
-        setTimeout(() => {
-            showCreditsPurchaseModal();
-        }, 300);
-        
-        return;
-    }
+    // Não há mais bloqueio de autenticação aqui
     
     console.log('[GENERATE] Iniciando processo de geração...');
     console.log('[GENERATE] Estado atual:', {
