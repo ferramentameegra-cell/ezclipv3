@@ -3731,22 +3731,22 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
-    // AUTENTICAÇÃO OBRIGATÓRIA - Redirecionar para login e mostrar planos
-    if (!appState.currentUser || !appState.userToken) {
-        // Salvar estado atual para retomar após login
-        appState.pendingGeneration = {
-            videoId: appState.videoId,
-            nicheId: appState.nicheId,
-            numberOfCuts: appState.numberOfCuts,
-            trimStart: appState.trimStart,
-            trimEnd: appState.trimEnd,
-            cutDuration: appState.cutDuration,
-            headlineStyle: appState.headlineStyle,
-            headlineText: appState.headlineText,
-            headlineSize: appState.headlineSize,
-            headlineColor: appState.headlineColor,
-            font: appState.font,
-            backgroundColor: appState.backgroundColor,
+    // REMOVIDO: Autenticação não é mais obrigatória - permitir geração sem login
+    // if (!appState.currentUser || !appState.userToken) {
+    //     // Salvar estado atual para retomar após login
+    //     appState.pendingGeneration = {
+    //         videoId: appState.videoId,
+    //         nicheId: appState.nicheId,
+    //         numberOfCuts: appState.numberOfCuts,
+    //         trimStart: appState.trimStart,
+    //         trimEnd: appState.trimEnd,
+    //         cutDuration: appState.cutDuration,
+    //         headlineStyle: appState.headlineStyle,
+    //         headlineText: appState.headlineText,
+    //         headlineSize: appState.headlineSize,
+    //         headlineColor: appState.headlineColor,
+    //         font: appState.font,
+    //         backgroundColor: appState.backgroundColor,
             retentionVideoId: appState.retentionVideoId,
             configurations: { ...appState.configurations }
         };
@@ -3908,14 +3908,14 @@ function updatePreviewStyle() {
 }
 
 async function generateSeries() {
-    // AUTENTICAÇÃO OBRIGATÓRIA - Backend também valida
-    if (!appState.currentUser || !appState.userToken) {
-        // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
-        // Mas manter como segurança - mostrar modal de login
-        // REMOVIDO: Não bloquear geração - permitir mesmo sem login
-        // showLoginRequiredModal();
-        return;
-    }
+    // REMOVIDO: Autenticação não é mais obrigatória - permitir geração sem login
+    // if (!appState.currentUser || !appState.userToken) {
+    //     // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
+    //     // Mas manter como segurança - mostrar modal de login
+    //     // REMOVIDO: Não bloquear geração - permitir mesmo sem login
+    //     // showLoginRequiredModal();
+    //     return;
+    // }
     
     // Verificação de vídeos será feita no backend
     // Aqui apenas mostramos confirmação (lógica já está em proceedToGenerate)
