@@ -3912,7 +3912,8 @@ async function generateSeries() {
     if (!appState.currentUser || !appState.userToken) {
         // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
         // Mas manter como segurança - mostrar modal de login
-        showLoginRequiredModal();
+        // REMOVIDO: Não bloquear geração - permitir mesmo sem login
+        // showLoginRequiredModal();
         return;
     }
     
