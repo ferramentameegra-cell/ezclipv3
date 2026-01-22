@@ -17,7 +17,9 @@ if (!supabaseAdmin) {
 export const register = async (req, res) => {
   try {
     if (!supabaseAdmin) {
-      return res.status(503).json({
+      // Se Supabase não estiver configurado, retornar erro mas não bloquear
+      return res.status(200).json({
+        success: false,
         error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
         code: 'AUTH_NOT_CONFIGURED'
       });
@@ -139,7 +141,9 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     if (!supabaseAdmin) {
-      return res.status(503).json({
+      // Se Supabase não estiver configurado, retornar erro mas não bloquear
+      return res.status(200).json({
+        success: false,
         error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
         code: 'AUTH_NOT_CONFIGURED'
       });

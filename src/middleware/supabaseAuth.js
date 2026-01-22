@@ -12,11 +12,10 @@ import { supabaseAdmin } from '../config/supabase.js';
 export const requireSupabaseAuth = async (req, res, next) => {
   try {
     // Verificar se o cliente Supabase está disponível
+    // Se não estiver configurado, permitir acesso (não bloquear)
     if (!supabaseAdmin) {
-      return res.status(503).json({
-        error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY.',
-        code: 'AUTH_NOT_CONFIGURED'
-      });
+      console.warn('[AUTH] Supabase não configurado - permitindo acesso sem autenticação');
+      return next(); // Permitir acesso sem bloquear
     }
 
     // Obter token do header Authorization ou cookie
