@@ -10,12 +10,12 @@ const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
 
 export const generateSeries = async (req, res) => {
   try {
-    // Autenticação obrigatória - req.user deve estar presente (middleware requireAuth)
+    // Autenticação opcional - se não houver usuário, usar ID temporário
+    const userId = req.userId || `temp_${Date.now()}`;
+    
+    // Se não houver usuário autenticado, pular verificação de créditos
     if (!req.user || !req.userId) {
-      return res.status(401).json({
-        error: 'Autenticação obrigatória. Faça login para continuar.',
-        code: 'NOT_AUTHENTICATED'
-      });
+      console.log('[GENERATE] Geração sem autenticação - usando ID temporário:', userId);
     }
 
     const {
@@ -50,14 +50,22 @@ export const generateSeries = async (req, res) => {
     // Calcular quantidade de clipes que serão gerados
     const finalClipsCount = clipsQuantity || numberOfCuts;
 
-    // Verificar se usuário tem créditos disponíveis ANTES de iniciar processamento
-    const creditCheck = await canGenerateVideo(req.userId);
-    if (!creditCheck.allowed) {
-      return res.status(402).json({
-        error: creditCheck.reason || 'Créditos esgotados',
-        code: 'NO_CREDITS',
-        creditos: creditCheck.creditos
-      });
+    // Verificar créditos apenas se usuário estiver autenticado
+    let creditCheck = { allowed: true, creditos: -1 }; // Permitir por padrão
+    if (req.user && req.userId) {
+      try {
+        creditCheck = await canGenerateVideo(req.userId);
+        if (!creditCheck.allowed) {
+          return res.status(402).json({
+            error: creditCheck.reason || 'Créditos esgotados',
+            code: 'NO_CREDITS',
+            creditos: creditCheck.creditos
+          });
+        }
+      } catch (error) {
+        console.warn('[GENERATE] Erro ao verificar créditos, permitindo geração:', error);
+        // Continuar mesmo se houver erro na verificação de créditos
+      }
     }
 
     const videoPath = path.join(BASE_TMP_DIR, `${videoId}.mp4`);
@@ -70,9 +78,13 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
-    // Créditos já foram verificados acima
-    // O crédito será decrementado APÓS a geração bem-sucedida (no worker)
-    console.log(`[GENERATE] Usuário ${req.userId} tem ${creditCheck.creditos} crédito(s) disponível(is). Iniciando geração...`);
+    // Créditos já foram verificados acima (se autenticado)
+    // O crédito será decrementado APÓS a geração bem-sucedida (no worker, apenas se autenticado)
+    if (req.userId) {
+      console.log(`[GENERATE] Usuário ${req.userId} tem ${creditCheck.creditos} crédito(s) disponível(is). Iniciando geração...`);
+    } else {
+      console.log(`[GENERATE] Geração sem autenticação. Iniciando geração...`);
+    }
 
     // Obter posição na fila antes de adicionar
     const waitingCount = await videoProcessQueue.getWaitingCount ? await videoProcessQueue.getWaitingCount() : 0;
@@ -103,7 +115,7 @@ export const generateSeries = async (req, res) => {
         captionStyle,
         clipsQuantity,
         safeMargins,
-        userId: req.userId, // Obrigatório agora
+        userId: userId, // ID do usuário (autenticado ou temporário)
         creditsDebited: true // Flag para indicar que créditos foram debitados
       },
       {
