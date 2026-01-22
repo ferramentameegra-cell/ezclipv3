@@ -4,7 +4,6 @@
  */
 
 import { getUserCredits, addCredits } from '../services/creditService.js';
-import { requireSupabaseAuth } from '../middleware/supabaseAuth.js';
 
 /**
  * GET /api/credits/balance
@@ -12,10 +11,12 @@ import { requireSupabaseAuth } from '../middleware/supabaseAuth.js';
  */
 export const getBalance = async (req, res) => {
   try {
+    // Se não houver usuário autenticado, retornar saldo padrão (não bloquear)
     if (!req.userId) {
-      return res.status(401).json({
-        error: 'Não autenticado',
-        code: 'NOT_AUTHENTICATED'
+      return res.json({
+        creditos: 0,
+        is_unlimited: false,
+        message: 'Não autenticado - créditos não disponíveis'
       });
     }
 
