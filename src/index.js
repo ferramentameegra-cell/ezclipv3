@@ -127,6 +127,11 @@ app.use("/api/terms", termsRoutes); // Público (termos)
 const publicDir = path.join(__dirname, "../public");
 app.use(express.static(publicDir));
 
+// Rota para confirmação de email/assinatura
+app.get("/auth/confirm", (req, res) => {
+  res.sendFile(path.join(publicDir, "auth-confirm.html"));
+});
+
 // ⚠️ ESSENCIAL: rota raiz
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
