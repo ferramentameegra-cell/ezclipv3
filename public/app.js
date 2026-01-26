@@ -794,12 +794,43 @@ async function purchasePlan(planId) {
                 }, 300000);
                 
             } else {
-                // Se não estiver logado, redirecionar para login primeiro
-                alert('Você precisa estar logado para comprar um plano.');
+                // Se não estiver logado, salvar plano desejado e redirecionar para login
+                localStorage.setItem('pending_plan_id', planId);
+                closeCreditsModal();
+                alert('Para comprar um plano, você precisa fazer login primeiro. Você será redirecionado para a página de login.');
                 switchTab('login');
+                // Mostrar mensagem na tela de login
+                setTimeout(() => {
+                    const statusMsg = document.getElementById('auth-login-status');
+                    if (statusMsg) {
+                        statusMsg.textContent = 'Faça login para continuar com a compra do plano';
+                        statusMsg.className = 'auth-status-message info';
+                        statusMsg.classList.remove('hidden');
+                    }
+                }, 500);
                 return;
             }
             
+            return;
+        }
+        
+        // Verificar se está logado antes de criar checkout
+        const currentUser = appState.currentUser;
+        if (!currentUser || !currentUser.id) {
+            // Se não estiver logado, salvar plano desejado e redirecionar para login
+            localStorage.setItem('pending_plan_id', planId);
+            closeCreditsModal();
+            alert('Para comprar um plano, você precisa fazer login primeiro. Você será redirecionado para a página de login.');
+            switchTab('login');
+            // Mostrar mensagem na tela de login
+            setTimeout(() => {
+                const statusMsg = document.getElementById('auth-login-status');
+                if (statusMsg) {
+                    statusMsg.textContent = 'Faça login para continuar com a compra do plano';
+                    statusMsg.className = 'auth-status-message info';
+                    statusMsg.classList.remove('hidden');
+                }
+            }, 500);
             return;
         }
         
@@ -1110,6 +1141,27 @@ async function handleLogin(event) {
             // Garantir que conteúdo principal está visível
             showMainContent();
             
+            // Verificar se há plano pendente para compra
+            const pendingPlanId = localStorage.getItem('pending_plan_id');
+            if (pendingPlanId) {
+                console.log('[AUTH] Plano pendente encontrado após login:', pendingPlanId);
+                localStorage.removeItem('pending_plan_id');
+                // Aguardar um pouco para garantir que UI está atualizada
+                setTimeout(() => {
+                    showCreditsPurchaseModal();
+                    // Destacar o plano que estava pendente
+                    setTimeout(() => {
+                        const planCard = document.querySelector(`[onclick*="${pendingPlanId}"]`);
+                        if (planCard) {
+                            planCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            planCard.style.borderColor = '#667eea';
+                            planCard.style.boxShadow = '0 0 20px rgba(102, 126, 234, 0.5)';
+                        }
+                    }, 300);
+                }, 500);
+                return;
+            }
+            
             // Retomar geração se estava pendente
             if (appState.pendingGeneration) {
                 console.log('[AUTH] Retomando geração após login...');
@@ -1291,6 +1343,27 @@ async function handleRegister(event) {
                 
                 // Garantir que conteúdo principal está visível
                 showMainContent();
+                
+                // Verificar se há plano pendente para compra
+                const pendingPlanId = localStorage.getItem('pending_plan_id');
+                if (pendingPlanId) {
+                    console.log('[AUTH] Plano pendente encontrado após registro:', pendingPlanId);
+                    localStorage.removeItem('pending_plan_id');
+                    // Aguardar um pouco para garantir que UI está atualizada
+                    setTimeout(() => {
+                        showCreditsPurchaseModal();
+                        // Destacar o plano que estava pendente
+                        setTimeout(() => {
+                            const planCard = document.querySelector(`[onclick*="${pendingPlanId}"]`);
+                            if (planCard) {
+                                planCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                planCard.style.borderColor = '#667eea';
+                                planCard.style.boxShadow = '0 0 20px rgba(102, 126, 234, 0.5)';
+                            }
+                        }, 300);
+                    }, 500);
+                    return;
+                }
                 
                 // Retomar geração se estava pendente
                 if (appState.pendingGeneration) {
