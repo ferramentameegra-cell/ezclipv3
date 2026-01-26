@@ -17,8 +17,9 @@ if (!supabaseAdmin) {
 export const register = async (req, res) => {
   try {
     if (!supabaseAdmin) {
-      // Se Supabase não estiver configurado, retornar erro mas não bloquear
-      return res.status(200).json({
+      // Se Supabase não estiver configurado, retornar erro
+      console.error('[AUTH] ❌ Supabase não configurado - SUPABASE_SERVICE_ROLE_KEY não definida');
+      return res.status(503).json({
         success: false,
         error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
         code: 'AUTH_NOT_CONFIGURED'
@@ -141,8 +142,9 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     if (!supabaseAdmin) {
-      // Se Supabase não estiver configurado, retornar erro mas não bloquear
-      return res.status(200).json({
+      // Se Supabase não estiver configurado, retornar erro
+      console.error('[AUTH] ❌ Supabase não configurado - SUPABASE_SERVICE_ROLE_KEY não definida');
+      return res.status(503).json({
         success: false,
         error: 'Serviço de autenticação não configurado. Configure SUPABASE_SERVICE_ROLE_KEY no Railway.',
         code: 'AUTH_NOT_CONFIGURED'
@@ -226,7 +228,8 @@ export const login = async (req, res) => {
 
     console.log(`[AUTH] Login bem-sucedido: ${email} (ID: ${authData.user.id})`);
 
-    res.json({
+    // Retornar resposta compatível com frontend (suporta tanto token direto quanto session)
+    const responseData = {
       message: 'Login realizado com sucesso',
       user: {
         id: authData.user.id,
@@ -240,7 +243,14 @@ export const login = async (req, res) => {
         refresh_token: authData.session?.refresh_token,
         expires_at: authData.session?.expires_at
       }
-    });
+    };
+
+    // Adicionar token direto para compatibilidade com código antigo
+    if (authData.session?.access_token) {
+      responseData.token = authData.session.access_token;
+    }
+
+    res.json(responseData);
   } catch (error) {
     console.error('[AUTH] Erro ao fazer login:', error);
     res.status(500).json({

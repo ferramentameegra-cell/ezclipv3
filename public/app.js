@@ -1027,15 +1027,39 @@ async function handleLogin(event) {
         
         let data;
         try {
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('[AUTH] Resposta não é JSON:', text.substring(0, 500));
+                throw new Error(`Servidor retornou resposta inválida (não é JSON). Status: ${response.status}`);
+            }
+            
             const text = await response.text();
             console.log('[AUTH] Resposta texto (primeiros 200 chars):', text.substring(0, 200));
+            
+            if (!text || text.trim() === '') {
+                throw new Error('Resposta vazia do servidor');
+            }
+            
             data = JSON.parse(text);
         } catch (parseError) {
             console.error('[AUTH] Erro ao parsear resposta:', parseError);
-            throw new Error('Resposta inválida do servidor');
+            if (statusMsg) {
+                statusMsg.textContent = parseError.message || 'Erro ao processar resposta do servidor';
+                statusMsg.className = 'auth-status-message error';
+                statusMsg.classList.remove('hidden');
+            }
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnSpinner) btnSpinner.classList.add('hidden');
+            return;
         }
         
-        console.log('[AUTH] Dados parseados:', { hasUser: !!data.user, hasToken: !!data.token, error: data.error });
+        console.log('[AUTH] Dados parseados:', { 
+            hasUser: !!data.user, 
+            hasToken: !!(data.token || data.session?.access_token), 
+            hasSession: !!data.session,
+            error: data.error 
+        });
         
         if (!response.ok) {
             // Mostrar erro
@@ -1049,13 +1073,21 @@ async function handleLogin(event) {
             return;
         }
         
-        if (data.user && data.token) {
+        // Verificar se temos usuário e token (pode vir em data.token ou data.session.access_token)
+        const accessToken = data.token || data.session?.access_token;
+        
+        if (data.user && accessToken) {
             console.log('[AUTH] ✅ Login realizado com sucesso!');
             
             appState.currentUser = data.user;
-            appState.userToken = data.token;
+            appState.userToken = accessToken;
             localStorage.setItem('ezv2_user', JSON.stringify(data.user));
-            localStorage.setItem('ezv2_token', data.token);
+            localStorage.setItem('ezv2_token', accessToken);
+            
+            // Salvar também a sessão completa se disponível
+            if (data.session) {
+                localStorage.setItem('ezv2_session', JSON.stringify(data.session));
+            }
             
             if (statusMsg) {
                 statusMsg.textContent = 'Login realizado com sucesso!';
@@ -1098,8 +1130,11 @@ async function handleLogin(event) {
             }, 500);
         } else {
             console.error('[AUTH] Resposta inválida:', data);
+            console.error('[AUTH] Estrutura esperada: { user: {...}, token: "..." } ou { user: {...}, session: { access_token: "..." } }');
             if (statusMsg) {
-                statusMsg.textContent = data.error || 'Erro ao fazer login - resposta inválida';
+                const errorMsg = data.error || 
+                    (data.user ? 'Erro: Token não recebido do servidor' : 'Erro: Dados do usuário não recebidos');
+                statusMsg.textContent = errorMsg;
                 statusMsg.className = 'auth-status-message error';
                 statusMsg.classList.remove('hidden');
             }
@@ -1200,51 +1235,89 @@ async function handleRegister(event) {
             return;
         }
         
-        if (data.user && data.token) {
+        // Verificar se registro foi bem-sucedido
+        if (data.user) {
             console.log('[AUTH] ✅ Conta criada com sucesso!');
             
-            appState.currentUser = data.user;
-            appState.userToken = data.token;
-            localStorage.setItem('ezv2_user', JSON.stringify(data.user));
-            localStorage.setItem('ezv2_token', data.token);
-            
-            statusMsg.textContent = `Conta criada com sucesso! Você pode processar ${data.user.videos_limit || 1} vídeo(s).`;
-            statusMsg.className = 'auth-status-message success';
-            statusMsg.classList.remove('hidden');
-            
-            // Restaurar botões
-            btnText.classList.remove('hidden');
-            btnSpinner.classList.add('hidden');
-            
-            updateUserUI();
-            
-            // Carregar créditos
-            await loadUserVideos();
-            
-            // Fechar modal de login se estiver aberto
-            closeLoginRequiredModal();
-            
-            // Garantir que conteúdo principal está visível
-            showMainContent();
-            
-            // Retomar geração se estava pendente
-            if (appState.pendingGeneration) {
-                console.log('[AUTH] Retomando geração após registro...');
-                // Restaurar estado
-                Object.assign(appState, appState.pendingGeneration);
-                appState.pendingGeneration = null;
+            // Se requer confirmação de email, não fazer login automático
+            if (data.requiresEmailConfirmation) {
+                statusMsg.textContent = data.message || 'Conta criada! Verifique seu email para confirmar antes de fazer login.';
+                statusMsg.className = 'auth-status-message success';
+                statusMsg.classList.remove('hidden');
                 
-                // Verificar vídeos e continuar geração
+                // Restaurar botões
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                
+                // Mudar para tela de login após 2 segundos
                 setTimeout(() => {
-                    proceedToGenerate();
-                }, 500);
+                    switchAuthView('login');
+                    if (statusMsg) {
+                        statusMsg.textContent = 'Faça login após confirmar seu email';
+                        statusMsg.className = 'auth-status-message info';
+                    }
+                }, 2000);
                 return;
             }
             
-            // Se não havia geração pendente, apenas atualizar UI
-            setTimeout(() => {
-                switchTab('home');
-            }, 500);
+            // Se não requer confirmação, fazer login automático
+            const accessToken = data.token || data.session?.access_token;
+            
+            if (accessToken) {
+                appState.currentUser = data.user;
+                appState.userToken = accessToken;
+                localStorage.setItem('ezv2_user', JSON.stringify(data.user));
+                localStorage.setItem('ezv2_token', accessToken);
+                
+                if (data.session) {
+                    localStorage.setItem('ezv2_session', JSON.stringify(data.session));
+                }
+                
+                statusMsg.textContent = `Conta criada com sucesso! Você pode processar ${data.user.videos_limit || 1} vídeo(s).`;
+                statusMsg.className = 'auth-status-message success';
+                statusMsg.classList.remove('hidden');
+                
+                // Restaurar botões
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                
+                updateUserUI();
+                
+                // Carregar créditos
+                await loadUserVideos();
+                
+                // Fechar modal de login se estiver aberto
+                closeLoginRequiredModal();
+                
+                // Garantir que conteúdo principal está visível
+                showMainContent();
+                
+                // Retomar geração se estava pendente
+                if (appState.pendingGeneration) {
+                    console.log('[AUTH] Retomando geração após registro...');
+                    // Restaurar estado
+                    Object.assign(appState, appState.pendingGeneration);
+                    appState.pendingGeneration = null;
+                    
+                    // Verificar vídeos e continuar geração
+                    setTimeout(() => {
+                        proceedToGenerate();
+                    }, 500);
+                    return;
+                }
+                
+                // Se não havia geração pendente, apenas atualizar UI
+                setTimeout(() => {
+                    switchTab('home');
+                }, 500);
+            } else {
+                // Conta criada mas sem token (precisa confirmar email)
+                statusMsg.textContent = data.message || 'Conta criada! Verifique seu email para confirmar.';
+                statusMsg.className = 'auth-status-message success';
+                statusMsg.classList.remove('hidden');
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+            }
         } else {
             console.error('[AUTH] Resposta inválida:', data);
             statusMsg.textContent = data.error || 'Erro ao criar conta - resposta inválida';
