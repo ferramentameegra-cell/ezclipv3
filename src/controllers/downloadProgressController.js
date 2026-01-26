@@ -431,17 +431,12 @@ export async function downloadWithProgress(req, res) {
   }
   
   // Adicionar outras estratégias como fallback
+  // Ordem otimizada: iOS > Android > Web (mais confiáveis primeiro)
   strategies.push(
     {
       name: 'iOS Client',
       extractorArgs: 'youtube:player_client=ios',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
-      additionalArgs: []
-    },
-    {
-      name: 'Mweb Client (Mobile Web)',
-      extractorArgs: 'youtube:player_client=mweb',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+      userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
       additionalArgs: []
     },
     {
@@ -457,14 +452,20 @@ export async function downloadWithProgress(req, res) {
       additionalArgs: []
     },
     {
-      name: 'TV Embedded',
-      extractorArgs: 'youtube:player_client=tv_embedded',
+      name: 'Mweb Client (Mobile Web)',
+      extractorArgs: 'youtube:player_client=mweb',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+      additionalArgs: []
+    },
+    {
+      name: 'Web Client',
+      extractorArgs: 'youtube:player_client=web',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       additionalArgs: []
     },
     {
-      name: 'Web Client (Fallback)',
-      extractorArgs: 'youtube:player_client=web',
+      name: 'TV Embedded',
+      extractorArgs: 'youtube:player_client=tv_embedded',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       additionalArgs: []
     }
@@ -479,58 +480,68 @@ export async function downloadWithProgress(req, res) {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       
       // Criar arquivo de cookies se disponível (solução para erro 403)
-      const cookiesPath = createCookiesFile();
+      let cookiesPath = createCookiesFile();
       const userAgentFromEnv = getUserAgent();
       
       // Priorizar User-Agent da variável de ambiente, senão usar da estratégia
       const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent;
       
-      if (cookiesPath) {
-        // Validar que o arquivo existe e não está vazio
-        try {
-          if (!fs.existsSync(cookiesPath)) {
-            console.error('[DOWNLOAD] ❌ ERRO: Arquivo de cookies não existe:', cookiesPath);
-            console.error('[DOWNLOAD] ❌ Re-criando arquivo de cookies...');
-            // Tentar recriar
-            const newCookiesPath = createCookiesFile();
-            if (newCookiesPath && fs.existsSync(newCookiesPath)) {
-              cookiesPath = newCookiesPath;
-            } else {
-              console.error('[DOWNLOAD] ❌ Falha ao recriar arquivo de cookies');
+      // Validar cookies apenas se a estratégia requer cookies ou se cookies estão disponíveis
+      if (strategy.requiresCookies || cookiesPath) {
+        if (cookiesPath) {
+          // Validar que o arquivo existe e não está vazio
+          try {
+            if (!fs.existsSync(cookiesPath)) {
+              console.warn('[DOWNLOAD] ⚠️ Arquivo de cookies não existe, re-criando...');
+              // Tentar recriar
+              const newCookiesPath = createCookiesFile();
+              if (newCookiesPath && fs.existsSync(newCookiesPath)) {
+                cookiesPath = newCookiesPath;
+              } else {
+                console.warn('[DOWNLOAD] ⚠️ Falha ao recriar arquivo de cookies');
+                cookiesPath = null;
+              }
             }
-          }
-          
-          if (fs.existsSync(cookiesPath)) {
-            const stats = fs.statSync(cookiesPath);
-            if (stats.size === 0) {
-              console.error('[DOWNLOAD] ❌ ERRO: Arquivo de cookies está vazio:', cookiesPath);
-              console.error('[DOWNLOAD] ❌ Verifique se YTDLP_COOKIES contém cookies válidos');
-            } else {
-              console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
-              console.log('[DOWNLOAD] ✅ Caminho do arquivo de cookies:', cookiesPath);
-              console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
+            
+            if (cookiesPath && fs.existsSync(cookiesPath)) {
+              const stats = fs.statSync(cookiesPath);
+              if (stats.size === 0) {
+                console.warn('[DOWNLOAD] ⚠️ Arquivo de cookies está vazio');
+                cookiesPath = null;
+              } else {
+                console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+                console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
+              }
             }
+          } catch (e) {
+            console.warn('[DOWNLOAD] ⚠️ Erro ao validar arquivo de cookies:', e.message);
+            cookiesPath = null;
           }
-        } catch (e) {
-          console.error('[DOWNLOAD] ❌ Erro ao validar arquivo de cookies:', e.message);
+        } else {
+          if (strategy.requiresCookies) {
+            console.warn(`[DOWNLOAD] ⚠️ Estratégia ${strategy.name} requer cookies, mas nenhum foi configurado`);
+            console.warn('[DOWNLOAD] ⚠️ Configure YTDLP_COOKIES no Railway para melhor compatibilidade');
+          } else {
+            console.log('[DOWNLOAD] ℹ️ Nenhum cookie configurado - tentando sem cookies');
+          }
         }
       } else {
-        console.error('[DOWNLOAD] ❌ ERRO CRÍTICO: Nenhum cookie configurado (YTDLP_COOKIES não definido)');
-        console.error('[DOWNLOAD] ❌ É OBRIGATÓRIO configurar a variável YTDLP_COOKIES no Railway');
-        console.error('[DOWNLOAD] ❌ Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas');
-        console.error('[DOWNLOAD] ❌ Sem cookies, o YouTube detectará acesso automatizado e bloqueará o download');
+        console.log('[DOWNLOAD] ℹ️ Estratégia não requer cookies - tentando sem cookies');
       }
       
       console.log('[DOWNLOAD] User-Agent:', finalUserAgent.substring(0, 50) + '...');
       
       // Preparar argumentos do yt-dlp com a estratégia atual
-      // Formato MÁXIMA flexibilidade: usar formato selector que aceita QUALQUER formato
-      // Permitir vídeo+áudio mesclados (m3u8) ou separados (webm, mp4)
-      // Combinar extractor-args da estratégia com skip=dash para melhor performance
-      const extractorArgsCombined = `${strategy.extractorArgs},youtube:skip=dash`;
+      // Formato MÁXIMA flexibilidade: aceitar QUALQUER formato disponível
+      // Priorizar: melhor vídeo+áudio > melhor formato único > qualquer formato disponível
+      const extractorArgsCombined = strategy.extractorArgs;
+      
+      // Formato flexível que aceita qualquer formato disponível
+      // Ordem: melhor vídeo+áudio > melhor formato mp4 > melhor formato webm > melhor formato qualquer
+      const formatSelector = "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best";
       
       const downloadArgs = [
-        "-f", "bestvideo+bestaudio/best", // Tentar melhor vídeo+áudio, senão melhor formato geral
+        "-f", formatSelector, // Formato flexível que aceita qualquer formato disponível
         "--merge-output-format", "mp4", // Se precisar mergear, usar mp4
         "--no-playlist",
         "--no-warnings",
@@ -539,7 +550,7 @@ export async function downloadWithProgress(req, res) {
         ...(cookiesPath ? ["--cookies", cookiesPath] : []),
         "--user-agent", finalUserAgent,
         "--referer", "https://www.youtube.com/",
-        // Usar cliente específico da estratégia + skip=dash
+        // Usar cliente específico da estratégia
         "--extractor-args", extractorArgsCombined,
         // Flags para contornar detecção de bot e restrição de idade
         "--no-check-certificate", // Ignorar verificação de certificado (pode ajudar com alguns bloqueios)
@@ -634,6 +645,112 @@ export async function downloadWithProgress(req, res) {
             resolve({ success: true, strategy: strategy.name, filePath: downloadedFile, stderr, stdout });
             return;
           }
+        }
+        
+        // Verificar se é erro de formato não disponível - tentar com formato mais flexível
+        const isFormatError = stderr.includes('Requested format is not available') || 
+                             stderr.includes('format is not available') ||
+                             stderr.includes('format not available');
+        
+        if (isFormatError && !hasResolved) {
+          console.warn(`[DOWNLOAD] ⚠️ Formato não disponível com estratégia ${strategy.name}, tentando formato mais flexível...`);
+          
+          // Tentar novamente com formato ainda mais flexível (qualquer formato)
+          const flexibleFormatArgs = [
+            "-f", "best", // Apenas melhor formato disponível, sem restrições
+            "--merge-output-format", "mp4",
+            "--no-playlist",
+            "--no-warnings",
+            "--newline",
+            ...(cookiesPath ? ["--cookies", cookiesPath] : []),
+            "--user-agent", finalUserAgent,
+            "--referer", "https://www.youtube.com/",
+            "--extractor-args", extractorArgsCombined,
+            "--no-check-certificate",
+            "--retries", "3",
+            "--fragment-retries", "3",
+            "--file-access-retries", "3",
+            "--sleep-requests", "1",
+            "-4",
+            "-o", outputTemplate,
+            cleanUrl
+          ];
+          
+          const { executable: exec2, args: args2 } = buildYtDlpArgs(flexibleFormatArgs);
+          const ytdlp2 = spawn(exec2, args2, { stdio: ['ignore', 'pipe', 'pipe'] });
+          
+          let stderr2 = "";
+          let stdout2 = "";
+          let hasResolved2 = false;
+          
+          ytdlp2.stderr.on("data", (data) => {
+            stderr2 += data.toString();
+            const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
+            if (progressMatch) {
+              const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
+              res.write(`data: ${JSON.stringify({
+                progress: percent,
+                status: "downloading",
+                state: "downloading",
+                message: `Baixando (${strategy.name} - formato flexível)... ${percent.toFixed(1)}%`
+              })}\n\n`);
+            }
+          });
+          
+          ytdlp2.stdout.on("data", (data) => {
+            stdout2 += data.toString();
+          });
+          
+          ytdlp2.on("close", async (code2) => {
+            if (hasResolved2) return;
+            hasResolved2 = true;
+            
+            if (code2 === 0) {
+              const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
+              let downloadedFile = null;
+              
+              for (const ext of possibleExtensions) {
+                const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
+                if (fs.existsSync(testPath)) {
+                  const stats = fs.statSync(testPath);
+                  if (stats.size > 0) {
+                    downloadedFile = testPath;
+                    break;
+                  }
+                }
+              }
+              
+              // Se não encontrou, tentar outputPath original
+              if (!downloadedFile && fs.existsSync(outputPath)) {
+                const stats = fs.statSync(outputPath);
+                if (stats.size > 0) {
+                  downloadedFile = outputPath;
+                }
+              }
+              
+              if (downloadedFile) {
+                hasResolved = true;
+                console.log(`[DOWNLOAD] ✅ Sucesso com estratégia: ${strategy.name} (formato flexível) - Arquivo: ${downloadedFile}`);
+                resolve({ success: true, strategy: strategy.name, filePath: downloadedFile, stderr: stderr2, stdout: stdout2 });
+                return;
+              }
+            }
+            
+            // Se ainda falhou, rejeitar para tentar próxima estratégia
+            hasResolved = true;
+            lastError = { code: code2, stderr: stderr2, stdout: stdout2, strategy: strategy.name };
+            reject(lastError);
+          });
+          
+          ytdlp2.on("error", (error2) => {
+            if (hasResolved2) return;
+            hasResolved2 = true;
+            hasResolved = true;
+            lastError = { error: error2.message, strategy: strategy.name };
+            reject(lastError);
+          });
+          
+          return; // Não rejeitar ainda, aguardar segunda tentativa
         }
         
         // Se erro, rejeitar para tentar próxima estratégia
