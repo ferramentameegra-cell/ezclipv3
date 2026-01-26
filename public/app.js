@@ -3220,7 +3220,7 @@ async function selectNiche(nicheId, cardElement) {
 }
 
 /**
- * Carregar vídeo de retenção do nicho (YouTube)
+ * Carregar vídeo de retenção do nicho (YouTube) e todas as opções
  */
 async function loadNicheRetentionVideo(nicheId) {
     try {
@@ -3231,41 +3231,104 @@ async function loadNicheRetentionVideo(nicheId) {
         
         console.log('[NICHE] Dados do nicho:', data);
         
-        // Mostrar informações do vídeo de retenção do YouTube
+        // Mostrar todas as opções de retenção em miniaturas
         const retentionInfo = document.getElementById('niche-retention-info');
         if (retentionInfo) {
+            let html = `
+                <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 0.75rem; margin-top: 1rem;">
+                    <h4 style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Opções de Vídeo de Retenção</h4>
+                    <p style="margin: 0 0 1rem 0; color: var(--text-secondary); font-size: 0.875rem;">
+                        Escolha um vídeo de retenção para este nicho. O vídeo padrão do YouTube será usado automaticamente se nenhum for selecionado.
+                    </p>
+                    <div id="retention-options-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+            `;
+            
+            // Opção 1: Vídeo padrão do YouTube do nicho
             if (data.retentionYoutubeUrl) {
-                // Extrair ID do vídeo do YouTube
                 const youtubeIdMatch = data.retentionYoutubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
                 const youtubeId = youtubeIdMatch ? youtubeIdMatch[1] : null;
                 
-                retentionInfo.innerHTML = `
-                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 0.75rem; margin-top: 1rem;">
-                        <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;">Vídeo de Retenção do Nicho</h4>
-                        <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.875rem;">
-                            Este nicho usa um vídeo específico do YouTube como retenção (sem áudio).
-                        </p>
-                        ${youtubeId ? `
-                            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 0.5rem; margin-bottom: 0.75rem;">
-                                <iframe 
-                                    src="https://www.youtube.com/embed/${youtubeId}" 
-                                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowfullscreen>
-                                </iframe>
+                html += `
+                    <div class="retention-option-card" data-retention-type="niche-youtube" data-youtube-id="${youtubeId || ''}" style="
+                        position: relative;
+                        padding-bottom: 56.25%;
+                        height: 0;
+                        overflow: hidden;
+                        border-radius: 0.5rem;
+                        border: 2px solid var(--border);
+                        cursor: pointer;
+                        background: var(--bg-tertiary);
+                        transition: all 0.2s;
+                    " onclick="selectRetentionOption('niche-youtube', '${youtubeId || ''}')">
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 0.5rem;">
+                            ${youtubeId ? `
+                                <img src="https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg" 
+                                     style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.25rem;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                            ` : ''}
+                            <div style="display: ${youtubeId ? 'none' : 'flex'}; align-items: center; justify-content: center; width: 100%; height: 100%; flex-direction: column; gap: 0.25rem;">
+                                <span style="font-size: 1.5rem;">🎬</span>
+                                <span style="font-size: 0.75rem; text-align: center; color: var(--text-secondary);">YouTube</span>
                             </div>
-                        ` : ''}
-                        <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
-                            ${data.retentionVideoDownloaded ? 
-                                '<span style="color: #10b981;">✅ Vídeo baixado e pronto</span>' : 
-                                '<span style="color: #f59e0b;">⏳ Vídeo será baixado automaticamente durante a geração</span>'
-                            }
+                            <div style="position: absolute; top: 0.25rem; right: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.625rem; font-weight: 600;">
+                                PADRÃO
+                            </div>
                         </div>
                     </div>
                 `;
-                retentionInfo.style.display = 'block';
-            } else {
-                retentionInfo.style.display = 'none';
+            }
+            
+            // Opções legadas (vídeos antigos)
+            if (data.legacyVideos && data.legacyVideos.length > 0) {
+                data.legacyVideos.forEach(video => {
+                    html += `
+                        <div class="retention-option-card" data-retention-type="legacy" data-video-id="${video.id}" style="
+                            position: relative;
+                            padding-bottom: 56.25%;
+                            height: 0;
+                            overflow: hidden;
+                            border-radius: 0.5rem;
+                            border: 2px solid var(--border);
+                            cursor: pointer;
+                            background: var(--bg-tertiary);
+                            transition: all 0.2s;
+                        " onclick="selectRetentionOption('legacy', '${video.id}')">
+                            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 0.5rem;">
+                                <span style="font-size: 1.5rem;">${video.exists ? '🎬' : '📁'}</span>
+                                <span style="font-size: 0.75rem; text-align: center; color: var(--text-secondary); margin-top: 0.25rem;">${video.name || video.id}</span>
+                                ${!video.exists ? `
+                                    <span style="font-size: 0.625rem; color: var(--text-tertiary); margin-top: 0.125rem;">Não disponível</span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; padding-top: 0.75rem; border-top: 1px solid var(--border);">
+                        <span id="selected-retention-info" style="color: var(--text-secondary);">
+                            ${data.retentionYoutubeUrl ? '✅ Vídeo padrão do YouTube será usado' : '⚠️ Nenhum vídeo de retenção configurado'}
+                        </span>
+                    </div>
+                </div>
+            `;
+            
+            retentionInfo.innerHTML = html;
+            retentionInfo.style.display = 'block';
+            
+            // Selecionar opção padrão (YouTube do nicho)
+            if (data.retentionYoutubeUrl) {
+                const defaultCard = retentionInfo.querySelector('[data-retention-type="niche-youtube"]');
+                if (defaultCard) {
+                    defaultCard.style.borderColor = 'var(--primary)';
+                    defaultCard.style.boxShadow = '0 0 0 2px var(--primary-alpha)';
+                }
+                appState.selectedRetentionOption = {
+                    type: 'niche-youtube',
+                    youtubeId: data.retentionYoutubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1]
+                };
             }
         }
         
@@ -3273,12 +3336,49 @@ async function loadNicheRetentionVideo(nicheId) {
         appState.nicheRetentionVideo = {
             youtubeUrl: data.retentionYoutubeUrl,
             path: data.retentionVideoPath,
-            downloaded: data.retentionVideoDownloaded
+            downloaded: data.retentionVideoDownloaded,
+            legacyVideos: data.legacyVideos || []
         };
         
     } catch (error) {
         console.error('[NICHE] Erro ao carregar vídeo de retenção:', error);
     }
+}
+
+/**
+ * Selecionar opção de retenção
+ */
+function selectRetentionOption(type, id) {
+    // Remover seleção anterior
+    document.querySelectorAll('.retention-option-card').forEach(card => {
+        card.style.borderColor = 'var(--border)';
+        card.style.boxShadow = 'none';
+    });
+    
+    // Selecionar nova opção
+    const selectedCard = document.querySelector(`[data-retention-type="${type}"][data-${type === 'niche-youtube' ? 'youtube' : 'video'}-id="${id}"]`);
+    if (selectedCard) {
+        selectedCard.style.borderColor = 'var(--primary)';
+        selectedCard.style.boxShadow = '0 0 0 2px var(--primary-alpha)';
+    }
+    
+    // Atualizar estado
+    if (type === 'niche-youtube') {
+        appState.selectedRetentionOption = {
+            type: 'niche-youtube',
+            youtubeId: id
+        };
+        document.getElementById('selected-retention-info').textContent = '✅ Vídeo padrão do YouTube será usado';
+    } else if (type === 'legacy') {
+        appState.selectedRetentionOption = {
+            type: 'legacy',
+            videoId: id
+        };
+        const video = appState.nicheRetentionVideo?.legacyVideos?.find(v => v.id === id);
+        document.getElementById('selected-retention-info').textContent = `✅ ${video?.name || id} será usado`;
+    }
+    
+    console.log('[RETENTION] Opção selecionada:', appState.selectedRetentionOption);
 }
 
 async function loadRetentionVideos(nicheId) {
@@ -3930,11 +4030,26 @@ async function generateSeries() {
             queueInfoEl.textContent = 'Adicionando à fila de processamento...';
         }
 
+        // Determinar retentionVideoId baseado na opção selecionada
+        let retentionVideoId = 'random';
+        if (appState.selectedRetentionOption) {
+            if (appState.selectedRetentionOption.type === 'niche-youtube') {
+                // Usar vídeo padrão do nicho (YouTube) - será baixado automaticamente
+                retentionVideoId = 'niche-default';
+            } else if (appState.selectedRetentionOption.type === 'legacy') {
+                // Usar vídeo legado selecionado
+                retentionVideoId = appState.selectedRetentionOption.videoId;
+            }
+        } else if (appState.retentionVideoId) {
+            // Fallback para opção antiga
+            retentionVideoId = appState.retentionVideoId;
+        }
+        
         // Preparar dados para envio
         const requestData = {
             videoId: appState.videoId,
             nicheId: appState.nicheId,
-            retentionVideoId: appState.retentionVideoId || 'random',
+            retentionVideoId: retentionVideoId,
             numberOfCuts: appState.numberOfCuts || 1,
             headlineStyle: appState.headlineStyle || 'bold',
             headlineText: appState.headlineText || 'Headline',
