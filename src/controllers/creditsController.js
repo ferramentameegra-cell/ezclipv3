@@ -4,6 +4,7 @@
  */
 
 import { getUserCredits, addCredits } from '../services/creditService.js';
+import { getAllPlans } from '../models/plans.js';
 
 /**
  * GET /api/credits/balance
@@ -31,6 +32,29 @@ export const getBalance = async (req, res) => {
     res.status(500).json({
       error: 'Erro ao obter saldo de créditos',
       code: 'BALANCE_ERROR'
+    });
+  }
+};
+
+/**
+ * GET /api/credits/plans
+ * Listar todos os planos disponíveis (rota pública)
+ */
+export const getPlans = async (req, res) => {
+  try {
+    const plans = getAllPlans();
+    
+    console.log('[CREDITS] Planos disponíveis:', plans.length);
+    
+    res.json({
+      success: true,
+      plans: plans
+    });
+  } catch (error) {
+    console.error('[CREDITS] Erro ao listar planos:', error);
+    res.status(500).json({
+      error: 'Erro ao carregar planos',
+      code: 'PLANS_ERROR'
     });
   }
 };
