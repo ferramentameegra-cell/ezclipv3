@@ -1014,3 +1014,96 @@ export function getVideoState(req, res) {
     });
   }
 }
+
+/**
+ * Download de vídeo do YouTube SEM ÁUDIO (apenas vídeo)
+ * Usado para vídeos de retenção
+ * @param {string} youtubeUrl - URL do YouTube
+ * @param {string} outputPath - Caminho de saída
+ * @returns {Promise<string>} - Caminho do arquivo baixado
+ */
+export async function downloadYouTubeVideoNoAudio(youtubeUrl, outputPath) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log(`[DOWNLOAD-NO-AUDIO] Iniciando download sem áudio: ${youtubeUrl}`);
+      
+      // Detectar comando yt-dlp
+      await detectYtDlpCommand();
+      
+      // Criar arquivo de cookies se disponível
+      const cookiesPath = createCookiesFile();
+      const finalUserAgent = getUserAgent();
+      
+      // Formato: APENAS vídeo, SEM áudio
+      // bestvideo[height<=1080] - melhor vídeo até 1080p, sem áudio
+      const formatSelector = "bestvideo[height<=1080]/bestvideo/best[height<=1080]";
+      
+      const downloadArgs = [
+        "-f", formatSelector, // Apenas vídeo, sem áudio
+        "--no-playlist",
+        "--no-warnings",
+        "--newline",
+        // Cookies e User-Agent
+        ...(cookiesPath ? ["--cookies", cookiesPath] : []),
+        "--user-agent", finalUserAgent,
+        "--referer", "https://www.youtube.com/",
+        // Usar Android Client (mais confiável)
+        "--extractor-args", "youtube:player_client=android",
+        "--no-check-certificate",
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--file-access-retries", "3",
+        "--sleep-requests", "1",
+        "-4",
+        "-o", outputPath,
+        youtubeUrl
+      ];
+      
+      const { executable, args } = buildYtDlpArgs(downloadArgs);
+      
+      console.log(`[DOWNLOAD-NO-AUDIO] Comando: ${executable} ${args.join(' ')}`);
+      
+      const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let stderr = "";
+      let stdout = "";
+      
+      ytdlp.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      
+      ytdlp.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      
+      ytdlp.on("close", (code) => {
+        if (code === 0) {
+          // Verificar se arquivo foi criado
+          if (fs.existsSync(outputPath)) {
+            const stats = fs.statSync(outputPath);
+            if (stats.size > 0) {
+              console.log(`[DOWNLOAD-NO-AUDIO] ✅ Download concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              resolve(outputPath);
+            } else {
+              reject(new Error('Arquivo baixado está vazio'));
+            }
+          } else {
+            reject(new Error('Arquivo não foi criado após download'));
+          }
+        } else {
+          const errorMsg = parseYtDlpError(stderr, code);
+          console.error(`[DOWNLOAD-NO-AUDIO] ❌ Erro: ${errorMsg}`);
+          reject(new Error(errorMsg));
+        }
+      });
+      
+      ytdlp.on("error", (error) => {
+        console.error(`[DOWNLOAD-NO-AUDIO] ❌ Erro ao executar: ${error.message}`);
+        reject(error);
+      });
+    } catch (error) {
+      console.error(`[DOWNLOAD-NO-AUDIO] ❌ Erro fatal: ${error.message}`);
+      reject(error);
+    }
+  });
+}

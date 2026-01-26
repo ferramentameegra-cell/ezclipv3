@@ -1,9 +1,11 @@
 // Nichos disponíveis com suas configurações
+// Cada nicho DEVE ter um retentionYoutubeUrl obrigatório
 export const NICHES = {
   podcast: {
     id: 'podcast',
     name: 'Podcast',
     description: 'Conversas, entrevistas e debates',
+    retentionYoutubeUrl: 'https://www.youtube.com/watch?v=5HYs06bAEdc', // Prensa hidraulica
     retentionVideos: [
       'hydraulic-press',
       'hydraulic-press-1',
@@ -20,6 +22,7 @@ export const NICHES = {
     id: 'educacao',
     name: 'Educação',
     description: 'Aulas, tutoriais e conteúdo educacional',
+    retentionYoutubeUrl: 'https://www.youtube.com/watch?v=31ZpyOrXcoQ', // Areia 1
     retentionVideos: [
       'sand-kinetic',
       'slime',
@@ -33,6 +36,7 @@ export const NICHES = {
     id: 'motivacional',
     name: 'Motivacional',
     description: 'Conteúdo inspirador e de desenvolvimento pessoal',
+    retentionYoutubeUrl: 'https://www.youtube.com/watch?v=KCMf3a1XEo0', // Satisfatório 1
     retentionVideos: [
       'sunset-timelapse',
       'ocean-waves',
@@ -46,6 +50,7 @@ export const NICHES = {
     id: 'tech',
     name: 'Tech',
     description: 'Tecnologia, programação e inovação',
+    retentionYoutubeUrl: 'https://www.youtube.com/watch?v=5HYs06bAEdc', // Prensa hidraulica (fallback)
     retentionVideos: [
       'circuit-animation',
       'code-rain',
@@ -59,6 +64,7 @@ export const NICHES = {
     id: 'financeiro',
     name: 'Financeiro',
     description: 'Investimentos, economia e finanças',
+    retentionYoutubeUrl: 'https://www.youtube.com/watch?v=boDnPvIMyek', // Prensa hidraulica 1
     retentionVideos: [
       'gold-particles',
       'satisfying-loops',

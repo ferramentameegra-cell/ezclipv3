@@ -5,8 +5,10 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
-import { RETENTION_VIDEOS } from '../models/niches.js';
+import { spawn } from 'child_process';
+import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
 import { convertStreamableToDirectUrl, isStreamableUrl } from '../utils/streamableUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -160,4 +162,221 @@ export function getRetentionLibraryDir() {
 export function retentionVideoExists(retentionVideoId) {
   const videoPath = getRetentionVideoPath(retentionVideoId);
   return videoPath !== null && fs.existsSync(videoPath);
+}
+
+/**
+ * Obter vídeo de retenção do nicho (baixando do YouTube se necessário)
+ * 
+ * @param {string} nicheId - ID do nicho
+ * @returns {Promise<string|null>} - Caminho do arquivo ou null se erro
+ */
+export async function getNicheRetentionVideo(nicheId) {
+  try {
+    const niche = NICHES[nicheId];
+    
+    if (!niche) {
+      console.error(`[RETENTION] Nicho não encontrado: ${nicheId}`);
+      return null;
+    }
+    
+    // Verificar se nicho tem retentionYoutubeUrl
+    if (!niche.retentionYoutubeUrl) {
+      console.warn(`[RETENTION] Nicho ${nicheId} não tem retentionYoutubeUrl configurado`);
+      return null;
+    }
+    
+    // Extrair ID do vídeo do YouTube da URL
+    const youtubeIdMatch = niche.retentionYoutubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+    if (!youtubeIdMatch || !youtubeIdMatch[1]) {
+      console.error(`[RETENTION] URL do YouTube inválida para nicho ${nicheId}: ${niche.retentionYoutubeUrl}`);
+      return null;
+    }
+    
+    const youtubeVideoId = youtubeIdMatch[1];
+    const retentionVideoId = `niche-${nicheId}`;
+    const retentionFilePath = path.join(RETENTION_LIBRARY_DIR, `${retentionVideoId}.mp4`);
+    
+    // Se arquivo já existe, retornar
+    if (fs.existsSync(retentionFilePath)) {
+      const stats = fs.statSync(retentionFilePath);
+      if (stats.size > 0) {
+        console.log(`[RETENTION] ✅ Vídeo de retenção já existe para nicho ${nicheId}: ${retentionFilePath}`);
+        return retentionFilePath;
+      }
+    }
+    
+    // Baixar vídeo do YouTube SEM ÁUDIO
+    console.log(`[RETENTION] 📥 Baixando vídeo de retenção do YouTube para nicho ${nicheId}...`);
+    console.log(`[RETENTION] URL: ${niche.retentionYoutubeUrl}`);
+    console.log(`[RETENTION] YouTube ID: ${youtubeVideoId}`);
+    console.log(`[RETENTION] Caminho de saída: ${retentionFilePath}`);
+    
+    try {
+      await downloadRetentionVideoFromYouTube(niche.retentionYoutubeUrl, retentionFilePath);
+      
+      // Verificar se download foi bem-sucedido
+      if (fs.existsSync(retentionFilePath)) {
+        const stats = fs.statSync(retentionFilePath);
+        if (stats.size > 0) {
+          console.log(`[RETENTION] ✅ Vídeo de retenção baixado com sucesso: ${retentionFilePath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+          return retentionFilePath;
+        } else {
+          console.error(`[RETENTION] ❌ Arquivo baixado está vazio`);
+          return null;
+        }
+      } else {
+        console.error(`[RETENTION] ❌ Arquivo não foi criado após download`);
+        return null;
+      }
+    } catch (downloadError) {
+      console.error(`[RETENTION] ❌ Erro ao baixar vídeo de retenção: ${downloadError.message}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[RETENTION] ❌ Erro ao obter vídeo de retenção do nicho ${nicheId}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Obter URL do YouTube do vídeo de retenção do nicho
+ * 
+ * @param {string} nicheId - ID do nicho
+ * @returns {string|null} - URL do YouTube ou null
+ */
+export function getNicheRetentionYoutubeUrl(nicheId) {
+  const niche = NICHES[nicheId];
+  return niche?.retentionYoutubeUrl || null;
+}
+
+/**
+ * Download de vídeo do YouTube SEM ÁUDIO (apenas vídeo)
+ * Usado especificamente para vídeos de retenção
+ * 
+ * @param {string} youtubeUrl - URL do YouTube
+ * @param {string} outputPath - Caminho de saída
+ * @returns {Promise<string>} - Caminho do arquivo baixado
+ */
+async function downloadRetentionVideoFromYouTube(youtubeUrl, outputPath) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log(`[RETENTION-DOWNLOAD] Iniciando download sem áudio: ${youtubeUrl}`);
+      
+      // Criar diretório se não existir
+      const outputDir = path.dirname(outputPath);
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      
+      // Criar arquivo de cookies se disponível
+      const cookiesContent = process.env.YTDLP_COOKIES;
+      let cookiesPath = null;
+      
+      if (cookiesContent && cookiesContent.trim() !== '') {
+        try {
+          const tempDir = os.tmpdir();
+          cookiesPath = path.join(tempDir, `retention_cookies_${Date.now()}.txt`);
+          fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
+          console.log(`[RETENTION-DOWNLOAD] ✅ Cookies criados: ${cookiesPath}`);
+        } catch (error) {
+          console.warn(`[RETENTION-DOWNLOAD] ⚠️ Erro ao criar cookies: ${error.message}`);
+        }
+      }
+      
+      const userAgent = process.env.YTDLP_USER_AGENT || 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip';
+      
+      // Formato: APENAS vídeo, SEM áudio
+      // bestvideo[height<=1080] - melhor vídeo até 1080p, sem áudio
+      const formatSelector = "bestvideo[height<=1080]/bestvideo/best[height<=1080]";
+      
+      const downloadArgs = [
+        "-f", formatSelector, // Apenas vídeo, sem áudio
+        "--no-playlist",
+        "--no-warnings",
+        "--newline",
+        // Cookies e User-Agent
+        ...(cookiesPath ? ["--cookies", cookiesPath] : []),
+        "--user-agent", userAgent,
+        "--referer", "https://www.youtube.com/",
+        // Usar Android Client (mais confiável)
+        "--extractor-args", "youtube:player_client=android",
+        "--no-check-certificate",
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--file-access-retries", "3",
+        "--sleep-requests", "1",
+        "-4",
+        "-o", outputPath,
+        youtubeUrl
+      ];
+      
+      console.log(`[RETENTION-DOWNLOAD] Executando: yt-dlp ${downloadArgs.join(' ')}`);
+      
+      const ytdlp = spawn('yt-dlp', downloadArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let stderr = "";
+      let stdout = "";
+      
+      ytdlp.stderr.on("data", (data) => {
+        const text = data.toString();
+        stderr += text;
+        // Log progresso
+        const progressMatch = text.match(/\[download\]\s+(\d+\.?\d*)%/i);
+        if (progressMatch) {
+          console.log(`[RETENTION-DOWNLOAD] Progresso: ${progressMatch[1]}%`);
+        }
+      });
+      
+      ytdlp.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      
+      ytdlp.on("close", (code) => {
+        // Limpar cookies temporário
+        if (cookiesPath && fs.existsSync(cookiesPath)) {
+          try {
+            fs.unlinkSync(cookiesPath);
+          } catch (e) {
+            // Ignorar erro
+          }
+        }
+        
+        if (code === 0) {
+          // Verificar se arquivo foi criado
+          if (fs.existsSync(outputPath)) {
+            const stats = fs.statSync(outputPath);
+            if (stats.size > 0) {
+              console.log(`[RETENTION-DOWNLOAD] ✅ Download concluído: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              resolve(outputPath);
+            } else {
+              reject(new Error('Arquivo baixado está vazio'));
+            }
+          } else {
+            reject(new Error('Arquivo não foi criado após download'));
+          }
+        } else {
+          const errorMsg = `Erro ao baixar vídeo de retenção: ${stderr.slice(-500)}`;
+          console.error(`[RETENTION-DOWNLOAD] ❌ Erro: ${errorMsg}`);
+          reject(new Error(errorMsg));
+        }
+      });
+      
+      ytdlp.on("error", (error) => {
+        // Limpar cookies temporário
+        if (cookiesPath && fs.existsSync(cookiesPath)) {
+          try {
+            fs.unlinkSync(cookiesPath);
+          } catch (e) {
+            // Ignorar erro
+          }
+        }
+        
+        console.error(`[RETENTION-DOWNLOAD] ❌ Erro ao executar yt-dlp: ${error.message}`);
+        reject(error);
+      });
+    } catch (error) {
+      console.error(`[RETENTION-DOWNLOAD] ❌ Erro fatal: ${error.message}`);
+      reject(error);
+    }
+  });
 }

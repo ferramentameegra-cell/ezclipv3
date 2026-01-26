@@ -16,7 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 // Imports https e http removidos - não são mais necessários (apenas arquivos locais)
-import { getRetentionVideoPath, getRandomRetentionVideoPath } from './retentionVideoManager.js';
+import { getRetentionVideoPath, getRandomRetentionVideoPath, getNicheRetentionVideo, getNicheRetentionYoutubeUrl } from './retentionVideoManager.js';
 import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -154,8 +154,26 @@ export async function composeFinalVideo({
   }
 
   // Obter vídeo de retenção
+  // PRIORIDADE: Se há nicheId, usar vídeo de retenção do nicho (YouTube)
   let retentionVideoPath = null;
-  if (retentionVideoId && retentionVideoId !== 'none') {
+  
+  if (nicheId) {
+    // NOVO SISTEMA: Usar vídeo de retenção do nicho (YouTube, sem áudio)
+    console.log(`[COMPOSER] 📥 Obtendo vídeo de retenção do nicho: ${nicheId}`);
+    try {
+      retentionVideoPath = await getNicheRetentionVideo(nicheId);
+      if (retentionVideoPath) {
+        console.log(`[COMPOSER] ✅ Usando vídeo de retenção do nicho ${nicheId}: ${retentionVideoPath}`);
+      } else {
+        console.warn(`[COMPOSER] ⚠️ Não foi possível obter vídeo de retenção do nicho ${nicheId}, tentando fallback...`);
+      }
+    } catch (error) {
+      console.error(`[COMPOSER] ❌ Erro ao obter vídeo de retenção do nicho: ${error.message}`);
+    }
+  }
+  
+  // FALLBACK: Sistema antigo (se não há nicheId ou se falhou)
+  if (!retentionVideoPath && retentionVideoId && retentionVideoId !== 'none') {
     // Se retentionVideoId começa com 'upload:', é um upload customizado
     if (retentionVideoId.startsWith('upload:')) {
       const uploadPath = retentionVideoId.replace('upload:', '');

@@ -3212,11 +3212,73 @@ async function selectNiche(nicheId, cardElement) {
     // Salvar nicho escolhido
     console.log('[NICHE] Nicho selecionado:', nicheId);
     
-    // Carregar vídeos de retenção
-    await loadRetentionVideos(nicheId);
+    // NOVO SISTEMA: Carregar vídeo de retenção do nicho (YouTube)
+    await loadNicheRetentionVideo(nicheId);
     
     // Mostrar botão para continuar (NÃO avançar automaticamente)
     showContinueButtonAfterNiche();
+}
+
+/**
+ * Carregar vídeo de retenção do nicho (YouTube)
+ */
+async function loadNicheRetentionVideo(nicheId) {
+    try {
+        console.log(`[NICHE] Carregando vídeo de retenção do nicho: ${nicheId}`);
+        
+        const response = await fetch(`${API_BASE}/api/retention/niche/${nicheId}`);
+        const data = await response.json();
+        
+        console.log('[NICHE] Dados do nicho:', data);
+        
+        // Mostrar informações do vídeo de retenção do YouTube
+        const retentionInfo = document.getElementById('niche-retention-info');
+        if (retentionInfo) {
+            if (data.retentionYoutubeUrl) {
+                // Extrair ID do vídeo do YouTube
+                const youtubeIdMatch = data.retentionYoutubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+                const youtubeId = youtubeIdMatch ? youtubeIdMatch[1] : null;
+                
+                retentionInfo.innerHTML = `
+                    <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 0.75rem; margin-top: 1rem;">
+                        <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;">Vídeo de Retenção do Nicho</h4>
+                        <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.875rem;">
+                            Este nicho usa um vídeo específico do YouTube como retenção (sem áudio).
+                        </p>
+                        ${youtubeId ? `
+                            <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 0.5rem; margin-bottom: 0.75rem;">
+                                <iframe 
+                                    src="https://www.youtube.com/embed/${youtubeId}" 
+                                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowfullscreen>
+                                </iframe>
+                            </div>
+                        ` : ''}
+                        <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
+                            ${data.retentionVideoDownloaded ? 
+                                '<span style="color: #10b981;">✅ Vídeo baixado e pronto</span>' : 
+                                '<span style="color: #f59e0b;">⏳ Vídeo será baixado automaticamente durante a geração</span>'
+                            }
+                        </div>
+                    </div>
+                `;
+                retentionInfo.style.display = 'block';
+            } else {
+                retentionInfo.style.display = 'none';
+            }
+        }
+        
+        // Armazenar informações do vídeo de retenção
+        appState.nicheRetentionVideo = {
+            youtubeUrl: data.retentionYoutubeUrl,
+            path: data.retentionVideoPath,
+            downloaded: data.retentionVideoDownloaded
+        };
+        
+    } catch (error) {
+        console.error('[NICHE] Erro ao carregar vídeo de retenção:', error);
+    }
 }
 
 async function loadRetentionVideos(nicheId) {

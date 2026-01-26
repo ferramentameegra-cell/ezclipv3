@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
-import { getAvailableRetentionVideos, getRetentionVideoPath, retentionVideoExists, saveRetentionVideo } from '../services/retentionVideoManager.js';
+import { getAvailableRetentionVideos, getRetentionVideoPath, retentionVideoExists, saveRetentionVideo, getNicheRetentionVideo, getNicheRetentionYoutubeUrl } from '../services/retentionVideoManager.js';
 
 export const getRetentionVideos = (req, res) => {
   try {
@@ -12,7 +12,7 @@ export const getRetentionVideos = (req, res) => {
   }
 };
 
-export const getRetentionVideoByNiche = (req, res) => {
+export const getRetentionVideoByNiche = async (req, res) => {
   try {
     const { nicheId } = req.params;
     const niche = NICHES[nicheId];
@@ -21,13 +21,30 @@ export const getRetentionVideoByNiche = (req, res) => {
       return res.status(404).json({ error: 'Nicho não encontrado' });
     }
     
-    // Retornar vídeos com informação de disponibilidade
+    // NOVO SISTEMA: Retornar vídeo de retenção do YouTube do nicho
+    const retentionYoutubeUrl = niche.retentionYoutubeUrl;
+    const retentionVideoPath = await getNicheRetentionVideo(nicheId);
+    
+    // Retornar também vídeos antigos (fallback)
     const allVideos = getAvailableRetentionVideos();
     const nicheVideos = niche.retentionVideos
-      .map(videoId => allVideos.find(v => v.id === videoId))
-      .filter(v => v !== undefined);
+      ? niche.retentionVideos
+          .map(videoId => allVideos.find(v => v.id === videoId))
+          .filter(v => v !== undefined)
+      : [];
     
-    res.json({ videos: nicheVideos, niche: niche.name });
+    res.json({ 
+      niche: {
+        id: niche.id,
+        name: niche.name,
+        description: niche.description
+      },
+      retentionYoutubeUrl: retentionYoutubeUrl || null,
+      retentionVideoPath: retentionVideoPath || null,
+      retentionVideoDownloaded: retentionVideoPath !== null && fs.existsSync(retentionVideoPath),
+      // Vídeos antigos (fallback)
+      legacyVideos: nicheVideos
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

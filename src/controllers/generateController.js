@@ -103,6 +103,9 @@ export const generateSeries = async (req, res) => {
         headlineText: headlineText || null,
         headlineSize: headlineSize || 72,
         headlineColor: headlineColor || '#FFFFFF',
+        // NOVO SISTEMA: retentionVideoId não é mais necessário se há nicheId
+        // O videoComposer usará automaticamente o vídeo de retenção do nicho
+        // retentionVideoId é mantido apenas para compatibilidade com sistema antigo
         font: font || 'Inter',
         trimStart: trimStart || 0,
         trimEnd: trimEnd || null,
