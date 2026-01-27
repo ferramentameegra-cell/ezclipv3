@@ -2265,15 +2265,23 @@ body {
    ============================================ */
 
 .loading-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 10, 31, 0.9);
-    backdrop-filter: blur(20px) saturate(180%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-    pointer-events: auto;
+    position: fixed !important;
+    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(15, 10, 31, 0.95) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 99999 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .loading-overlay.hidden {
@@ -2285,14 +2293,18 @@ body {
 }
 
 .loading-card {
-    background: rgba(18, 11, 46, 0.95);
-    backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(18, 11, 46, 0.98) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
     border-radius: 20px;
-    padding: 3rem;
+    padding: 2.5rem;
     text-align: center;
     border: 1px solid rgba(179, 140, 255, 0.3);
     box-shadow: 0 20px 40px rgba(179, 140, 255, 0.25), 0 8px 16px rgba(255, 110, 199, 0.15);
-    min-width: 400px;
+    min-width: 450px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .loading-spinner {

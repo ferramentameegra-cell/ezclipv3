@@ -986,12 +986,41 @@
     <div id="loading-overlay" class="loading-overlay hidden">
         <div class="loading-card">
             <div class="loading-spinner"></div>
-            <h3>Gerando série...</h3>
-            <div class="progress-bar">
-                <div class="progress-fill" id="loading-progress"></div>
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 700; background: linear-gradient(135deg, #B38CFF 0%, #FF6EC7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Gerando Clipes...</h3>
+            
+            <!-- Informações de Clipes -->
+            <div id="clips-info" style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(179, 140, 255, 0.1); border-radius: 12px; border: 1px solid rgba(179, 140, 255, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.7); font-weight: 500;">Clipe Atual:</span>
+                    <span id="current-clip-number" style="font-size: 1.25rem; font-weight: 700; color: #B38CFF;">-</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.7); font-weight: 500;">Total de Clipes:</span>
+                    <span id="total-clips-number" style="font-size: 1.25rem; font-weight: 700; color: #FF6EC7;">-</span>
+                </div>
             </div>
-            <p class="progress-text" id="loading-percent">0%</p>
-            <p class="progress-message" id="loading-message" style="margin-top: 0.5rem; font-size: 0.875rem; color: rgba(255, 255, 255, 0.8);">Iniciando processamento...</p>
+            
+            <!-- Barra de Progresso -->
+            <div style="margin-bottom: 1rem;">
+                <div class="progress-bar" style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
+                    <div class="progress-fill" id="loading-progress" style="height: 100%; background: linear-gradient(90deg, #B38CFF 0%, #FF6EC7 100%); transition: width 0.3s ease; border-radius: 4px;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+                    <p class="progress-text" id="loading-percent" style="font-size: 1rem; font-weight: 700; color: #B38CFF; margin: 0;">0%</p>
+                    <p id="clips-progress-text" style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.6); margin: 0;">0 / 0</p>
+                </div>
+            </div>
+            
+            <!-- Mensagem de Status -->
+            <p class="progress-message" id="loading-message" style="margin-top: 1rem; font-size: 0.875rem; color: rgba(255, 255, 255, 0.8); text-align: center; line-height: 1.5;">Iniciando processamento...</p>
+            
+            <!-- Etapas do Processamento -->
+            <div id="processing-steps" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                <div style="font-size: 0.75rem; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; text-align: center;">Etapas</div>
+                <div id="step-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <!-- Etapas serão adicionadas dinamicamente -->
+                </div>
+            </div>
         </div>
     </div>
 

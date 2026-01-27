@@ -4062,6 +4062,106 @@ function updatePreviewStyle() {
     updateGenerateSummary();
 }
 
+/**
+ * Mostrar modal de loading em primeiro plano
+ */
+function showLoadingModal() {
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+        // Garantir que o modal fique em primeiro plano
+        loadingOverlay.style.zIndex = '9999';
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.top = '0';
+        loadingOverlay.style.left = '0';
+        loadingOverlay.style.width = '100%';
+        loadingOverlay.style.height = '100%';
+        
+        // Resetar informações
+        const currentClipNumber = document.getElementById('current-clip-number');
+        const totalClipsNumber = document.getElementById('total-clips-number');
+        const clipsProgressText = document.getElementById('clips-progress-text');
+        const progressMessage = document.getElementById('loading-message');
+        
+        if (currentClipNumber) currentClipNumber.textContent = '-';
+        if (totalClipsNumber) totalClipsNumber.textContent = '-';
+        if (clipsProgressText) clipsProgressText.textContent = '0 / 0';
+        if (progressMessage) progressMessage.textContent = 'Iniciando processamento...';
+        
+        // Resetar barra de progresso
+        const progressFill = document.getElementById('loading-progress');
+        const progressText = document.getElementById('loading-percent');
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressText) progressText.textContent = '0%';
+        
+        // Limpar etapas anteriores
+        const stepList = document.getElementById('step-list');
+        if (stepList) stepList.innerHTML = '';
+    }
+}
+
+/**
+ * Esconder modal de loading
+ */
+function hideLoadingModal() {
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+    }
+}
+
+/**
+ * Atualizar etapas do processamento
+ */
+function updateProcessingSteps(message, currentClip, totalClips) {
+    const stepList = document.getElementById('step-list');
+    if (!stepList) return;
+    
+    // Identificar etapa atual baseado na mensagem
+    let currentStep = '';
+    if (message) {
+        if (message.includes('Iniciando') || message.includes('processamento')) {
+            currentStep = 'Iniciando processamento...';
+        } else if (message.includes('Validando') || message.includes('validação')) {
+            currentStep = 'Validando vídeo...';
+        } else if (message.includes('Gerando clipe') || message.includes('clip')) {
+            currentStep = `Gerando clipe ${currentClip} de ${totalClips}...`;
+        } else if (message.includes('Compondo') || message.includes('composição')) {
+            currentStep = `Compondo clipe ${currentClip}...`;
+        } else if (message.includes('Finalizando') || message.includes('final')) {
+            currentStep = 'Finalizando...';
+        } else {
+            currentStep = message;
+        }
+    }
+    
+    // Adicionar etapa se ainda não existir
+    const existingSteps = Array.from(stepList.children).map(el => el.textContent.trim());
+    if (currentStep && !existingSteps.includes(currentStep)) {
+        const stepElement = document.createElement('div');
+        stepElement.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(179, 140, 255, 0.05);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.8);
+        `;
+        stepElement.innerHTML = `
+            <div style="width: 8px; height: 8px; border-radius: 50%; background: #B38CFF; animation: pulse 2s infinite;"></div>
+            <span>${currentStep}</span>
+        `;
+        stepList.appendChild(stepElement);
+        
+        // Manter apenas as últimas 5 etapas
+        while (stepList.children.length > 5) {
+            stepList.removeChild(stepList.firstChild);
+        }
+    }
+}
+
 async function generateSeries() {
     console.log('[GENERATE] generateSeries() iniciada');
     
@@ -4196,6 +4296,10 @@ async function generateSeries() {
             console.log('[GENERATE] Job criado com sucesso:', data.jobId);
             console.log('[GENERATE] SeriesId:', data.seriesId);
             console.log('[GENERATE] Iniciando monitoramento de progresso...');
+            
+            // Mostrar modal de loading em primeiro plano
+            showLoadingModal();
+            
             monitorProgress(data.jobId);
         } else {
             console.error('[GENERATE] Erro ao criar job:', data);
@@ -4211,7 +4315,7 @@ async function generateSeries() {
                 alert('Erro ao gerar série: ' + errorMsg);
             }
             
-            if (loadingOverlay) loadingOverlay.classList.add('hidden');
+            hideLoadingModal();
         }
     } catch (error) {
         console.error('Erro:', error);
@@ -4226,7 +4330,7 @@ async function generateSeries() {
             alert('Erro ao gerar série: ' + errorMessage);
         }
         
-        if (loadingOverlay) loadingOverlay.classList.add('hidden');
+        hideLoadingModal();
     }
 }
 
@@ -4296,17 +4400,39 @@ async function monitorProgress(jobId) {
                     progressText.textContent = `${progressPercent}%`;
                 }
                 
+                // Atualizar informações de clipes
+                const currentClipNumber = document.getElementById('current-clip-number');
+                const totalClipsNumber = document.getElementById('total-clips-number');
+                const clipsProgressText = document.getElementById('clips-progress-text');
+                
+                if (currentClipNumber) {
+                    currentClipNumber.textContent = currentClip > 0 ? currentClip : '-';
+                }
+                if (totalClipsNumber) {
+                    totalClipsNumber.textContent = totalClips > 0 ? totalClips : '-';
+                }
+                if (clipsProgressText) {
+                    if (totalClips > 0 && currentClip > 0) {
+                        clipsProgressText.textContent = `${currentClip} / ${totalClips}`;
+                    } else {
+                        clipsProgressText.textContent = '0 / 0';
+                    }
+                }
+                
                 // Atualizar mensagem de status
                 if (progressMessage) {
                     if (totalClips > 0 && currentClip > 0) {
                         // Mensagem detalhada: "Gerando clipe X de Y"
-                        progressMessage.textContent = message || `Gerando clipe ${currentClip} de ${totalClips}`;
+                        progressMessage.textContent = message || `Gerando clipe ${currentClip} de ${totalClips}...`;
                     } else if (message) {
                         progressMessage.textContent = message;
                     } else {
                         progressMessage.textContent = 'Processando...';
                     }
                 }
+                
+                // Atualizar etapas do processamento
+                updateProcessingSteps(message, currentClip, totalClips);
                 
                 // Atualizar appState
                 if (seriesId) {
@@ -4336,9 +4462,8 @@ async function monitorProgress(jobId) {
                 } else if (status === 'error') {
                     eventSource.close();
                     console.error('[GENERATE] ❌ Erro na geração via SSE:', error || message);
+                    hideLoadingModal();
                     alert('Erro ao gerar série: ' + (error || message || 'Erro desconhecido'));
-                    const loadingOverlay = document.getElementById('loading-overlay');
-                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
                 }
             } catch (parseError) {
                 console.error('[GENERATE-SSE] Erro ao processar evento:', parseError, event.data);
@@ -4416,9 +4541,8 @@ async function monitorProgress(jobId) {
                     }, 500);
                 } else if (status === 'failed' || status === 'error') {
                     clearInterval(fallbackInterval);
+                    hideLoadingModal();
                     alert('Erro ao gerar série: ' + (data.failedReason || data.error || 'Erro desconhecido'));
-                    const loadingOverlay = document.getElementById('loading-overlay');
-                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
                 }
             } catch (error) {
                 console.error('[GENERATE-POLL] Erro ao verificar progresso:', error);
