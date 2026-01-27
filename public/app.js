@@ -4113,6 +4113,66 @@ function hideLoadingModal() {
 /**
  * Atualizar etapas do processamento
  */
+/**
+ * Mostrar barra de progresso de download durante geração de clipes
+ */
+function showDownloadProgressInGeneration(percent, message) {
+    let downloadProgressContainer = document.getElementById('generation-download-progress');
+    if (!downloadProgressContainer) {
+        downloadProgressContainer = document.createElement('div');
+        downloadProgressContainer.id = 'generation-download-progress';
+        downloadProgressContainer.style.cssText = `
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(18, 11, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(179, 140, 255, 0.3);
+            border-radius: 12px;
+            animation: slideDown 0.3s ease-out;
+        `;
+        
+        // Inserir no modal de loading
+        const loadingModal = document.getElementById('loading-modal');
+        if (loadingModal) {
+            const progressContainer = loadingModal.querySelector('.progress-container');
+            if (progressContainer) {
+                progressContainer.appendChild(downloadProgressContainer);
+            } else {
+                loadingModal.appendChild(downloadProgressContainer);
+            }
+        }
+    }
+    
+    downloadProgressContainer.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #EAEAF0;">
+                ${message || 'Baixando vídeo do YouTube...'}
+            </div>
+            <div style="font-size: 0.875rem; font-weight: 700; color: #B38CFF;">
+                ${Math.round(percent)}%
+            </div>
+        </div>
+        <div style="width: 100%; height: 8px; background: rgba(179, 140, 255, 0.2); border-radius: 4px; overflow: hidden;">
+            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, #B38CFF 0%, #FF6EC7 100%); border-radius: 4px; transition: width 0.3s ease; box-shadow: 0 0 8px rgba(179, 140, 255, 0.5);"></div>
+        </div>
+    `;
+}
+
+/**
+ * Ocultar barra de progresso de download durante geração de clipes
+ */
+function hideDownloadProgressInGeneration() {
+    const downloadProgressContainer = document.getElementById('generation-download-progress');
+    if (downloadProgressContainer) {
+        downloadProgressContainer.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => {
+            if (downloadProgressContainer.parentNode) {
+                downloadProgressContainer.parentNode.removeChild(downloadProgressContainer);
+            }
+        }, 300);
+    }
+}
+
 function updateProcessingSteps(message, currentClip, totalClips) {
     const stepList = document.getElementById('step-list');
     if (!stepList) return;
@@ -4385,7 +4445,9 @@ async function monitorProgress(jobId) {
                     currentClip = 0,
                     message = '',
                     seriesId,
-                    error
+                    error,
+                    downloadProgress,
+                    downloadStatus
                 } = data;
                 
                 // Atualizar progresso percentual
@@ -4421,7 +4483,22 @@ async function monitorProgress(jobId) {
                 
                 // Atualizar mensagem de status
                 if (progressMessage) {
-                    if (totalClips > 0 && currentClip > 0) {
+                    // Se houver progresso de download, mostrar isso primeiro
+                    if (downloadStatus && downloadProgress !== undefined) {
+                        if (downloadStatus === 'downloading') {
+                            progressMessage.textContent = `Baixando vídeo: ${Math.round(downloadProgress)}%`;
+                        } else if (downloadStatus === 'retrying') {
+                            progressMessage.textContent = message || 'Tentando novamente o download...';
+                        } else if (downloadStatus === 'starting') {
+                            progressMessage.textContent = 'Iniciando download do vídeo...';
+                        } else if (downloadStatus === 'completed') {
+                            progressMessage.textContent = 'Download concluído, processando...';
+                        } else if (downloadStatus === 'failed') {
+                            progressMessage.textContent = 'Erro no download. Tentando outra estratégia...';
+                        } else {
+                            progressMessage.textContent = message || 'Processando...';
+                        }
+                    } else if (totalClips > 0 && currentClip > 0) {
                         // Mensagem detalhada: "Gerando clipe X de Y"
                         progressMessage.textContent = message || `Gerando clipe ${currentClip} de ${totalClips}...`;
                     } else if (message) {
@@ -4429,6 +4506,13 @@ async function monitorProgress(jobId) {
                     } else {
                         progressMessage.textContent = 'Processando...';
                     }
+                }
+                
+                // Mostrar barra de progresso de download se estiver em download
+                if (downloadStatus === 'downloading' && downloadProgress !== undefined) {
+                    showDownloadProgressInGeneration(downloadProgress, message || 'Baixando vídeo do YouTube...');
+                } else if (downloadStatus === 'completed' || downloadStatus === 'failed') {
+                    hideDownloadProgressInGeneration();
                 }
                 
                 // Atualizar etapas do processamento

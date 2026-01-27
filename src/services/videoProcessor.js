@@ -221,9 +221,43 @@ export const generateVideoSeries = async (job, jobsMap) => {
         currentClip: 0
       });
 
-      // Importar downloadYouTubeVideo dinamicamente se necessário
-      const { downloadYouTubeVideo } = await import('./youtubeDownloader.js');
-      await downloadYouTubeVideo(youtubeVideoId, downloadPath);
+      // Usar robustDownloader para download à prova de falhas
+      const { downloadWithRetries } = await import('./robustDownloader.js');
+      
+      // Callback de progresso que atualiza o frontend via SSE
+      const onProgress = (progressData) => {
+        // Mapear progresso do download (0-100) para o progresso geral do job (5-20%)
+        const downloadProgressPercent = 5 + (progressData.progress * 0.15); // 5% a 20%
+        
+        // Atualizar progresso do job
+        if (typeof job.progress === 'function') {
+          job.progress(Math.round(downloadProgressPercent));
+        } else {
+          job.progress = Math.round(downloadProgressPercent);
+        }
+        if (jobsMap) jobsMap.set(job.id, job);
+        
+        // Atualizar evento de progresso para o frontend
+        updateProgressEvent(job.id, {
+          status: progressData.status === 'downloading' ? 'processing' : progressData.status,
+          progress: Math.round(downloadProgressPercent),
+          message: progressData.message || 'Baixando vídeo do YouTube...',
+          totalClips: 0,
+          currentClip: 0,
+          downloadProgress: progressData.progress, // Progresso específico do download
+          downloadStatus: progressData.status // Status específico do download
+        });
+        
+        console.log(`[PROCESSING] Download progress: ${progressData.progress.toFixed(1)}% - ${progressData.message || ''}`);
+      };
+      
+      const downloadedPath = await downloadWithRetries(youtubeVideoId, videoId, onProgress);
+      
+      // Se o caminho retornado for diferente do esperado, usar o retornado
+      if (downloadedPath && downloadedPath !== downloadPath) {
+        console.log(`[PROCESSING] Download retornou caminho diferente: ${downloadedPath}`);
+        downloadPath = downloadedPath;
+      }
 
       // VALIDAR DOWNLOAD
       if (!fs.existsSync(downloadPath)) {
