@@ -949,36 +949,36 @@ export const generateVideoSeries = async (job, jobsMap) => {
         console.log(`[PROCESSING] [PARALLEL] COMPONDO CLIP ${clipIndex}/${finalClips.length}`);
         console.log(`[PROCESSING] ========================================`);
         console.log(`[PROCESSING] Clip path: ${clipPath}`);
-      
-      // VALIDAR clip antes de compor
-      if (!fs.existsSync(clipPath)) {
-        const error = `[PROCESSING_ERROR] Clip ${clipIndex} não existe antes de composição: ${clipPath}`;
-        console.error(error);
-        throw new Error(error);
-      }
-      
-      const clipStatsBefore = fs.statSync(clipPath);
-      if (clipStatsBefore.size === 0) {
-        const error = `[PROCESSING_ERROR] Clip ${clipIndex} está vazio antes de composição: ${clipPath}`;
-        console.error(error);
-        throw new Error(error);
-      }
-      
-      console.log(`[PROCESSING] ✅ Clip ${clipIndex} validado antes de composição: ${(clipStatsBefore.size / 1024 / 1024).toFixed(2)} MB`);
-      
-      // Emitir evento: iniciando clipe
-      updateProgressEvent(job.id, {
-        status: 'processing',
-        totalClips: finalClips.length,
-        currentClip: clipIndex,
-        progress: Math.round(compositionProgress + (compositionRange * (i / finalClips.length))),
-        message: `Gerando clipe ${clipIndex} de ${finalClips.length}`
-      });
+        
+        // VALIDAR clip antes de compor
+        if (!fs.existsSync(clipPath)) {
+          const error = `[PROCESSING_ERROR] Clip ${clipIndex} não existe antes de composição: ${clipPath}`;
+          console.error(error);
+          throw new Error(error);
+        }
+        
+        const clipStatsBefore = fs.statSync(clipPath);
+        if (clipStatsBefore.size === 0) {
+          const error = `[PROCESSING_ERROR] Clip ${clipIndex} está vazio antes de composição: ${clipPath}`;
+          console.error(error);
+          throw new Error(error);
+        }
+        
+        console.log(`[PROCESSING] ✅ Clip ${clipIndex} validado antes de composição: ${(clipStatsBefore.size / 1024 / 1024).toFixed(2)} MB`);
+        
+        // Emitir evento: iniciando clipe
+        updateProgressEvent(job.id, {
+          status: 'processing',
+          totalClips: finalClips.length,
+          currentClip: clipIndex,
+          progress: Math.round(compositionProgress + (compositionRange * ((clipIndex - 1) / finalClips.length))),
+          message: `[PARALLEL] Gerando clipe ${clipIndex} de ${finalClips.length}`
+        });
 
-      // Criar caminho para clip final composto
-      const finalClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
-      
-      console.log(`[PROCESSING] Output path (final): ${finalClipPath}`);
+        // Criar caminho para clip final composto
+        const finalClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
+        
+        console.log(`[PROCESSING] Output path (final): ${finalClipPath}`);
 
         // Usar clip de retenção correspondente se disponível, senão usar vídeo completo
         let currentRetentionVideoPath = null;
@@ -1003,42 +1003,41 @@ export const generateVideoSeries = async (job, jobsMap) => {
           // Uma legenda deve aparecer se há qualquer overlap com o intervalo do clip
           const clipStartTime = retentionIndex * finalCutDuration;
           const clipEndTime = (retentionIndex + 1) * finalCutDuration;
-        
-        console.log(`[PROCESSING] Intervalo do clip ${clipIndex}: ${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s`);
-        
-        // Filtrar legendas que têm overlap com o intervalo do clip
-        // Overlap ocorre quando: cap.start < clipEndTime && cap.end > clipStartTime
-        const clipCaptions = captions.filter(
-          cap => cap.start < clipEndTime && cap.end > clipStartTime
-        ).map(cap => ({
-          ...cap,
-          // Ajustar timestamps para serem relativos ao início do clip (0-based)
-          start: Math.max(0, cap.start - clipStartTime), // Não permitir negativo
-          end: Math.min(finalCutDuration, cap.end - clipStartTime) // Não ultrapassar duração do clip
-        })).filter(cap => cap.end > cap.start); // Remover legendas inválidas (end <= start)
-        
-        console.log(`[PROCESSING] Clip ${clipIndex}: ${clipCaptions.length} legendas no intervalo [${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s]`);
+          
+          console.log(`[PROCESSING] Intervalo do clip ${clipIndex}: ${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s`);
+          
+          // Filtrar legendas que têm overlap com o intervalo do clip
+          // Overlap ocorre quando: cap.start < clipEndTime && cap.end > clipStartTime
+          const clipCaptions = captions.filter(
+            cap => cap.start < clipEndTime && cap.end > clipStartTime
+          ).map(cap => ({
+            ...cap,
+            // Ajustar timestamps para serem relativos ao início do clip (0-based)
+            start: Math.max(0, cap.start - clipStartTime), // Não permitir negativo
+            end: Math.min(finalCutDuration, cap.end - clipStartTime) // Não ultrapassar duração do clip
+          })).filter(cap => cap.end > cap.start); // Remover legendas inválidas (end <= start)
+          
+          console.log(`[PROCESSING] Clip ${clipIndex}: ${clipCaptions.length} legendas no intervalo [${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s]`);
 
-        // Headline para este clip (se houver)
-        // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
-        const clipHeadline = headlineText ? {
-          text: headlineText,
-          startTime: 0,
-          endTime: finalCutDuration // Até o final do clip, não apenas 5 segundos
-        } : null;
+          // Headline para este clip (se houver)
+          // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
+          const clipHeadline = headlineText ? {
+            text: headlineText,
+            startTime: 0,
+            endTime: finalCutDuration // Até o final do clip, não apenas 5 segundos
+          } : null;
 
-        console.log(`[PROCESSING] Chamando composeFinalVideo para clip ${clipIndex}...`);
-        console.log(`[PROCESSING] Parâmetros de composição:`);
-        console.log(`[PROCESSING]   - clipPath: ${clipPath}`);
-        console.log(`[PROCESSING]   - outputPath: ${finalClipPath}`);
-        console.log(`[PROCESSING]   - legendas: ${clipCaptions.length} blocos`);
-        console.log(`[PROCESSING]   - headline: ${clipHeadline ? 'SIM' : 'NÃO'}`);
-        console.log(`[PROCESSING]   - retenção: ${currentRetentionVideoPath ? 'SIM' : 'NÃO'}`);
-        
-        // Aplicar composição final
-        // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
-        // currentRetentionVideoPath já foi definido antes do loop
-        await composeFinalVideo({
+          console.log(`[PROCESSING] Chamando composeFinalVideo para clip ${clipIndex}...`);
+          console.log(`[PROCESSING] Parâmetros de composição:`);
+          console.log(`[PROCESSING]   - clipPath: ${clipPath}`);
+          console.log(`[PROCESSING]   - outputPath: ${finalClipPath}`);
+          console.log(`[PROCESSING]   - legendas: ${clipCaptions.length} blocos`);
+          console.log(`[PROCESSING]   - headline: ${clipHeadline ? 'SIM' : 'NÃO'}`);
+          console.log(`[PROCESSING]   - retenção: ${currentRetentionVideoPath ? 'SIM' : 'NÃO'}`);
+          
+          // Aplicar composição final
+          // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
+          await composeFinalVideo({
           clipPath,
           outputPath: finalClipPath,
           captions: clipCaptions,
@@ -1077,47 +1076,44 @@ export const generateVideoSeries = async (job, jobsMap) => {
             });
             console.log(`[PROCESSING] Progresso clip ${clipIndex}: ${safePercent}% -> Progresso geral: ${finalProgress}%`);
           }
-        });
+          });
 
-        // VALIDAR clip final ANTES de substituir
-        if (!fs.existsSync(finalClipPath)) {
-          throw new Error(`Clip final ${clipIndex} não foi criado: ${finalClipPath}`);
-        }
-        
-        const finalClipStats = fs.statSync(finalClipPath);
-        if (finalClipStats.size === 0) {
-          throw new Error(`Clip final ${clipIndex} está vazio: ${finalClipPath}`);
-        }
-        
-        console.log(`[PROCESSING] ✅ Clip final ${clipIndex} validado: ${(finalClipStats.size / 1024 / 1024).toFixed(2)} MB`);
-        
-        // Retornar caminho do clip final
-        return finalClipPath;
-        
-        // Remover clip original (economizar espaço)
-        if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
-          try {
-            fs.unlinkSync(clipPath);
-            console.log(`[PROCESSING] ✅ Clip original removido: ${clipPath}`);
-          } catch (unlinkError) {
-            console.warn(`[PROCESSING] ⚠️ Erro ao remover clip original: ${unlinkError.message}`);
+          // VALIDAR clip final ANTES de substituir
+          if (!fs.existsSync(finalClipPath)) {
+            throw new Error(`Clip final ${clipIndex} não foi criado: ${finalClipPath}`);
           }
-        }
+          
+          const finalClipStats = fs.statSync(finalClipPath);
+          if (finalClipStats.size === 0) {
+            throw new Error(`Clip final ${clipIndex} está vazio: ${finalClipPath}`);
+          }
+          
+          console.log(`[PROCESSING] ✅ Clip final ${clipIndex} validado: ${(finalClipStats.size / 1024 / 1024).toFixed(2)} MB`);
+          
+          // Remover clip original (economizar espaço)
+          if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
+            try {
+              fs.unlinkSync(clipPath);
+              console.log(`[PROCESSING] ✅ Clip original removido: ${clipPath}`);
+            } catch (unlinkError) {
+              console.warn(`[PROCESSING] ⚠️ Erro ao remover clip original: ${unlinkError.message}`);
+            }
+          }
 
-        console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
-        console.log(`[PROCESSING] ✅ Clip final salvo em: ${finalClipPath}`);
-        
-        // Emitir evento: clipe concluído
-        const clipProgress = Math.round(compositionProgress + (compositionRange * (clipIndex / finalClips.length)));
-        updateProgressEvent(job.id, {
-          status: 'processing',
-          totalClips: finalClips.length,
-          currentClip: clipIndex,
-          progress: clipProgress,
-          message: `[PARALLEL] Clipe ${clipIndex} de ${finalClips.length} concluído`
-        });
+          console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
+          console.log(`[PROCESSING] ✅ Clip final salvo em: ${finalClipPath}`);
+          
+          // Emitir evento: clipe concluído
+          const clipProgress = Math.round(compositionProgress + (compositionRange * (clipIndex / finalClips.length)));
+          updateProgressEvent(job.id, {
+            status: 'processing',
+            totalClips: finalClips.length,
+            currentClip: clipIndex,
+            progress: clipProgress,
+            message: `[PARALLEL] Clipe ${clipIndex} de ${finalClips.length} concluído`
+          });
 
-        return finalClipPath;
+          return finalClipPath;
       } catch (compositionError) {
         console.error(`[PROCESSING_ERROR] ========================================`);
         console.error(`[PROCESSING_ERROR] ERRO ao compor clip ${clipIndex}/${finalClips.length}`);
@@ -1272,13 +1268,16 @@ export const generateVideoSeries = async (job, jobsMap) => {
             });
             
             console.warn(`[PROCESSING] ⚠️ Usando clip fallback simplificado 1080x1920 para clip ${clipIndex}`);
+            return fallbackClipPath;
           } catch (fallbackError) {
             console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha no fallback: ${fallbackError.message}`);
             console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
             console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
-            throw compositionError; // Re-lançar erro original
+            // Retornar clip original como último recurso (mesmo que formato possa estar incorreto)
+            return clipPath;
           }
         }
+      }
       });
       
       // Aguardar todos os clipes do batch em paralelo
