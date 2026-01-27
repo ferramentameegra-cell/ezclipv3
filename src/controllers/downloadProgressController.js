@@ -621,69 +621,16 @@ export async function downloadWithProgress(req, res) {
     });
   }
   
-  // ESTRATÉGIAS MÚLTIPLAS PARA CONTORNAR ERRO 403
-  // Tentar com diferentes clientes do YouTube em ordem de prioridade
-  // Verificar se há cookies disponíveis para usar android_with_cookies (mais confiável)
-  const cookiesPathForCheck = createCookiesFile();
-  const hasCookies = cookiesPathForCheck && fs.existsSync(cookiesPathForCheck) && fs.statSync(cookiesPathForCheck).size > 0;
+  // ESTRATÉGIA ÚNICA: APENAS ANDROID CLIENT
+  // Removidas todas as outras estratégias conforme solicitado
+  const strategy = {
+    name: 'Android Client',
+    extractorArgs: 'youtube:player_client=android',
+    userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+    additionalArgs: []
+  };
   
-  // Ordem baseada em taxa de sucesso: android_with_cookies (se houver cookies) > iOS > Mweb > Android > TV > Web
-  const strategies = [];
-  
-  // Se houver cookies, adicionar android_with_cookies como primeira estratégia (mais confiável, evita bloqueios 403)
-  if (hasCookies) {
-    strategies.push({
-      name: 'Android with Cookies (Mais confiável com cookies)',
-      extractorArgs: 'youtube:player_client=android_with_cookies',
-      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-      additionalArgs: [],
-      requiresCookies: true
-    });
-    console.log('[DOWNLOAD] ✅ Cookies disponíveis - usando estratégia android_with_cookies como primeira opção');
-  } else {
-    console.warn('[DOWNLOAD] ⚠️ Nenhum cookie configurado - android_with_cookies não será usado');
-  }
-  
-  // Adicionar outras estratégias como fallback
-  // Ordem otimizada: iOS > Android > Web (mais confiáveis primeiro)
-  strategies.push(
-    {
-      name: 'iOS Client',
-      extractorArgs: 'youtube:player_client=ios',
-      userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-      additionalArgs: []
-    },
-    {
-      name: 'Android Client',
-      extractorArgs: 'youtube:player_client=android',
-      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-      additionalArgs: []
-    },
-    {
-      name: 'Android Embedded',
-      extractorArgs: 'youtube:player_client=android_embedded',
-      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-      additionalArgs: []
-    },
-    {
-      name: 'Mweb Client (Mobile Web)',
-      extractorArgs: 'youtube:player_client=mweb',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
-      additionalArgs: []
-    },
-    {
-      name: 'Web Client',
-      extractorArgs: 'youtube:player_client=web',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      additionalArgs: []
-    },
-    {
-      name: 'TV Embedded',
-      extractorArgs: 'youtube:player_client=tv_embedded',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      additionalArgs: []
-    }
-  );
+  console.log('[DOWNLOAD] ✅ Usando APENAS Android Client (estratégia única)');
   
   // Tentar cada estratégia sequencialmente
   let strategyIndex = 0;
@@ -986,123 +933,54 @@ export async function downloadWithProgress(req, res) {
     });
   };
   
-  // Tentar cada estratégia sequencialmente até uma funcionar
+  // Tentar download com Android Client (única estratégia)
   let downloadResult = null;
-  for (const strategy of strategies) {
-    try {
-      downloadResult = await tryDownloadWithStrategy(strategy);
-      console.log(`[DOWNLOAD] ✅ Download bem-sucedido com estratégia: ${strategy.name}`);
-      break; // Sucesso, parar tentativas
-    } catch (error) {
-      console.warn(`[DOWNLOAD] ❌ Estratégia ${strategy.name} falhou:`, error.code || error.error);
-      lastError = error;
-      
-      // Se ainda há estratégias para tentar, continuar (OTIMIZADO - delay reduzido)
-      if (strategies.indexOf(strategy) < strategies.length - 1) {
-        console.log(`[DOWNLOAD] Tentando próxima estratégia...`);
-        // Delay reduzido para agilidade (500ms ao invés de 2s)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Limpar cache entre tentativas
-        try {
-          const cmd = ytDlpCommandCache || { executable: 'python3', useModule: true };
-          const clearCacheProc = spawn(
-            cmd.useModule ? cmd.executable : 'python3',
-            cmd.useModule ? ['-m', 'yt_dlp', '--rm-cache-dir'] : ['--rm-cache-dir'],
-            { stdio: 'ignore' }
-          );
-          clearCacheProc.on('close', () => {
-            console.log('[DOWNLOAD] Cache limpo entre tentativas');
-          });
-          setTimeout(() => {
-            if (!clearCacheProc.killed) clearCacheProc.kill();
-          }, 1000);
-        } catch (cacheError) {
-          // Ignorar erro de limpeza de cache
-        }
-        
-        continue;
-      }
-    }
+  try {
+    downloadResult = await tryDownloadWithStrategy(strategy);
+    console.log(`[DOWNLOAD] ✅ Download bem-sucedido com Android Client`);
+  } catch (error) {
+    console.warn(`[DOWNLOAD] ❌ Android Client falhou:`, error.code || error.error);
+    lastError = error;
   }
   
-  // Se nenhuma estratégia funcionou, tentar listar e testar formatos disponíveis (OTIMIZADO - paralelo e rápido)
+  // Se Android Client falhou, tentar listar e testar formatos disponíveis com Android Client
   if (!downloadResult) {
-    console.log('[DOWNLOAD] 🔄 Estratégias padrão falharam. Listando formatos disponíveis (modo rápido)...');
+    console.log('[DOWNLOAD] 🔄 Android Client falhou. Listando formatos disponíveis...');
     
-    // Listar formatos em paralelo das primeiras 3 estratégias (mais rápidas)
-    const strategiesToTry = strategies.slice(0, 3);
-    const formatPromises = strategiesToTry.map(strategy => 
-      listAvailableFormats(cleanUrl, strategy).catch(() => [])
-    );
+    // Listar formatos com Android Client
+    const formats = await listAvailableFormats(cleanUrl, strategy).catch(() => []);
     
-    const formatArrays = await Promise.all(formatPromises);
-    let allFormats = [];
-    
-    formatArrays.forEach((formats, index) => {
-      if (formats.length > 0) {
-        formats.forEach(f => f.strategy = strategiesToTry[index]);
-        allFormats.push(...formats);
-      }
-    });
-    
-    // Remover duplicatas e ordenar
-    const uniqueFormats = [];
-    const seenIds = new Set();
-    for (const format of allFormats) {
-      if (!seenIds.has(format.id)) {
-        seenIds.add(format.id);
-        uniqueFormats.push(format);
-      }
-    }
-    uniqueFormats.sort((a, b) => b.priority - a.priority);
-    
-    // Testar apenas os TOP 10 formatos (mais rápidos)
-    const topFormats = uniqueFormats.slice(0, 10);
-    
-    console.log(`[DOWNLOAD] 📋 Testando ${topFormats.length} melhores formatos (modo rápido)...`);
-    
-    // Testar formatos em paralelo (até 3 ao mesmo tempo para agilidade)
-    const BATCH_SIZE = 3;
-    for (let i = 0; i < topFormats.length; i += BATCH_SIZE) {
-      const batch = topFormats.slice(i, i + BATCH_SIZE);
+    if (formats.length > 0) {
+      // Testar apenas os TOP 5 formatos (mais rápidos)
+      const topFormats = formats.slice(0, 5);
       
-      res.write(`data: ${JSON.stringify({
-        progress: 0,
-        status: 'testing',
-        state: 'testing',
-        message: `Testando formatos ${batch.map(f => f.id).join(', ')}...`
-      })}\n\n`);
+      console.log(`[DOWNLOAD] 📋 Testando ${topFormats.length} melhores formatos com Android Client...`);
       
-      // Testar batch em paralelo
-      const batchPromises = batch.map(async (format) => {
+      // Testar formatos sequencialmente
+      for (const format of topFormats) {
         try {
-          const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, format.strategy);
+          res.write(`data: ${JSON.stringify({
+            progress: 0,
+            status: 'testing',
+            state: 'testing',
+            message: `Testando formato ${format.id} (${format.resolution})...`
+          })}\n\n`);
+          
+          const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, strategy);
+          
           if (result.success) {
-            return result;
+            console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${format.id} usando Android Client!`);
+            downloadResult = {
+              success: true,
+              strategy: `Android Client (formato ${format.id})`,
+              filePath: result.filePath
+            };
+            break; // Parar se encontrou um que funciona
           }
         } catch (error) {
-          // Ignorar erro, continuar
+          console.warn(`[DOWNLOAD] ⚠️ Formato ${format.id} falhou:`, error.code || error.error);
+          // Continuar para próximo formato
         }
-        return null;
-      });
-      
-      const batchResults = await Promise.all(batchPromises);
-      const successResult = batchResults.find(r => r && r.success);
-      
-      if (successResult) {
-        console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${successResult.formatId} usando ${successResult.strategy}!`);
-        downloadResult = {
-          success: true,
-          strategy: `${successResult.strategy} (formato ${successResult.formatId})`,
-          filePath: successResult.filePath
-        };
-        break; // Parar se encontrou um que funciona
-      }
-      
-      // Delay mínimo entre batches (100ms)
-      if (i + BATCH_SIZE < topFormats.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
     
