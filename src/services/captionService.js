@@ -175,32 +175,67 @@ async function transcribeAudio(audioPath) {
       return await transcribeAudioWithChunking(audioPath, client);
     }
     
-    const transcription = await client.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: 'whisper-1',
-      response_format: 'verbose_json',
-      timestamp_granularity: 'word'
-    });
-
-    console.log('[CAPTION] Transcrição concluída');
-    return transcription;
-  } catch (error) {
-    console.error('[CAPTION] Erro na transcrição:', error);
+    // Retry logic com backoff exponencial para rate limiting
+    const maxRetries = 5;
+    let lastError = null;
     
-    // Verificar se é erro 413 - sempre tentar chunking se ocorrer
-    if (error.status === 413 || 
-        error.message.includes('413') || 
-        error.message.includes('Maximum content size') ||
-        error.message.includes('26214400')) {
-      console.log('[CAPTION] Erro 413 detectado, tentando chunking automático...');
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        return await transcribeAudioWithChunking(audioPath, client);
-      } catch (chunkError) {
-        throw new Error(`Erro ao transcrever áudio (tentativa com chunking): ${chunkError.message}`);
+        const transcription = await client.audio.transcriptions.create({
+          file: fs.createReadStream(audioPath),
+          model: 'whisper-1',
+          response_format: 'verbose_json',
+          timestamp_granularity: 'word'
+        });
+
+        console.log('[CAPTION] Transcrição concluída');
+        return transcription;
+      } catch (error) {
+        lastError = error;
+        console.error(`[CAPTION] Erro na transcrição (tentativa ${attempt + 1}/${maxRetries}):`, error.message);
+        
+        // Verificar se é erro 413 - sempre tentar chunking se ocorrer
+        if (error.status === 413 || 
+            error.message.includes('413') || 
+            error.message.includes('Maximum content size') ||
+            error.message.includes('26214400')) {
+          console.log('[CAPTION] Erro 413 detectado, tentando chunking automático...');
+          try {
+            return await transcribeAudioWithChunking(audioPath, client);
+          } catch (chunkError) {
+            throw new Error(`Erro ao transcrever áudio (tentativa com chunking): ${chunkError.message}`);
+          }
+        }
+        
+        // Verificar se é rate limit ou ECONNRESET - fazer retry com backoff
+        const isRateLimit = error.status === 429 || 
+                           error.message.includes('rate limit') ||
+                           error.message.includes('Rate limit') ||
+                           error.message.includes('too many requests') ||
+                           error.code === 'ECONNRESET' ||
+                           error.message.includes('ECONNRESET') ||
+                           error.message.includes('Limite de processamentos');
+        
+        if (isRateLimit && attempt < maxRetries - 1) {
+          // Backoff exponencial: 2^attempt segundos (2s, 4s, 8s, 16s, 32s)
+          const waitTime = Math.min(2 ** attempt * 1000, 30000); // Máximo 30 segundos
+          console.log(`[CAPTION] Rate limit detectado, aguardando ${waitTime/1000}s antes de tentar novamente...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue; // Tentar novamente
+        }
+        
+        // Se não é rate limit ou já tentou todas as vezes, lançar erro
+        if (!isRateLimit || attempt === maxRetries - 1) {
+          throw error;
+        }
       }
     }
     
-    throw new Error(`Erro ao transcrever áudio: ${error.message}`);
+    // Se chegou aqui, todas as tentativas falharam
+    throw new Error(`Erro ao transcrever áudio após ${maxRetries} tentativas: ${lastError?.message || 'Erro desconhecido'}`);
+  } catch (error) {
+    console.error('[CAPTION] Erro final na transcrição:', error);
+    throw error;
   }
 }
 
@@ -286,13 +321,51 @@ async function transcribeAudioWithChunking(audioPath, client) {
       
       console.log(`[CAPTION] Enviando chunk ${i + 1}/${chunks} (${chunkSizeMB.toFixed(2)}MB)...`);
       
-      // Transcrever chunk
-      const chunkTranscription = await client.audio.transcriptions.create({
-        file: fs.createReadStream(chunkPath),
-        model: 'whisper-1',
-        response_format: 'verbose_json',
-        timestamp_granularity: 'word'
-      });
+      // Transcrever chunk com retry logic
+      const maxRetries = 5;
+      let chunkTranscription = null;
+      let chunkError = null;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          chunkTranscription = await client.audio.transcriptions.create({
+            file: fs.createReadStream(chunkPath),
+            model: 'whisper-1',
+            response_format: 'verbose_json',
+            timestamp_granularity: 'word'
+          });
+          break; // Sucesso, sair do loop
+        } catch (error) {
+          chunkError = error;
+          console.error(`[CAPTION] Erro no chunk ${i + 1} (tentativa ${attempt + 1}/${maxRetries}):`, error.message);
+          
+          // Verificar se é rate limit ou ECONNRESET
+          const isRateLimit = error.status === 429 || 
+                             error.message.includes('rate limit') ||
+                             error.message.includes('Rate limit') ||
+                             error.message.includes('too many requests') ||
+                             error.code === 'ECONNRESET' ||
+                             error.message.includes('ECONNRESET') ||
+                             error.message.includes('Limite de processamentos');
+          
+          if (isRateLimit && attempt < maxRetries - 1) {
+            // Backoff exponencial: 2^attempt segundos (2s, 4s, 8s, 16s, 32s)
+            const waitTime = Math.min(2 ** attempt * 1000, 30000); // Máximo 30 segundos
+            console.log(`[CAPTION] Rate limit no chunk ${i + 1}, aguardando ${waitTime/1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue; // Tentar novamente
+          }
+          
+          // Se não é rate limit ou já tentou todas as vezes, lançar erro
+          if (!isRateLimit || attempt === maxRetries - 1) {
+            throw error;
+          }
+        }
+      }
+      
+      if (!chunkTranscription) {
+        throw new Error(`Falha ao transcrever chunk ${i + 1} após ${maxRetries} tentativas: ${chunkError?.message || 'Erro desconhecido'}`);
+      }
       
       // Ajustar timestamps do chunk (adicionar offset)
       if (chunkTranscription.words && Array.isArray(chunkTranscription.words)) {
