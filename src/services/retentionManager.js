@@ -19,13 +19,10 @@ import ffmpeg from 'fluent-ffmpeg';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import { STORAGE_CONFIG } from '../config/storage.config.js';
+
 // Diretório base para armazenar vídeos de retenção
-// Em produção: /tmp/retention_library
-// Em desenvolvimento: retention-library na raiz
-const RETENTION_LIBRARY_BASE = process.env.RETENTION_LIBRARY_DIR || 
-  (process.env.NODE_ENV === 'production' 
-    ? '/tmp/retention_library' 
-    : path.join(__dirname, '../../retention-library'));
+const RETENTION_LIBRARY_BASE = STORAGE_CONFIG.RETENTION_DIR;
 
 // Duração padrão dos clipes de retenção (60 segundos)
 const RETENTION_CLIP_DURATION = 60;

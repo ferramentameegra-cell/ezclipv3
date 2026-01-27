@@ -15,10 +15,9 @@ import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-// Imports https e http removidos - não são mais necessários (apenas arquivos locais)
-import { getRetentionVideoPath, getRandomRetentionVideoPath, getNicheRetentionVideo, getNicheRetentionYoutubeUrl } from './retentionVideoManager.js';
+// Sistema antigo de retenção removido - usar apenas retentionManager
 import { getRetentionClip } from './retentionManager.js';
-import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,13 +156,13 @@ export async function composeFinalVideo({
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Obter vídeo de retenção usando o novo sistema retentionManager
-  // PRIORIDADE: Novo sistema de retenção por nicho (pré-definidos)
+  // Obter vídeo de retenção usando APENAS o novo sistema retentionManager
+  // Sistema antigo foi completamente removido
   let retentionVideoPath = null;
   
-  // Se há nicheId, usar o novo sistema de retenção por nicho
+  // Se há nicheId e retenção não foi desabilitada, usar o sistema de retenção por nicho
   if (nicheId && retentionVideoId !== 'none') {
-    console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho usando novo sistema: ${nicheId}`);
+    console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${nicheId}`);
     try {
       // getRetentionClip faz todo o trabalho: download, processamento em clipes, seleção aleatória
       retentionVideoPath = await getRetentionClip(nicheId);
@@ -173,60 +172,22 @@ export async function composeFinalVideo({
         if (stats.size > 0) {
           console.log(`[COMPOSER] ✅ Clipe de retenção obtido do nicho ${nicheId}: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
         } else {
-          console.warn(`[COMPOSER] ⚠️ Clipe de retenção está vazio, tentando fallback...`);
+          console.warn(`[COMPOSER] ⚠️ Clipe de retenção está vazio, continuando sem retenção.`);
           retentionVideoPath = null;
         }
       } else {
-        console.warn(`[COMPOSER] ⚠️ Não foi possível obter clipe de retenção do nicho ${nicheId}, tentando fallback...`);
+        console.warn(`[COMPOSER] ⚠️ Nenhum vídeo de retenção disponível para o nicho ${nicheId}, continuando sem.`);
         retentionVideoPath = null;
       }
     } catch (error) {
       console.error(`[COMPOSER] ❌ Erro ao obter clipe de retenção do nicho: ${error.message}`);
+      console.error(`[COMPOSER] Continuando sem vídeo de retenção.`);
       retentionVideoPath = null; // Continuar sem vídeo de retenção
     }
-  }
-  
-  // FALLBACK: Sistema antigo (se não há nicheId ou se novo sistema falhou)
-  if (!retentionVideoPath && retentionVideoId && retentionVideoId !== 'none') {
-    // Se retentionVideoId começa com 'upload:', é um upload customizado
-    if (retentionVideoId.startsWith('upload:')) {
-      const uploadPath = retentionVideoId.replace('upload:', '');
-      if (fs.existsSync(uploadPath)) {
-        retentionVideoPath = uploadPath;
-        console.log(`[COMPOSER] Usando vídeo de retenção customizado: ${uploadPath}`);
-      }
-    } else if (retentionVideoId === 'random' && nicheId) {
-      // Tentar sistema antigo de retenção do nicho
-      try {
-        retentionVideoPath = await getNicheRetentionVideo(nicheId);
-        if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
-          const stats = fs.statSync(retentionVideoPath);
-          if (stats.size > 0) {
-            console.log(`[COMPOSER] ✅ Usando vídeo de retenção do nicho (sistema antigo): ${retentionVideoPath}`);
-          } else {
-            retentionVideoPath = null;
-          }
-        }
-      } catch (error) {
-        console.warn(`[COMPOSER] ⚠️ Erro ao obter vídeo de retenção (sistema antigo): ${error.message}`);
-        retentionVideoPath = null;
-      }
-    } else if (retentionVideoId !== 'random') {
-      retentionVideoPath = getRetentionVideoPath(retentionVideoId);
-    }
-
-    // Verificar se é URL externa ou arquivo local
-    if (retentionVideoPath) {
-      const isUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
-      const isLocalFile = !isUrl && fs.existsSync(retentionVideoPath);
-      
-      if (!isUrl && !isLocalFile) {
-        console.warn(`[COMPOSER] Vídeo de retenção não encontrado: ${retentionVideoId}, continuando sem retenção`);
-        retentionVideoPath = null;
-      } else if (isUrl) {
-        console.log(`[COMPOSER] Usando URL externa de retenção: ${retentionVideoPath}`);
-      }
-    }
+  } else if (retentionVideoId === 'none') {
+    console.log(`[COMPOSER] Vídeo de retenção desabilitado (retentionVideoId='none')`);
+  } else if (!nicheId) {
+    console.warn(`[COMPOSER] ⚠️ Nenhum nicheId fornecido, não é possível obter vídeo de retenção.`);
   }
   
   // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical para todos os vídeos gerados

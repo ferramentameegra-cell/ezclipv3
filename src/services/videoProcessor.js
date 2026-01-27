@@ -6,24 +6,10 @@ import { getVideoState, VIDEO_STATES } from './videoStateManager.js';
 import { validateVideoWithFfprobe } from './videoValidator.js';
 import { composeFinalVideo } from './videoComposer.js';
 import { updateProgressEvent } from '../controllers/progressEvents.js';
-
-// ===============================
-// CONFIGURAÇÃO RAILWAY (OBRIGATÓRIA)
-// ===============================
-const TMP_UPLOADS_DIR = '/tmp/uploads';
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 
 /** Timeout (s) para FFmpeg de fallback na composição */
 const FFMPEG_FALLBACK_TIMEOUT = parseInt(process.env.FFMPEG_COMPOSE_TIMEOUT || process.env.FFMPEG_TRIM_TIMEOUT || '300', 10);
-const SERIES_DIR = path.join(TMP_UPLOADS_DIR, 'series');
-
-// Garantir diretórios
-if (!fs.existsSync(TMP_UPLOADS_DIR)) {
-  fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
-}
-
-if (!fs.existsSync(SERIES_DIR)) {
-  fs.mkdirSync(SERIES_DIR, { recursive: true });
-}
 
 // ===============================
 // VIDEO STORE (INJETADO)
@@ -95,15 +81,11 @@ export const generateVideoSeries = async (job, jobsMap) => {
       console.log(`[PROCESSING] ⚠️ Vídeo ${videoId} não encontrado no videoStore, verificando download...`);
       
       // Verificar se há arquivo baixado mesmo sem estar no store
-      // Tentar múltiplos caminhos possíveis onde o arquivo pode estar
+      // Usar STORAGE_CONFIG para caminhos centralizados
       const possiblePaths = [
-        path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`), // Caminho padrão no Railway
-        path.join(TMP_UPLOADS_DIR, `${videoId}_downloaded.mp4`), // Nome alternativo
-        path.join(process.cwd(), 'uploads', `${videoId}.mp4`), // Caminho local
-        path.join(process.cwd(), 'tmp', `${videoId}.mp4`), // Caminho tmp local
-        path.join('/tmp', `${videoId}.mp4`), // /tmp direto
-        path.join('/tmp/uploads', `${videoId}.mp4`), // /tmp/uploads
-        path.join(process.cwd(), 'tmp', 'uploads', `${videoId}.mp4`) // tmp/uploads local
+        STORAGE_CONFIG.getVideoPath(videoId), // Caminho padrão
+        STORAGE_CONFIG.getDownloadedVideoPath(videoId), // Nome alternativo
+        STORAGE_CONFIG.getTrimmedVideoPath(videoId), // Vídeo trimado
       ];
       
       // Tentar encontrar arquivo existente
@@ -190,7 +172,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // PREPARAR DIRETÓRIO DA SÉRIE
     // ===============================
-    const seriesPath = path.join(SERIES_DIR, seriesId);
+    const seriesPath = STORAGE_CONFIG.getSeriesPath(seriesId);
 
     if (!fs.existsSync(seriesPath)) {
       fs.mkdirSync(seriesPath, { recursive: true });
@@ -208,10 +190,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // Verificar se precisa baixar (vídeo do YouTube sem arquivo local)
     const youtubeVideoId = video.youtubeVideoId || jobData.youtubeVideoId;
     if (youtubeVideoId && (!video.path || !fs.existsSync(video.path) || (fs.existsSync(video.path) && fs.statSync(video.path).size === 0))) {
-      const downloadPath = path.join(
-        TMP_UPLOADS_DIR,
-        `${videoId}_downloaded.mp4`
-      );
+      const downloadPath = STORAGE_CONFIG.getDownloadedVideoPath(videoId);
 
       console.log(`[PROCESSING] Baixando vídeo do YouTube: ${youtubeVideoId}`);
 
@@ -301,26 +280,23 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // ===============================
     // CALCULAR TRIM
     // ===============================
-    let videoDuration = video.duration || 0;
-    
-    // Se a duração do vídeo não está disponível ou é inválida, tentar obter via ffprobe
-    if (!videoDuration || videoDuration <= 0 || isNaN(videoDuration)) {
-      console.log(`[PROCESSING] Duração do vídeo inválida no store (${videoDuration}), obtendo via ffprobe...`);
-      try {
-        const videoValidation = await validateVideoWithFfprobe(sourceVideoPath);
-        videoDuration = Math.floor(videoValidation.durationFloat || videoValidation.duration || 0);
-        console.log(`[PROCESSING] Duração obtida via ffprobe: ${videoDuration}s`);
-        
-        // Atualizar no store
-        video.duration = videoDuration;
-        videoStore.set(videoId, video);
-      } catch (validationError) {
-        throw new Error(`Não foi possível obter a duração do vídeo. Duração no store: ${video.duration}s. Erro: ${validationError.message}`);
+    // SEMPRE obter duração via ffprobe (fonte única de verdade)
+    let videoDuration = 0;
+    try {
+      const videoValidation = await validateVideoWithFfprobe(sourceVideoPath);
+      videoDuration = Math.floor(videoValidation.durationFloat || videoValidation.duration || 0);
+      
+      if (!videoDuration || videoDuration <= 0 || isNaN(videoDuration)) {
+        throw new Error(`Duração inválida retornada pelo ffprobe: ${videoDuration}s`);
       }
-    }
-    
-    if (videoDuration <= 0 || isNaN(videoDuration)) {
-      throw new Error(`Duração do vídeo inválida: ${videoDuration}s`);
+      
+      console.log(`[PROCESSING] ✅ Duração obtida via ffprobe: ${videoDuration}s`);
+      
+      // Atualizar no store para referência futura
+      video.duration = videoDuration;
+      videoStore.set(videoId, video);
+    } catch (validationError) {
+      throw new Error(`Não foi possível obter a duração do vídeo via ffprobe: ${validationError.message}`);
     }
     
     const startTime = Math.max(0, Math.floor(trimStart || 0));
@@ -369,10 +345,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
         currentClip: 0
       });
 
-      const trimmedPath = path.join(
-        TMP_UPLOADS_DIR,
-        `${videoId}_trimmed.mp4`
-      );
+      const trimmedPath = STORAGE_CONFIG.getTrimmedVideoPath(videoId);
 
       console.log(`[PROCESSING] Aplicando trim: ${startTime}s - ${endTime}s`);
 
@@ -382,6 +355,32 @@ export const generateVideoSeries = async (job, jobsMap) => {
         startTime,
         endTime
       );
+
+      // ===============================
+      // VALIDAÇÃO PÓS-TRIM (CRÍTICO)
+      // ===============================
+      const expectedTrimDuration = endTime - startTime;
+      
+      // Validar que o arquivo trimado foi criado corretamente
+      if (!fs.existsSync(trimmedPath)) {
+        throw new Error(`Erro de Trim: o arquivo de vídeo trimado não foi criado: ${trimmedPath}`);
+      }
+      
+      const trimmedStats = fs.statSync(trimmedPath);
+      if (trimmedStats.size === 0) {
+        throw new Error('Erro de Trim: o arquivo de vídeo trimado está vazio.');
+      }
+      
+      // Validar duração do arquivo trimado usando ffprobe
+      const trimmedMetadata = await validateVideoWithFfprobe(trimmedPath);
+      const actualTrimmedDuration = Math.floor(trimmedMetadata.durationFloat || 0);
+      
+      // Permite uma pequena tolerância (ex: 2 segundos) para a duração
+      if (Math.abs(actualTrimmedDuration - expectedTrimDuration) > 2) {
+        throw new Error(`Erro de Trim: a duração do vídeo trimado não corresponde ao esperado. Esperado: ${expectedTrimDuration}s, Obtido: ${actualTrimmedDuration}s`);
+      }
+      
+      console.log(`[PROCESSING] ✅ Trim validado com sucesso. Duração: ${actualTrimmedDuration}s (esperado: ${expectedTrimDuration}s)`);
 
       // Após o trim, o vídeo processado começa em 0 e termina em trimmedDuration
       actualStartTime = 0;
@@ -641,16 +640,9 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // Obter vídeo de retenção se especificado
     if (retentionVideoId && retentionVideoId !== 'none') {
       try {
-        if (retentionVideoId === 'niche-default' && nicheId) {
-          // Usar vídeo de retenção do nicho (será baixado automaticamente se necessário)
-          const { getNicheRetentionVideo } = await import('./retentionVideoManager.js');
-          console.log(`[PROCESSING] 📥 Obtendo vídeo de retenção do nicho ${nicheId} para gerar clipes...`);
-          retentionVideoPath = await getNicheRetentionVideo(nicheId);
-        } else {
-          // Sistema legado
-          const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
-          retentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
-        }
+        // Sistema antigo de retenção removido - usar apenas retentionManager
+        // Este código é mantido apenas para compatibilidade, mas não deve ser usado
+        console.warn(`[PROCESSING] ⚠️ retentionVideoId=${retentionVideoId} não é mais suportado. Use apenas o sistema de retenção por nicho.`);
         
         if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
           const stats = fs.statSync(retentionVideoPath);
@@ -901,10 +893,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
       });
 
       // Criar caminho para clip final composto
-      const finalClipPath = path.join(
-        seriesPath,
-        `clip_${String(clipIndex).padStart(3, '0')}_final.mp4`
-      );
+      const finalClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
       
       console.log(`[PROCESSING] Output path (final): ${finalClipPath}`);
 

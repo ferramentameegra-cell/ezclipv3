@@ -4,9 +4,7 @@ import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
 import { canGenerateVideo, decrementCredits } from '../services/creditService.js';
-
-const BASE_TMP_DIR = '/tmp/uploads';
-const SERIES_DIR = path.join(BASE_TMP_DIR, 'series');
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 
 export const generateSeries = async (req, res) => {
   try {
@@ -68,7 +66,7 @@ export const generateSeries = async (req, res) => {
       }
     }
 
-    const videoPath = path.join(BASE_TMP_DIR, `${videoId}.mp4`);
+    const videoPath = STORAGE_CONFIG.getVideoPath(videoId);
 
     if (!fs.existsSync(videoPath)) {
       return res.status(404).json({
@@ -239,7 +237,7 @@ export const getSeriesStatus = async (req, res) => {
 };
 
 export const downloadSeries = async (req, res) => {
-  const seriesPath = path.join(SERIES_DIR, req.params.seriesId);
+  const seriesPath = STORAGE_CONFIG.getSeriesPath(req.params.seriesId);
 
   if (!fs.existsSync(seriesPath)) {
     return res.status(404).json({ error: 'Série não encontrada' });
