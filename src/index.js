@@ -93,7 +93,8 @@ app.use(loggerMiddleware);
 
 // Rate limit para operações pesadas
 app.use('/api/download/youtube', heavyOperationLimiter);
-app.use('/api/generate', heavyOperationLimiter);
+// REMOVIDO de /api/generate para permitir geração de clipes sem restrições
+// app.use('/api/generate', heavyOperationLimiter);
 app.use('/api/captions/generate', heavyOperationLimiter);
 
 // Rate limit geral para API (mais permissivo)
