@@ -1,0 +1,46 @@
+---
+description: NUNCA mexer em código que bloqueie cliques do site - regra crítica permanente
+alwaysApply: true
+---
+
+# REGRA CRÍTICA: NUNCA BLOQUEAR CLIQUES
+
+## ⚠️ REGRA ABSOLUTA E PERMANENTE
+
+**JAMAIS modificar, adicionar ou alterar qualquer código que possa bloquear cliques na plataforma.**
+
+## O que NUNCA fazer:
+
+### ❌ PROIBIDO - Nunca modificar:
+- `pointer-events: none` ou `pointer-events: auto` em overlays ou elementos que possam bloquear
+- `z-index` de overlays, modais ou elementos de loading (especialmente valores altos como 9999, 2000)
+- `display`, `visibility`, `opacity` de elementos que possam bloquear interações
+- `preventDefault()` ou `stopPropagation()` que possam interferir em cliques normais
+- Qualquer código relacionado a bloqueio de eventos de mouse/clique
+- Overlays de loading que possam ficar visíveis e bloquear a página
+
+### ✅ PERMITIDO - Apenas quando explicitamente solicitado:
+- Esconder overlays corretamente (garantir que não bloqueiem)
+- Remover código que bloqueie cliques (quando o usuário reportar problema)
+- Garantir que elementos estejam realmente escondidos quando devem estar
+
+## Contexto:
+
+O usuário explicitamente instruiu: **"nunca cometa isso novamente, jamais mexa em arquivos ou linhas de codigos que bloqueem os cliques do site"**
+
+Esta é uma regra crítica que deve ser seguida SEMPRE, em TODAS as situações.
+
+## Quando em dúvida:
+
+Se houver qualquer dúvida sobre se uma mudança pode bloquear cliques:
+1. **NÃO FAÇA A MUDANÇA**
+2. Pergunte ao usuário primeiro
+3. Se não tiver certeza absoluta, não mexa
+
+## Arquivos sensíveis:
+
+- `public/app.js` - especialmente código relacionado a overlays, loading, modais
+- `public/styles.css` - especialmente z-index, pointer-events, display de overlays
+- `public/index.html` - estrutura de overlays e modais
+
+**NUNCA modifique código nesses arquivos relacionado a bloqueio de cliques sem autorização explícita do usuário.**

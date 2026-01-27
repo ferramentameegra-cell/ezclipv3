@@ -28,6 +28,7 @@ import captionsRoutes from "./routes/captions.js";
 import termsRoutes from "./routes/terms.js";
 import creditsRoutes from "./routes/credits.js";
 import stripeRoutes from "./routes/stripe.js";
+// videoRoutes removido - duplicado com downloadRoutes
 import { requireAuth } from "./middleware/authMiddleware.js";
 
 // Configurar ffmpeg antes de importar workers

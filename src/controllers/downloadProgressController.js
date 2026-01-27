@@ -633,19 +633,19 @@ export async function downloadWithProgress(req, res) {
       name: 'iOS Client',
       extractorArgs: 'youtube:player_client=ios',
       userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-      format: 'bestvideo[height<=720]+bestaudio/best[height<=720]/best'
+      format: 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best[height<=720]/best/bestvideo+bestaudio/best'
     },
     {
       name: 'Web Client',
       extractorArgs: 'youtube:player_client=web',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      format: 'best[height<=720]/best'
+      format: 'best[height<=720]/bestvideo+bestaudio/best'
     },
     {
       name: 'TV Client',
       extractorArgs: 'youtube:player_client=tv_embedded',
       userAgent: 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
-      format: 'best[height<=480]/best'
+      format: 'best[height<=480]/bestvideo+bestaudio/best'
     }
   ];
   
@@ -714,11 +714,11 @@ export async function downloadWithProgress(req, res) {
       // Priorizar: melhor vídeo+áudio > melhor formato único > qualquer formato disponível
       const extractorArgsCombined = strategy.extractorArgs;
       
-      // Usar formato da estratégia
-      const formatSelector = strategy.format || "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best";
+      // Usar formato da estratégia, mas sempre com fallback para "best" se formato específico falhar
+      const formatSelector = strategy.format || "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best/bestvideo+bestaudio/best";
       
       const downloadArgs = [
-        "-f", formatSelector, // Formato flexível que aceita qualquer formato disponível
+        "-f", formatSelector, // Formato com múltiplos fallbacks
         "--merge-output-format", "mp4", // Se precisar mergear, usar mp4
         "--no-playlist",
         "--no-warnings",
@@ -824,17 +824,17 @@ export async function downloadWithProgress(req, res) {
           }
         }
         
-        // Verificar se é erro de formato não disponível - tentar com formato mais flexível
+        // Verificar se é erro de formato não disponível - tentar com "best" sem restrições
         const isFormatError = stderr.includes('Requested format is not available') || 
                              stderr.includes('format is not available') ||
                              stderr.includes('format not available');
         
         if (isFormatError && !hasResolved) {
-          console.warn(`[DOWNLOAD] ⚠️ Formato não disponível com estratégia ${strategy.name}, tentando formato mais flexível...`);
+          console.log(`[DOWNLOAD] Formato não disponível, tentando "best" sem restrições...`);
           
-          // Tentar novamente com formato ainda mais flexível (qualquer formato)
-          const flexibleFormatArgs = [
-            "-f", "best", // Apenas melhor formato disponível, sem restrições
+          // Tentar com "best" (qualquer formato disponível)
+          const bestFormatArgs = [
+            "-f", "best",
             "--merge-output-format", "mp4",
             "--no-playlist",
             "--no-warnings",
@@ -853,15 +853,15 @@ export async function downloadWithProgress(req, res) {
             cleanUrl
           ];
           
-          const { executable: exec2, args: args2 } = buildYtDlpArgs(flexibleFormatArgs);
-          const ytdlp2 = spawn(exec2, args2, { stdio: ['ignore', 'pipe', 'pipe'] });
+          const { executable: execBest, args: argsBest } = buildYtDlpArgs(bestFormatArgs);
+          const ytdlpBest = spawn(execBest, argsBest, { stdio: ['ignore', 'pipe', 'pipe'] });
           
-          let stderr2 = "";
-          let stdout2 = "";
-          let hasResolved2 = false;
+          let stderrBest = "";
+          let stdoutBest = "";
+          let hasResolvedBest = false;
           
-          ytdlp2.stderr.on("data", (data) => {
-            stderr2 += data.toString();
+          ytdlpBest.stderr.on("data", (data) => {
+            stderrBest += data.toString();
             const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
             if (progressMatch) {
               const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
@@ -869,65 +869,53 @@ export async function downloadWithProgress(req, res) {
                 progress: percent,
                 status: "downloading",
                 state: "downloading",
-                message: `Baixando (${strategy.name} - formato flexível)... ${percent.toFixed(1)}%`
+                message: `Baixando (${strategy.name})... ${percent.toFixed(1)}%`
               })}\n\n`);
             }
           });
           
-          ytdlp2.stdout.on("data", (data) => {
-            stdout2 += data.toString();
+          ytdlpBest.stdout.on("data", (data) => {
+            stdoutBest += data.toString();
           });
           
-          ytdlp2.on("close", async (code2) => {
-            if (hasResolved2) return;
-            hasResolved2 = true;
+          ytdlpBest.on("close", (codeBest) => {
+            if (hasResolvedBest) return;
+            hasResolvedBest = true;
             
-            if (code2 === 0) {
+            if (codeBest === 0) {
               const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
-              let downloadedFile = null;
+              const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
+              const videoId = path.basename(outputTemplate, '.%(ext)s');
               
               for (const ext of possibleExtensions) {
                 const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
                 if (fs.existsSync(testPath)) {
                   const stats = fs.statSync(testPath);
                   if (stats.size > 0) {
-                    downloadedFile = testPath;
-                    break;
+                    hasResolved = true;
+                    console.log(`[DOWNLOAD] ✅ Sucesso com ${strategy.name} usando formato "best"`);
+                    resolve({ success: true, strategy: `${strategy.name} (best)`, filePath: testPath, stderr: stderrBest, stdout: stdoutBest });
+                    return;
                   }
                 }
-              }
-              
-              // Se não encontrou, tentar outputPath original
-              if (!downloadedFile && fs.existsSync(outputPath)) {
-                const stats = fs.statSync(outputPath);
-                if (stats.size > 0) {
-                  downloadedFile = outputPath;
-                }
-              }
-              
-              if (downloadedFile) {
-                hasResolved = true;
-                console.log(`[DOWNLOAD] ✅ Sucesso com estratégia: ${strategy.name} (formato flexível) - Arquivo: ${downloadedFile}`);
-                resolve({ success: true, strategy: strategy.name, filePath: downloadedFile, stderr: stderr2, stdout: stdout2 });
-                return;
               }
             }
             
             // Se ainda falhou, rejeitar para tentar próxima estratégia
             hasResolved = true;
-            lastError = { code: code2, stderr: stderr2, stdout: stdout2, strategy: strategy.name };
+            lastError = { code: codeBest, stderr: stderrBest, stdout: stdoutBest, strategy: strategy.name };
             reject(lastError);
           });
           
-          ytdlp2.on("error", (error2) => {
-            if (hasResolved2) return;
-            hasResolved2 = true;
+          ytdlpBest.on("error", (errorBest) => {
+            if (hasResolvedBest) return;
+            hasResolvedBest = true;
             hasResolved = true;
-            lastError = { error: error2.message, strategy: strategy.name };
+            lastError = { error: errorBest.message, strategy: strategy.name };
             reject(lastError);
           });
           
-          return; // Não rejeitar ainda, aguardar segunda tentativa
+          return; // Aguardar resultado do "best"
         }
         
         // Se erro, rejeitar para tentar próxima estratégia
