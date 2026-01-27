@@ -750,22 +750,6 @@ export async function composeFinalVideo({
         fixedBackgroundPath = null;
       }
       
-      // VALIDAR arquivo de entrada ANTES de construir comando FFmpeg
-      if (!fs.existsSync(clipPath)) {
-        const error = `[COMPOSER_ERROR] Arquivo de vídeo principal não existe: ${clipPath}`;
-        console.error(error);
-        return reject(new Error(error));
-      }
-      
-      const clipStats = fs.statSync(clipPath);
-      if (clipStats.size === 0) {
-        const error = `[COMPOSER_ERROR] Arquivo de vídeo principal está vazio: ${clipPath}`;
-        console.error(error);
-        return reject(new Error(error));
-      }
-      
-      console.log(`[COMPOSER] ✅ Vídeo principal validado: ${clipPath} (${(clipStats.size / 1024 / 1024).toFixed(2)} MB)`);
-      
       // Construir comando FFmpeg
       const command = ffmpeg();
       
