@@ -87,9 +87,9 @@ app.use(xssProtection);
 app.use(loggerMiddleware);
 
 // 8. Rate Limiting (fail-open, não bloqueia se Redis falhar)
-// Rate limit agressivo para login (prevenir brute force)
-app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth/register', loginLimiter);
+// Rate limit REMOVIDO para login - sem restrições de tentativas
+// app.use('/api/auth/login', loginLimiter);
+// app.use('/api/auth/register', loginLimiter);
 
 // Rate limit para operações pesadas
 app.use('/api/download/youtube', heavyOperationLimiter);

@@ -217,12 +217,16 @@ export const login = async (req, res) => {
     }
 
     // Configurar cookie com token de acesso (opcional - frontend pode usar session)
+    // Cookie com expiração muito longa (1 ano) para manter usuário conectado
     if (authData.session) {
+      // Usar expiração de 1 ano (31536000000 ms) ao invés do expires_in do Supabase
+      // Isso mantém o usuário conectado por muito tempo
+      const oneYearInMs = 365 * 24 * 60 * 60 * 1000; // 1 ano em milissegundos
       res.cookie('sb-access-token', authData.session.access_token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: authData.session.expires_in * 1000 // Converter segundos para milissegundos
+        maxAge: oneYearInMs // 1 ano - mantém usuário conectado
       });
     }
 

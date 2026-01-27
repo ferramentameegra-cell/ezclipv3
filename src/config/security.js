@@ -37,10 +37,10 @@ export const csrfConfig = {
 
 // Rate Limiting Configuration
 export const rateLimitConfig = {
-  // Rate limit agressivo para login (prevenir brute force)
+  // Rate limit REMOVIDO para login - sem restrições
   login: {
     windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 5, // Máximo 5 tentativas por IP
+    max: 999999, // Sem limite prático
     message: 'Muitas tentativas de login. Tente novamente em 15 minutos.',
     standardHeaders: true,
     legacyHeaders: false
