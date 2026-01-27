@@ -621,19 +621,36 @@ export async function downloadWithProgress(req, res) {
     });
   }
   
-  // ESTRATÉGIA ÚNICA: APENAS ANDROID CLIENT
-  // Removidas todas as outras estratégias conforme solicitado
-  const strategy = {
-    name: 'Android Client',
-    extractorArgs: 'youtube:player_client=android',
-    userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-    additionalArgs: []
-  };
+  // MÚLTIPLAS ESTRATÉGIAS PARA CONTORNAR ERRO 403
+  const strategies = [
+    {
+      name: 'Android Client',
+      extractorArgs: 'youtube:player_client=android',
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+      format: 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best'
+    },
+    {
+      name: 'iOS Client',
+      extractorArgs: 'youtube:player_client=ios',
+      userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+      format: 'bestvideo[height<=720]+bestaudio/best[height<=720]/best'
+    },
+    {
+      name: 'Web Client',
+      extractorArgs: 'youtube:player_client=web',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      format: 'best[height<=720]/best'
+    },
+    {
+      name: 'TV Client',
+      extractorArgs: 'youtube:player_client=tv_embedded',
+      userAgent: 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
+      format: 'best[height<=480]/best'
+    }
+  ];
   
-  console.log('[DOWNLOAD] ✅ Usando APENAS Android Client (estratégia única)');
+  console.log('[DOWNLOAD] Tentando múltiplas estratégias para contornar erro 403...');
   
-  // Tentar cada estratégia sequencialmente
-  let strategyIndex = 0;
   let lastError = null;
   
   const tryDownloadWithStrategy = async (strategy) => {
@@ -697,9 +714,8 @@ export async function downloadWithProgress(req, res) {
       // Priorizar: melhor vídeo+áudio > melhor formato único > qualquer formato disponível
       const extractorArgsCombined = strategy.extractorArgs;
       
-      // Formato flexível que aceita qualquer formato disponível
-      // Ordem: melhor vídeo+áudio > melhor formato mp4 > melhor formato webm > melhor formato qualquer
-      const formatSelector = "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best";
+      // Usar formato da estratégia
+      const formatSelector = strategy.format || "bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best[height<=1080]/best";
       
       const downloadArgs = [
         "-f", formatSelector, // Formato flexível que aceita qualquer formato disponível
@@ -933,184 +949,156 @@ export async function downloadWithProgress(req, res) {
     });
   };
   
-  // Tentar download com Android Client (única estratégia)
+  // Tentar cada estratégia sequencialmente até conseguir fazer download
   let downloadResult = null;
-  let formats = []; // Declarar formats no escopo correto
   
-  try {
-    downloadResult = await tryDownloadWithStrategy(strategy);
-    console.log(`[DOWNLOAD] ✅ Download bem-sucedido com Android Client`);
-  } catch (error) {
-    console.warn(`[DOWNLOAD] ❌ Android Client falhou:`, error.code || error.error);
-    lastError = error;
-  }
-  
-  // Se Android Client falhou, tentar listar e testar formatos disponíveis com Android Client
-  if (!downloadResult) {
-    console.log('[DOWNLOAD] 🔄 Android Client falhou. Listando formatos disponíveis...');
+  for (const strategy of strategies) {
+    if (downloadResult) break;
     
-    // Listar formatos com Android Client
-    formats = await listAvailableFormats(cleanUrl, strategy).catch(() => []);
-    
-    if (formats.length > 0) {
-      // Testar apenas os TOP 5 formatos (mais rápidos)
-      const topFormats = formats.slice(0, 5);
-      
-      console.log(`[DOWNLOAD] 📋 Testando ${topFormats.length} melhores formatos com Android Client...`);
-      
-      // Testar formatos sequencialmente
-      for (const format of topFormats) {
-        try {
-          res.write(`data: ${JSON.stringify({
-            progress: 0,
-            status: 'testing',
-            state: 'testing',
-            message: `Testando formato ${format.id} (${format.resolution})...`
-          })}\n\n`);
-          
-          const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, strategy);
-          
-          if (result.success) {
-            console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${format.id} usando Android Client!`);
-            downloadResult = {
-              success: true,
-              strategy: `Android Client (formato ${format.id})`,
-              filePath: result.filePath
-            };
-            break; // Parar se encontrou um que funciona
-          }
-        } catch (error) {
-          console.warn(`[DOWNLOAD] ⚠️ Formato ${format.id} falhou:`, error.code || error.error);
-          lastError = error;
-          // Continuar para próximo formato
-        }
-      }
-    }
-    
-    // Se ainda falhou e é erro 403, tentar estratégia alternativa sem cookies primeiro
-    if (!downloadResult && lastError?.stderr && (lastError.stderr.includes('403') || lastError.stderr.includes('Forbidden'))) {
-      console.log('[DOWNLOAD] 🔄 Erro 403 detectado. Tentando estratégia alternativa...');
-      
+    try {
+      console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
       res.write(`data: ${JSON.stringify({
         progress: 0,
-        status: 'retrying',
-        state: 'retrying',
-        message: 'Tentando estratégia alternativa para contornar bloqueio 403...'
+        status: 'trying',
+        state: 'trying',
+        message: `Tentando download com ${strategy.name}...`
       })}\n\n`);
       
-      // Tentar com formato mais simples e sem alguns headers que podem causar bloqueio
-      try {
-        const cookiesPath = createCookiesFile();
-        const userAgent = getUserAgent();
-        
-        const simpleFormatArgs = [
-          "-f", "18", // Formato 18 é mais compatível (360p mp4)
-          "--no-playlist",
-          "--no-warnings",
-          "--newline",
-          ...(cookiesPath ? ["--cookies", cookiesPath] : []),
-          "--user-agent", userAgent,
-          "--referer", "https://www.youtube.com/",
-          "--extractor-args", "youtube:player_client=android",
-          "--no-check-certificate",
-          "--retries", "2",
-          "--fragment-retries", "2",
-          "--socket-timeout", "20",
-          "-4",
-          "-o", outputTemplate,
-          cleanUrl
-        ];
-        
-        const { executable, args } = buildYtDlpArgs(simpleFormatArgs);
-        const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-        
-        let stderr = "";
-        let stdout = "";
-        let hasResolved = false;
-        
-        const timeout = setTimeout(() => {
-          if (!hasResolved) {
-            hasResolved = true;
-            ytdlp.kill();
-          }
-        }, 60000);
-        
-        ytdlp.stderr.on("data", (data) => {
-          stderr += data.toString();
-          const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
-          if (progressMatch) {
-            const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
-            res.write(`data: ${JSON.stringify({
-              progress: percent,
-              status: "downloading",
-              state: "downloading",
-              message: `Baixando (estratégia alternativa)... ${percent.toFixed(1)}%`
-            })}\n\n`);
-          }
-        });
-        
-        ytdlp.stdout.on("data", (data) => {
-          stdout += data.toString();
-        });
-        
-        ytdlp.on("close", (code) => {
-          clearTimeout(timeout);
-          if (hasResolved) return;
+      downloadResult = await tryDownloadWithStrategy(strategy);
+      if (downloadResult) {
+        console.log(`[DOWNLOAD] ✅ Download bem-sucedido com ${strategy.name}`);
+        break;
+      }
+    } catch (error) {
+      console.warn(`[DOWNLOAD] ❌ ${strategy.name} falhou:`, error.code || error.error);
+      lastError = error;
+      // Continuar para próxima estratégia
+    }
+  }
+  
+  // Se todas as estratégias falharam, tentar formato 18 (mais compatível)
+  if (!downloadResult) {
+    console.log('[DOWNLOAD] Tentando formato 18 (mais compatível)...');
+    
+    res.write(`data: ${JSON.stringify({
+      progress: 0,
+      status: 'retrying',
+      state: 'retrying',
+      message: 'Tentando formato mais compatível...'
+    })}\n\n`);
+    
+    try {
+      const cookiesPath = createCookiesFile();
+      const userAgent = getUserAgent();
+      
+      const format18Args = [
+        "-f", "18",
+        "--no-playlist",
+        "--no-warnings",
+        "--newline",
+        ...(cookiesPath ? ["--cookies", cookiesPath] : []),
+        "--user-agent", userAgent,
+        "--referer", "https://www.youtube.com/",
+        "--extractor-args", "youtube:player_client=android",
+        "--no-check-certificate",
+        "--retries", "3",
+        "--fragment-retries", "3",
+        "--socket-timeout", "30",
+        "-4",
+        "-o", outputTemplate,
+        cleanUrl
+      ];
+      
+      const { executable, args } = buildYtDlpArgs(format18Args);
+      const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let stderr = "";
+      let stdout = "";
+      let hasResolved = false;
+      
+      const timeout = setTimeout(() => {
+        if (!hasResolved) {
           hasResolved = true;
+          ytdlp.kill();
+        }
+      }, 90000);
+      
+      ytdlp.stderr.on("data", (data) => {
+        stderr += data.toString();
+        const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
+        if (progressMatch) {
+          const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
+          res.write(`data: ${JSON.stringify({
+            progress: percent,
+            status: "downloading",
+            state: "downloading",
+            message: `Baixando... ${percent.toFixed(1)}%`
+          })}\n\n`);
+        }
+      });
+      
+      ytdlp.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      
+      ytdlp.on("close", (code) => {
+        clearTimeout(timeout);
+        if (hasResolved) return;
+        hasResolved = true;
+        
+        if (code === 0) {
+          const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
+          const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
+          const videoId = path.basename(outputTemplate, '.%(ext)s');
           
-          if (code === 0) {
-            const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
-            const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
-            const videoId = path.basename(outputTemplate, '.%(ext)s');
-            
-            for (const ext of possibleExtensions) {
-              const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
-              if (fs.existsSync(testPath)) {
-                const stats = fs.statSync(testPath);
-                if (stats.size > 0) {
-                  downloadResult = {
-                    success: true,
-                    strategy: 'Android Client (estratégia alternativa)',
-                    filePath: testPath
-                  };
-                  console.log(`[DOWNLOAD] ✅ SUCESSO com estratégia alternativa!`);
-                  break;
-                }
+          for (const ext of possibleExtensions) {
+            const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
+            if (fs.existsSync(testPath)) {
+              const stats = fs.statSync(testPath);
+              if (stats.size > 0) {
+                downloadResult = {
+                  success: true,
+                  strategy: 'Formato 18 (fallback)',
+                  filePath: testPath
+                };
+                console.log(`[DOWNLOAD] ✅ SUCESSO com formato 18!`);
+                break;
               }
             }
           }
-          
-          if (!downloadResult) {
-            lastError = { code, stderr, stdout, strategy: 'estratégia alternativa' };
-          }
-        });
+        }
         
-        ytdlp.on("error", (error) => {
-          clearTimeout(timeout);
-          if (hasResolved) return;
-          hasResolved = true;
-          lastError = { error: error.message, strategy: 'estratégia alternativa' };
-        });
-        
-        // Aguardar resultado
-        await new Promise((resolve) => {
-          const checkInterval = setInterval(() => {
-            if (hasResolved) {
-              clearInterval(checkInterval);
-              resolve();
-            }
-          }, 100);
-          
-          setTimeout(() => {
+        if (!downloadResult) {
+          lastError = { code, stderr, stdout, strategy: 'formato 18' };
+        }
+      });
+      
+      ytdlp.on("error", (error) => {
+        clearTimeout(timeout);
+        if (hasResolved) return;
+        hasResolved = true;
+        lastError = { error: error.message, strategy: 'formato 18' };
+      });
+      
+      // Aguardar resultado
+      await new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (hasResolved) {
             clearInterval(checkInterval);
             resolve();
-          }, 65000);
-        });
-      } catch (altError) {
-        console.warn(`[DOWNLOAD] ⚠️ Estratégia alternativa falhou:`, altError.message);
-        lastError = altError;
-      }
+          }
+        }, 100);
+        
+        setTimeout(() => {
+          clearInterval(checkInterval);
+          resolve();
+        }, 95000);
+      });
+    } catch (format18Error) {
+      console.warn(`[DOWNLOAD] ⚠️ Formato 18 falhou:`, format18Error.message);
+      lastError = format18Error;
     }
+  }
     
     // Se ainda não funcionou após testar todos os formatos
     if (!downloadResult) {
@@ -1127,16 +1115,11 @@ export async function downloadWithProgress(req, res) {
       }
       
       const errorMessage = parseYtDlpError(lastError?.stderr || lastError?.stdout || '', lastError?.code || 1);
-      console.error(`[DOWNLOAD] ❌ Todos os formatos testados falharam. Último erro: ${errorMessage}`);
-      if (formats && formats.length > 0) {
-        console.error(`[DOWNLOAD] ❌ Total de formatos disponíveis: ${formats.length}, formatos testados: ${Math.min(formats.length, 5)}`);
-      } else {
-        console.error(`[DOWNLOAD] ❌ Nenhum formato disponível foi encontrado`);
-      }
+      console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam. Último erro: ${errorMessage}`);
       
       res.write(`data: ${JSON.stringify({
         success: false,
-        error: `Nenhum formato disponível funcionou. ${errorMessage}`,
+        error: `Erro ao baixar vídeo: ${errorMessage}. Verifique se YTDLP_COOKIES está configurado no Railway.`,
         state: "error"
       })}\n\n`);
       res.end();
