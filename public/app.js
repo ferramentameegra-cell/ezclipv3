@@ -4063,10 +4063,13 @@ function updatePreviewStyle() {
 }
 
 async function generateSeries() {
+    console.log('[GENERATE] generateSeries() iniciada');
+    
     // AUTENTICAÇÃO OBRIGATÓRIA - Backend também valida
     if (!appState.currentUser || !appState.userToken) {
         // Não deve chegar aqui se proceedToGenerate foi chamado corretamente
         // Mas manter como segurança - mostrar modal de login
+        console.warn('[GENERATE] Usuário não autenticado, mostrando modal de login');
         showLoginRequiredModal();
         return;
     }
@@ -4086,8 +4089,25 @@ async function generateSeries() {
         // Não bloquear - deixar backend validar
     }
     
+    // Mostrar loading overlay IMEDIATAMENTE
     const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('hidden');
+        console.log('[GENERATE] Loading overlay exibido');
+    } else {
+        console.error('[GENERATE] Loading overlay não encontrado!');
+    }
+    
+    // Atualizar mensagem inicial
+    const progressMessage = document.getElementById('loading-message');
+    if (progressMessage) {
+        progressMessage.textContent = 'Iniciando geração de clipes...';
+    }
+    
+    const progressFill = document.getElementById('loading-progress');
+    const progressText = document.getElementById('loading-percent');
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
     
     try {
         // Mostrar feedback de fila
