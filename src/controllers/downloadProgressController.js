@@ -408,11 +408,11 @@ export async function downloadWithProgress(req, res) {
   }
   
   /**
-   * Lista todos os formatos disponíveis para um vídeo do YouTube
+   * Lista todos os formatos disponíveis para um vídeo do YouTube (OTIMIZADO - timeout curto)
    * Retorna array de formatos ordenados por qualidade (melhor primeiro)
    */
   async function listAvailableFormats(videoUrl, strategy) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const cookiesPath = createCookiesFile();
       const userAgent = getUserAgent();
       const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent || userAgent;
@@ -426,6 +426,7 @@ export async function downloadWithProgress(req, res) {
         '--referer', 'https://www.youtube.com/',
         '--extractor-args', strategy.extractorArgs,
         '--no-check-certificate',
+        '--socket-timeout', '10', // Timeout curto para agilidade
         videoUrl
       ];
       
@@ -434,6 +435,13 @@ export async function downloadWithProgress(req, res) {
       
       let stdout = '';
       let stderr = '';
+      
+      // Timeout de 15 segundos (rápido)
+      const timeout = setTimeout(() => {
+        ytdlp.kill();
+        console.warn(`[DOWNLOAD] ⚠️ Timeout ao listar formatos com ${strategy.name}`);
+        resolve([]);
+      }, 15000);
       
       ytdlp.stdout.on('data', (data) => {
         stdout += data.toString();
@@ -444,19 +452,17 @@ export async function downloadWithProgress(req, res) {
       });
       
       ytdlp.on('close', (code) => {
+        clearTimeout(timeout);
         if (code !== 0) {
-          console.warn(`[DOWNLOAD] ⚠️ Erro ao listar formatos com ${strategy.name}:`, stderr.slice(-200));
           resolve([]); // Retornar array vazio em caso de erro
           return;
         }
         
-        // Parsear formatos do stdout
+        // Parsear formatos do stdout (OTIMIZADO - apenas formatos mais comuns)
         const formats = [];
         const lines = stdout.split('\n');
         
         for (const line of lines) {
-          // Formato: ID  EXT   RESOLUTION FPS │ FILESIZE   TBR PROTO │ VCODEC  VBR ACODEC      ABR ASR MORE INFO
-          // Exemplo: 18  mp4   640x360    30   │ 5.52MiB    396k https │ avc1.42001E  396k video only           │ 640x360    30 │ 396k https
           const match = line.match(/^\s*(\d+)\s+(\w+)\s+([\dx]+)?\s*(\d+)?\s*\|/);
           if (match) {
             const formatId = match[1];
@@ -464,25 +470,25 @@ export async function downloadWithProgress(req, res) {
             const resolution = match[3] || 'unknown';
             const fps = match[4] || '0';
             
-            // Extrair codec e outras informações
+            // Extrair codec
             const codecMatch = line.match(/avc1|vp9|av01|h264|h265/i);
             const codec = codecMatch ? codecMatch[0].toLowerCase() : 'unknown';
             
-            // Extrair filesize se disponível
-            const sizeMatch = line.match(/([\d.]+)\s*(MiB|KiB|GiB)/i);
-            const size = sizeMatch ? parseFloat(sizeMatch[1]) : 0;
-            const sizeUnit = sizeMatch ? sizeMatch[2].toUpperCase() : 'MB';
-            
-            // Calcular prioridade (maior resolução e melhor codec = maior prioridade)
+            // Calcular prioridade (OTIMIZADO - priorizar formatos comuns)
             let priority = 0;
             if (resolution !== 'unknown') {
               const [width, height] = resolution.split('x').map(Number);
               if (width && height) {
-                priority += width * height; // Priorizar maior resolução
+                priority += width * height;
               }
             }
-            if (codec.includes('avc1') || codec.includes('h264')) priority += 10000; // Preferir H.264
-            if (ext === 'mp4') priority += 5000; // Preferir MP4
+            // Priorizar formatos mais comuns primeiro
+            if (codec.includes('avc1') || codec.includes('h264')) priority += 20000; // Muito preferir H.264
+            if (ext === 'mp4') priority += 10000; // Muito preferir MP4
+            // Priorizar resoluções comuns: 1080p > 720p > 480p > 360p
+            if (resolution.includes('1920x1080') || resolution.includes('1080x1920')) priority += 5000;
+            if (resolution.includes('1280x720') || resolution.includes('720x1280')) priority += 3000;
+            if (resolution.includes('854x480') || resolution.includes('480x854')) priority += 1000;
             
             formats.push({
               id: formatId,
@@ -490,10 +496,8 @@ export async function downloadWithProgress(req, res) {
               resolution,
               fps: parseInt(fps) || 0,
               codec,
-              size,
-              sizeUnit,
               priority,
-              line: line.trim()
+              strategy
             });
           }
         }
@@ -501,23 +505,25 @@ export async function downloadWithProgress(req, res) {
         // Ordenar por prioridade (maior primeiro)
         formats.sort((a, b) => b.priority - a.priority);
         
-        console.log(`[DOWNLOAD] ✅ Encontrados ${formats.length} formatos disponíveis com ${strategy.name}`);
-        if (formats.length > 0) {
-          console.log(`[DOWNLOAD] Melhores formatos: ${formats.slice(0, 5).map(f => `${f.id} (${f.resolution}, ${f.ext})`).join(', ')}`);
+        // Limitar aos top 20 formatos (mais rápidos)
+        const topFormats = formats.slice(0, 20);
+        
+        if (topFormats.length > 0) {
+          console.log(`[DOWNLOAD] ✅ ${topFormats.length} melhores formatos encontrados: ${topFormats.slice(0, 3).map(f => `${f.id} (${f.resolution})`).join(', ')}...`);
         }
         
-        resolve(formats);
+        resolve(topFormats);
       });
       
       ytdlp.on('error', (error) => {
-        console.warn(`[DOWNLOAD] ⚠️ Erro ao executar list-formats: ${error.message}`);
+        clearTimeout(timeout);
         resolve([]);
       });
     });
   }
   
   /**
-   * Tenta fazer download usando um formato específico
+   * Tenta fazer download usando um formato específico (OTIMIZADO - timeout curto, retries reduzidos)
    */
   async function tryDownloadWithFormat(videoUrl, outputTemplate, formatId, strategy) {
     return new Promise((resolve, reject) => {
@@ -536,8 +542,10 @@ export async function downloadWithProgress(req, res) {
         '--referer', 'https://www.youtube.com/',
         '--extractor-args', strategy.extractorArgs,
         '--no-check-certificate',
-        '--retries', '2',
-        '--fragment-retries', '2',
+        '--retries', '1', // Reduzido para agilidade
+        '--fragment-retries', '1', // Reduzido
+        '--socket-timeout', '15', // Timeout curto
+        '--file-access-retries', '1', // Reduzido
         '-o', outputTemplate,
         videoUrl
       ];
@@ -548,17 +556,28 @@ export async function downloadWithProgress(req, res) {
       let stderr = '';
       let stdout = '';
       let hasResolved = false;
+      let downloadStarted = false;
+      
+      // Timeout de 30 segundos por formato (rápido)
+      const timeout = setTimeout(() => {
+        if (!hasResolved) {
+          hasResolved = true;
+          ytdlp.kill();
+          reject({ timeout: true, formatId, strategy: strategy.name });
+        }
+      }, 30000);
       
       ytdlp.stderr.on('data', (data) => {
         stderr += data.toString();
         const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
         if (progressMatch) {
+          downloadStarted = true;
           const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
           res.write(`data: ${JSON.stringify({
             progress: percent,
             status: 'downloading',
             state: 'downloading',
-            message: `Testando formato ${formatId} (${strategy.name})... ${percent.toFixed(1)}%`
+            message: `Baixando formato ${formatId}... ${percent.toFixed(1)}%`
           })}\n\n`);
         }
       });
@@ -568,10 +587,11 @@ export async function downloadWithProgress(req, res) {
       });
       
       ytdlp.on('close', (code) => {
+        clearTimeout(timeout);
         if (hasResolved) return;
         hasResolved = true;
         
-        if (code === 0) {
+        if (code === 0 || downloadStarted) {
           // Procurar arquivo baixado
           const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
           const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
@@ -589,10 +609,11 @@ export async function downloadWithProgress(req, res) {
           }
         }
         
-        reject({ code, stderr, stdout, formatId, strategy: strategy.name });
+        reject({ code, stderr: stderr.slice(-200), formatId, strategy: strategy.name });
       });
       
       ytdlp.on('error', (error) => {
+        clearTimeout(timeout);
         if (hasResolved) return;
         hasResolved = true;
         reject({ error: error.message, formatId, strategy: strategy.name });
@@ -976,11 +997,11 @@ export async function downloadWithProgress(req, res) {
       console.warn(`[DOWNLOAD] ❌ Estratégia ${strategy.name} falhou:`, error.code || error.error);
       lastError = error;
       
-      // Se ainda há estratégias para tentar, continuar
+      // Se ainda há estratégias para tentar, continuar (OTIMIZADO - delay reduzido)
       if (strategies.indexOf(strategy) < strategies.length - 1) {
-        console.log(`[DOWNLOAD] Tentando próxima estratégia em 2 segundos...`);
-        // Delay maior entre tentativas para evitar rate limiting
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`[DOWNLOAD] Tentando próxima estratégia...`);
+        // Delay reduzido para agilidade (500ms ao invés de 2s)
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Limpar cache entre tentativas
         try {
@@ -1005,27 +1026,27 @@ export async function downloadWithProgress(req, res) {
     }
   }
   
-  // Se nenhuma estratégia funcionou, tentar listar e testar TODOS os formatos disponíveis
+  // Se nenhuma estratégia funcionou, tentar listar e testar formatos disponíveis (OTIMIZADO - paralelo e rápido)
   if (!downloadResult) {
-    console.log('[DOWNLOAD] 🔄 Todas as estratégias padrão falharam. Listando TODOS os formatos disponíveis...');
+    console.log('[DOWNLOAD] 🔄 Estratégias padrão falharam. Listando formatos disponíveis (modo rápido)...');
     
-    // Tentar com cada estratégia para listar formatos
+    // Listar formatos em paralelo das primeiras 3 estratégias (mais rápidas)
+    const strategiesToTry = strategies.slice(0, 3);
+    const formatPromises = strategiesToTry.map(strategy => 
+      listAvailableFormats(cleanUrl, strategy).catch(() => [])
+    );
+    
+    const formatArrays = await Promise.all(formatPromises);
     let allFormats = [];
-    for (const strategy of strategies) {
-      try {
-        const formats = await listAvailableFormats(cleanUrl, strategy);
-        if (formats.length > 0) {
-          console.log(`[DOWNLOAD] ✅ Encontrados ${formats.length} formatos com ${strategy.name}`);
-          // Adicionar estratégia a cada formato para rastreamento
-          formats.forEach(f => f.strategy = strategy);
-          allFormats.push(...formats);
-        }
-      } catch (error) {
-        console.warn(`[DOWNLOAD] ⚠️ Erro ao listar formatos com ${strategy.name}:`, error.message);
-      }
-    }
     
-    // Remover duplicatas (mesmo formatId)
+    formatArrays.forEach((formats, index) => {
+      if (formats.length > 0) {
+        formats.forEach(f => f.strategy = strategiesToTry[index]);
+        allFormats.push(...formats);
+      }
+    });
+    
+    // Remover duplicatas e ordenar
     const uniqueFormats = [];
     const seenIds = new Set();
     for (const format of allFormats) {
@@ -1034,42 +1055,55 @@ export async function downloadWithProgress(req, res) {
         uniqueFormats.push(format);
       }
     }
-    
-    // Ordenar por prioridade
     uniqueFormats.sort((a, b) => b.priority - a.priority);
     
-    console.log(`[DOWNLOAD] 📋 Total de ${uniqueFormats.length} formatos únicos encontrados. Testando cada um...`);
+    // Testar apenas os TOP 10 formatos (mais rápidos)
+    const topFormats = uniqueFormats.slice(0, 10);
     
-    // Testar cada formato até encontrar um que funcione
-    for (const format of uniqueFormats) {
-      try {
-        console.log(`[DOWNLOAD] 🧪 Testando formato ${format.id} (${format.resolution}, ${format.ext}, ${format.codec}) com ${format.strategy.name}...`);
-        
-        res.write(`data: ${JSON.stringify({
-          progress: 0,
-          status: 'testing',
-          state: 'testing',
-          message: `Testando formato ${format.id} (${format.resolution})...`
-        })}\n\n`);
-        
-        const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, format.strategy);
-        
-        if (result.success) {
-          console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${format.id} (${format.resolution}, ${format.ext}) usando ${format.strategy.name}!`);
-          downloadResult = {
-            success: true,
-            strategy: `${format.strategy.name} (formato ${format.id})`,
-            filePath: result.filePath
-          };
-          break;
+    console.log(`[DOWNLOAD] 📋 Testando ${topFormats.length} melhores formatos (modo rápido)...`);
+    
+    // Testar formatos em paralelo (até 3 ao mesmo tempo para agilidade)
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < topFormats.length; i += BATCH_SIZE) {
+      const batch = topFormats.slice(i, i + BATCH_SIZE);
+      
+      res.write(`data: ${JSON.stringify({
+        progress: 0,
+        status: 'testing',
+        state: 'testing',
+        message: `Testando formatos ${batch.map(f => f.id).join(', ')}...`
+      })}\n\n`);
+      
+      // Testar batch em paralelo
+      const batchPromises = batch.map(async (format) => {
+        try {
+          const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, format.strategy);
+          if (result.success) {
+            return result;
+          }
+        } catch (error) {
+          // Ignorar erro, continuar
         }
-      } catch (error) {
-        console.warn(`[DOWNLOAD] ⚠️ Formato ${format.id} falhou:`, error.code || error.error);
-        // Continuar para próximo formato
+        return null;
+      });
+      
+      const batchResults = await Promise.all(batchPromises);
+      const successResult = batchResults.find(r => r && r.success);
+      
+      if (successResult) {
+        console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${successResult.formatId} usando ${successResult.strategy}!`);
+        downloadResult = {
+          success: true,
+          strategy: `${successResult.strategy} (formato ${successResult.formatId})`,
+          filePath: successResult.filePath
+        };
+        break; // Parar se encontrou um que funciona
       }
       
-      // Pequeno delay entre tentativas
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Delay mínimo entre batches (100ms)
+      if (i + BATCH_SIZE < topFormats.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
     }
     
     // Se ainda não funcionou após testar todos os formatos
