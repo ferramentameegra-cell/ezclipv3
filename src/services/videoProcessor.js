@@ -910,6 +910,13 @@ export const generateVideoSeries = async (job, jobsMap) => {
         try {
           console.log(`[PROCESSING] 🔄 Tentativa de recuperação: recompondo clip ${clipIndex}...`);
           
+          // Recriar clipHeadline no escopo do catch para garantir que esteja definida
+          const retryClipHeadline = headlineText ? {
+            text: headlineText,
+            startTime: 0,
+            endTime: finalCutDuration
+          } : null;
+          
           // Usar currentRetentionVideoPath que já foi definido antes do loop
           // Se não estiver disponível, continuar sem vídeo de retenção (não bloquear)
           const retryComposition = await composeFinalVideo({
@@ -917,7 +924,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
             outputPath: finalClipPath,
             retentionVideoId: retentionVideoId,
             retentionVideoPath: currentRetentionVideoPath, // Usar variável definida antes do loop
-            headline: clipHeadline,
+            headline: retryClipHeadline,
             headlineStyle: headlineStyleObj,
             headlineText: headlineText,
             captions: clipCaptions,
@@ -926,7 +933,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
             format: '9:16',
             platforms: { tiktok: true, reels: true, shorts: true },
             safeMargins: 10,
-            clipNumber: clipIndex + 1,
+            clipNumber: clipIndex,
             totalClips: finalClips.length
           });
           

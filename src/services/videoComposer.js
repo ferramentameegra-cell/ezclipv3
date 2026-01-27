@@ -712,6 +712,13 @@ export async function composeFinalVideo({
       // O background já tem 1080x1920, mas garantimos que [final] também tenha
       // IMPORTANTE: Sempre criar [final] a partir do currentLabel atual
       // FORÇAR dimensões exatas: 1080x1920 (hardcoded para garantir formato vertical)
+      // Validar que currentLabel está definido antes de criar [final]
+      if (!currentLabel || currentLabel.trim() === '') {
+        console.error('[COMPOSER] ❌ ERRO: currentLabel não está definido antes de criar [final]');
+        console.error('[COMPOSER] Filter parts até agora:', filterParts);
+        return reject(new Error('currentLabel não está definido - não é possível criar [final]'));
+      }
+      
       // Usar force_original_aspect_ratio=increase para garantir que preencha todo o espaço
       // Depois crop para garantir dimensões EXATAS 1080x1920 sem distorção
       filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
@@ -720,6 +727,7 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
       console.log(`[COMPOSER] ✅ Formato vertical garantido: scale=1080:1920:force_original_aspect_ratio=increase + crop=1080:1920:0:0`);
       console.log(`[COMPOSER] ✅ Dimensões finais EXATAS: 1080x1920 (sem exceções)`);
+      console.log(`[COMPOSER] ✅ Label [final] criado a partir de: ${currentLabel}`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
