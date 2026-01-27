@@ -755,7 +755,7 @@ export async function composeFinalVideo({
         '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical OBRIGATÓRIO)
         '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical OBRIGATÓRIO)
         '-c:v', 'libx264',
-        '-preset', 'medium',
+        '-preset', 'veryfast', // OTIMIZAÇÃO 3: Mudado de 'medium' para 'veryfast' (20-30% mais rápido)
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart'

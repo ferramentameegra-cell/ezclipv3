@@ -723,14 +723,17 @@ export const generateVideoSeries = async (job, jobsMap) => {
             
             console.log(`[PROCESSING] Gerando ${clipIntervals.length} clipes de retenção com intervalos:`, clipIntervals.map(ci => `${ci.start.toFixed(2)}s-${ci.end.toFixed(2)}s`).join(', '));
             
-            // Gerar cada clip de retenção usando FFmpeg
-            for (const interval of clipIntervals) {
+            // OTIMIZAÇÃO 2: Paralelizar geração de clipes de retenção
+            console.log(`[PROCESSING] ⚡ Gerando ${clipIntervals.length} clipes de retenção em PARALELO...`);
+            const retentionStartTime = Date.now();
+            
+            const retentionPromises = clipIntervals.map(async (interval) => {
               const retentionClipPath = path.join(
                 retentionClipsDir,
                 `retention_clip_${String(interval.index + 1).padStart(3, '0')}.mp4`
               );
               
-              console.log(`[PROCESSING] Gerando clip de retenção ${interval.index + 1}/${clipIntervals.length}: ${interval.start.toFixed(2)}s - ${interval.end.toFixed(2)}s`);
+              console.log(`[PROCESSING] [PARALLEL] Gerando clip de retenção ${interval.index + 1}/${clipIntervals.length}: ${interval.start.toFixed(2)}s - ${interval.end.toFixed(2)}s`);
               
               try {
                 await trimVideo(retentionVideoPath, retentionClipPath, interval.start, interval.end);
@@ -739,19 +742,29 @@ export const generateVideoSeries = async (job, jobsMap) => {
                 if (fs.existsSync(retentionClipPath)) {
                   const clipStats = fs.statSync(retentionClipPath);
                   if (clipStats.size > 0) {
-                    retentionClips.push(retentionClipPath);
                     console.log(`[PROCESSING] ✅ Clip de retenção ${interval.index + 1} gerado: ${(clipStats.size / 1024 / 1024).toFixed(2)} MB`);
+                    return retentionClipPath;
                   } else {
                     console.warn(`[PROCESSING] ⚠️ Clip de retenção ${interval.index + 1} está vazio`);
+                    return null;
                   }
                 } else {
                   console.warn(`[PROCESSING] ⚠️ Clip de retenção ${interval.index + 1} não foi criado`);
+                  return null;
                 }
               } catch (clipError) {
                 console.error(`[PROCESSING] ❌ Erro ao gerar clip de retenção ${interval.index + 1}: ${clipError.message}`);
                 // Continuar mesmo se um clip falhar
+                return null;
               }
-            }
+            });
+            
+            // Aguardar todos os clipes de retenção em paralelo
+            const retentionResults = await Promise.all(retentionPromises);
+            retentionClips = retentionResults.filter(path => path !== null);
+            
+            const retentionDuration = ((Date.now() - retentionStartTime) / 1000).toFixed(2);
+            console.log(`[PROCESSING] ⚡ ${retentionClips.length}/${clipIntervals.length} clipes de retenção gerados em PARALELO em ${retentionDuration}s`);
             
             console.log(`[PROCESSING] ✅ ${retentionClips.length}/${clipIntervals.length} clipes de retenção gerados com sucesso`);
           } else {
@@ -901,27 +914,41 @@ export const generateVideoSeries = async (job, jobsMap) => {
     const compositionProgress = 60; // Começar em 60% (após split)
     const compositionRange = 40; // 40% para composição
     
+    // OTIMIZAÇÃO 1: Limite de concorrência para composição paralela
+    const COMPOSITION_BATCH_SIZE = parseInt(process.env.COMPOSITION_BATCH_SIZE || '2', 10);
+    console.log(`[PROCESSING] ⚡ Composição paralela ativada (batch size: ${COMPOSITION_BATCH_SIZE})`);
+    
     // Inicializar evento de progresso
     updateProgressEvent(job.id, {
       status: 'processing',
       totalClips: finalClips.length,
       currentClip: 0,
       progress: compositionProgress,
-      message: `Iniciando composição de ${finalClips.length} clipes...`
+      message: `Iniciando composição paralela de ${finalClips.length} clipes...`
     });
 
     // Usar clipes de retenção gerados automaticamente se disponíveis
     // Se não houver clipes de retenção, usar vídeo completo (fallback)
     console.log(`[PROCESSING] Clipes de retenção disponíveis: ${retentionClips.length}/${finalClips.length}`);
 
-    for (let i = 0; i < finalClips.length; i++) {
-      const clipPath = finalClips[i];
-      const clipIndex = i + 1;
+    // OTIMIZAÇÃO 1: Processar composição em batches paralelos
+    const compositionStartTime = Date.now();
+    const finalClipsPaths = [];
+    
+    for (let i = 0; i < finalClips.length; i += COMPOSITION_BATCH_SIZE) {
+      const batch = finalClips.slice(i, i + COMPOSITION_BATCH_SIZE);
+      const batchStartIndex = i;
+      
+      console.log(`[PROCESSING] ⚡ Processando batch de composição: clipes ${i + 1} a ${Math.min(i + COMPOSITION_BATCH_SIZE, finalClips.length)} (${batch.length} clipes em paralelo)`);
+      
+      // Criar promises para o batch atual
+      const batchPromises = batch.map(async (clipPath, batchIndex) => {
+        const clipIndex = batchStartIndex + batchIndex + 1;
 
-      console.log(`[PROCESSING] ========================================`);
-      console.log(`[PROCESSING] COMPONDO CLIP ${clipIndex}/${finalClips.length}`);
-      console.log(`[PROCESSING] ========================================`);
-      console.log(`[PROCESSING] Clip path: ${clipPath}`);
+        console.log(`[PROCESSING] ========================================`);
+        console.log(`[PROCESSING] [PARALLEL] COMPONDO CLIP ${clipIndex}/${finalClips.length}`);
+        console.log(`[PROCESSING] ========================================`);
+        console.log(`[PROCESSING] Clip path: ${clipPath}`);
       
       // VALIDAR clip antes de compor
       if (!fs.existsSync(clipPath)) {
@@ -953,28 +980,29 @@ export const generateVideoSeries = async (job, jobsMap) => {
       
       console.log(`[PROCESSING] Output path (final): ${finalClipPath}`);
 
-      // Usar clip de retenção correspondente se disponível, senão usar vídeo completo
-      let currentRetentionVideoPath = null;
-      if (retentionClips.length > i && retentionClips[i] && fs.existsSync(retentionClips[i])) {
-        currentRetentionVideoPath = retentionClips[i];
-        console.log(`[PROCESSING] ✅ Usando clip de retenção ${clipIndex}: ${currentRetentionVideoPath}`);
-      } else if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
-        // Fallback: usar vídeo completo se clip não estiver disponível
-        currentRetentionVideoPath = retentionVideoPath;
-        console.log(`[PROCESSING] ⚠️ Clip de retenção ${clipIndex} não disponível, usando vídeo completo como fallback`);
-      }
-
-      try {
-        // VALIDAR clip novamente antes de compor (pode ter sido deletado)
-        if (!fs.existsSync(clipPath)) {
-          throw new Error(`Clip ${clipIndex} foi removido durante processamento: ${clipPath}`);
+        // Usar clip de retenção correspondente se disponível, senão usar vídeo completo
+        let currentRetentionVideoPath = null;
+        const retentionIndex = clipIndex - 1; // Converter para 0-based
+        if (retentionClips.length > retentionIndex && retentionClips[retentionIndex] && fs.existsSync(retentionClips[retentionIndex])) {
+          currentRetentionVideoPath = retentionClips[retentionIndex];
+          console.log(`[PROCESSING] ✅ Usando clip de retenção ${clipIndex}: ${currentRetentionVideoPath}`);
+        } else if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
+          // Fallback: usar vídeo completo se clip não estiver disponível
+          currentRetentionVideoPath = retentionVideoPath;
+          console.log(`[PROCESSING] ⚠️ Clip de retenção ${clipIndex} não disponível, usando vídeo completo como fallback`);
         }
-        
-        // Filtrar legendas para este clip específico
-        // IMPORTANTE: Usar overlap ao invés de "contém completamente"
-        // Uma legenda deve aparecer se há qualquer overlap com o intervalo do clip
-        const clipStartTime = i * finalCutDuration;
-        const clipEndTime = (i + 1) * finalCutDuration;
+
+        try {
+          // VALIDAR clip novamente antes de compor (pode ter sido deletado)
+          if (!fs.existsSync(clipPath)) {
+            throw new Error(`Clip ${clipIndex} foi removido durante processamento: ${clipPath}`);
+          }
+          
+          // Filtrar legendas para este clip específico
+          // IMPORTANTE: Usar overlap ao invés de "contém completamente"
+          // Uma legenda deve aparecer se há qualquer overlap com o intervalo do clip
+          const clipStartTime = retentionIndex * finalCutDuration;
+          const clipEndTime = (retentionIndex + 1) * finalCutDuration;
         
         console.log(`[PROCESSING] Intervalo do clip ${clipIndex}: ${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s`);
         
@@ -1063,8 +1091,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
         
         console.log(`[PROCESSING] ✅ Clip final ${clipIndex} validado: ${(finalClipStats.size / 1024 / 1024).toFixed(2)} MB`);
         
-        // Substituir clip original pelo clip final no array
-        finalClips[i] = finalClipPath;
+        // Retornar caminho do clip final
+        return finalClipPath;
         
         // Remover clip original (economizar espaço)
         if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
@@ -1080,15 +1108,16 @@ export const generateVideoSeries = async (job, jobsMap) => {
         console.log(`[PROCESSING] ✅ Clip final salvo em: ${finalClipPath}`);
         
         // Emitir evento: clipe concluído
-        const clipProgress = Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length)));
+        const clipProgress = Math.round(compositionProgress + (compositionRange * (clipIndex / finalClips.length)));
         updateProgressEvent(job.id, {
           status: 'processing',
           totalClips: finalClips.length,
           currentClip: clipIndex,
           progress: clipProgress,
-          message: `Clipe ${clipIndex} de ${finalClips.length} concluído`
+          message: `[PARALLEL] Clipe ${clipIndex} de ${finalClips.length} concluído`
         });
 
+        return finalClipPath;
       } catch (compositionError) {
         console.error(`[PROCESSING_ERROR] ========================================`);
         console.error(`[PROCESSING_ERROR] ERRO ao compor clip ${clipIndex}/${finalClips.length}`);
@@ -1106,8 +1135,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
         try {
           // Tentar recriar clipCaptions se captions estiver disponível
           if (captions && Array.isArray(captions)) {
-            const clipStartTime = i * finalCutDuration;
-            const clipEndTime = (i + 1) * finalCutDuration;
+            const clipStartTime = retentionIndex * finalCutDuration;
+            const clipEndTime = (retentionIndex + 1) * finalCutDuration;
             
             retryClipCaptions = captions.filter(
               cap => cap.start < clipEndTime && cap.end > clipStartTime
@@ -1176,7 +1205,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           
           if (retryComposition && fs.existsSync(retryComposition) && fs.statSync(retryComposition).size > 0) {
             console.log(`[PROCESSING] ✅ Recuperação bem-sucedida: clip ${clipIndex} recompondo com sucesso`);
-            finalClips[i] = retryComposition;
+            return retryComposition;
           } else {
             throw new Error('Composição de recuperação falhou ou arquivo inválido');
           }
@@ -1187,10 +1216,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           // FALLBACK SIMPLIFICADO: Apenas vídeo principal sobre fundo preto
           // Objetivo: Produzir algo funcional, mesmo que básico
           try {
-            const fallbackClipPath = path.join(
-              seriesPath,
-              `clip_${String(clipIndex).padStart(3, '0')}_fallback_1080x1920.mp4`
-            );
+            const fallbackClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
             
             await new Promise((resolve, reject) => {
               const TOP_MARGIN_FALLBACK = 180;
@@ -1231,8 +1257,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
                     return reject(new Error('Arquivo fallback está vazio'));
                   }
                   console.log(`[PROCESSING] ✅ Clip fallback criado: 1080x1920 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                  finalClips[i] = fallbackClipPath;
-                  resolve();
+                  resolve(fallbackClipPath);
                 })
                 .on('error', (err) => {
                   const isTimeout = err.message && (err.message.includes('timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('SIGKILL'));
@@ -1251,21 +1276,44 @@ export const generateVideoSeries = async (job, jobsMap) => {
             console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha no fallback: ${fallbackError.message}`);
             console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
             console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
+            throw compositionError; // Re-lançar erro original
           }
         }
-      }
-
-      // Atualizar progresso geral após cada clip
-      const overallProgress = Math.min(99, Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length))));
-      // Atualizar progresso usando função do BullMQ
+      });
+      
+      // Aguardar todos os clipes do batch em paralelo
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Atualizar array finalClips com os resultados
+      batchResults.forEach((resultPath, batchIndex) => {
+        const clipIndex = batchStartIndex + batchIndex;
+        if (resultPath) {
+          finalClips[clipIndex] = resultPath;
+        }
+      });
+      
+      // Atualizar progresso após cada batch
+      const batchProgress = Math.min(99, Math.round(compositionProgress + (compositionRange * ((i + COMPOSITION_BATCH_SIZE) / finalClips.length))));
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        totalClips: finalClips.length,
+        currentClip: Math.min(i + COMPOSITION_BATCH_SIZE, finalClips.length),
+        progress: batchProgress,
+        message: `[PARALLEL] Batch concluído: ${batchResults.length} clipes compostos`
+      });
+      
       if (typeof job.progress === 'function') {
-        await job.progress(overallProgress);
+        await job.progress(batchProgress);
       } else {
-        job.progress = overallProgress;
+        job.progress = batchProgress;
       }
       if (jobsMap) jobsMap.set(job.id, job);
-      console.log(`[PROCESSING] Progresso geral após clip ${clipIndex}: ${overallProgress}%`);
+      
+      console.log(`[PROCESSING] ⚡ Batch ${Math.floor(i / COMPOSITION_BATCH_SIZE) + 1} concluído: ${batchResults.length} clipes compostos em paralelo`);
     }
+    
+    const compositionDuration = ((Date.now() - compositionStartTime) / 1000).toFixed(2);
+    console.log(`[PROCESSING] ⚡ Composição paralela concluída em ${compositionDuration}s`);
 
     console.log(`[PROCESSING] ✅ Composição final concluída: ${finalClips.length} clips finais`);
     
