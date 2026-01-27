@@ -1139,32 +1139,30 @@ export const generateVideoSeries = async (job, jobsMap) => {
           console.error(`[PROCESSING] ❌ Recuperação falhou: ${retryError.message}`);
           console.log(`[PROCESSING] ⚠️ Usando fallback simplificado para clip ${clipIndex}...`);
           
-          // Se composição falhar, FORÇAR formato 1080x1920 no clip original
-          // NUNCA usar clip sem formato vertical forçado
+          // FALLBACK SIMPLIFICADO: Apenas vídeo principal sobre fundo preto
+          // Objetivo: Produzir algo funcional, mesmo que básico
           try {
             const fallbackClipPath = path.join(
               seriesPath,
               `clip_${String(clipIndex).padStart(3, '0')}_fallback_1080x1920.mp4`
             );
             
-            // No fallback, manter vídeo principal em 16:9 e criar frame vertical 1080x1920
-            // Vídeo principal será posicionado no topo do frame vertical, mantendo proporção 16:9
             await new Promise((resolve, reject) => {
-              // Criar frame vertical 1080x1920 com vídeo principal 16:9 posicionado no topo
-              // Vídeo principal será redimensionado para caber na largura 1080px mantendo proporção 16:9
-              const TOP_MARGIN_FALLBACK = 180; // Margem superior (mesma da composição)
-              const mainVideoHeight = Math.round(1080 * 9 / 16); // Altura para vídeo 16:9 com largura 1080px = 607px
-              const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600); // Máximo 1600px de altura
+              const TOP_MARGIN_FALLBACK = 180;
+              const mainVideoHeight = Math.round(1080 * 9 / 16); // 607px para 16:9
+              const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600);
+              
+              // Construir filter_complex como string (sequencial e robusto)
+              // FALLBACK: Apenas background preto + vídeo principal (sem headlines, retenção, etc.)
+              const filterComplex = `color=c=black:s=1080x1920:d=60[bg];[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled];[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`;
+              
+              // Validar que [final] existe
+              if (!filterComplex.includes('[final]') || !filterComplex.includes('=[final]')) {
+                return reject(new Error('Filter complex do fallback não contém [final]'));
+              }
               
               ffmpeg(clipPath, { timeout: FFMPEG_FALLBACK_TIMEOUT })
-                .complexFilter([
-                  // Criar background preto 1080x1920
-                  `color=c=black:s=1080x1920[bg]`,
-                  // Redimensionar vídeo principal mantendo proporção 16:9
-                  `[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled]`,
-                  // Posicionar vídeo principal no topo do frame vertical (centralizado horizontalmente)
-                  `[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`
-                ])
+                .complexFilter(filterComplex)
                 .outputOptions([
                   '-map', '[final]',
                   '-s', '1080x1920',
@@ -1177,7 +1175,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
                 ])
                 .output(fallbackClipPath)
                 .on('start', (cmd) => {
-                  console.log(`[PROCESSING] Criando fallback 1080x1920 com vídeo principal 16:9: ${cmd}`);
+                  console.log(`[PROCESSING] Criando fallback simplificado 1080x1920: ${cmd}`);
                 })
                 .on('end', () => {
                   if (!fs.existsSync(fallbackClipPath)) {
@@ -1187,8 +1185,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
                   if (stats.size === 0) {
                     return reject(new Error('Arquivo fallback está vazio'));
                   }
-                  console.log(`[PROCESSING] ✅ Clip fallback criado: 1080x1920 com vídeo principal 16:9 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-                  // Substituir clip original pelo clip com formato forçado
+                  console.log(`[PROCESSING] ✅ Clip fallback criado: 1080x1920 (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
                   finalClips[i] = fallbackClipPath;
                   resolve();
                 })
@@ -1198,15 +1195,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
                     console.error(`[PROCESSING] ❌ Timeout no fallback após ${FFMPEG_FALLBACK_TIMEOUT}s`);
                   }
                   console.error(`[PROCESSING] ❌ Erro ao criar fallback: ${err.message}`);
+                  console.error(`[PROCESSING] ❌ Filter complex do fallback: ${filterComplex}`);
                   reject(err);
                 })
                 .run();
             });
             
-            console.warn(`[PROCESSING] ⚠️ Usando clip fallback 1080x1920 com vídeo principal 16:9 para clip ${clipIndex} devido a erro na composição`);
+            console.warn(`[PROCESSING] ⚠️ Usando clip fallback simplificado 1080x1920 para clip ${clipIndex}`);
           } catch (fallbackError) {
-            console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha ao forçar formato no fallback: ${fallbackError.message}`);
-            // Se até o fallback falhar, manter clip original mas logar aviso crítico
+            console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha no fallback: ${fallbackError.message}`);
             console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
             console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
           }
