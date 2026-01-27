@@ -797,7 +797,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
             clipPath: clipPath,
             outputPath: finalClipPath,
             retentionVideoId: retentionVideoId,
-            retentionVideoPath: retryRetentionVideoPath, // Usar variável definida
+            retentionVideoPath: currentRetentionVideoPath, // Usar variável definida antes do loop
             headline: clipHeadline,
             headlineStyle: headlineStyleObj,
             headlineText: headlineText,

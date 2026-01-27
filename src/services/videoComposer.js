@@ -724,6 +724,24 @@ export async function composeFinalVideo({
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
 
+      // VALIDAR arquivo de entrada ANTES de processar
+      if (!fs.existsSync(clipPath)) {
+        return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo principal não existe: ${clipPath}`));
+      }
+      
+      const clipStats = fs.statSync(clipPath);
+      if (clipStats.size === 0) {
+        return reject(new Error(`[COMPOSER] ❌ Arquivo de vídeo principal está vazio: ${clipPath}`));
+      }
+      
+      console.log(`[COMPOSER] ✅ Vídeo principal validado: ${clipPath} (${(clipStats.size / 1024 / 1024).toFixed(2)} MB)`);
+      
+      // Validar background fixo se especificado
+      if (fixedBackgroundPath && !fs.existsSync(fixedBackgroundPath)) {
+        console.warn(`[COMPOSER] ⚠️ Background fixo não existe: ${fixedBackgroundPath}. Continuando sem background.`);
+        fixedBackgroundPath = null;
+      }
+      
       // Construir comando FFmpeg
       const command = ffmpeg();
 
@@ -823,24 +841,49 @@ export async function composeFinalVideo({
           // É um input como [0:v] ou [1:v], ignorar
           continue;
         }
-        if (filterComplex.indexOf(`[${label}]`) < filterComplex.indexOf(`=${label}]`)) {
-          // Label usado antes de ser definido
+        // Verificar se label foi definido antes de ser usado
+        const labelDefIndex = filterComplex.indexOf(`=${label}]`);
+        const labelUseIndex = filterComplex.indexOf(`[${label}]`);
+        if (labelDefIndex !== -1 && labelUseIndex !== -1 && labelUseIndex < labelDefIndex) {
+          // Label usado antes de ser definido - isso é um problema
           usedLabels.add(label);
-        } else {
-          // Label definido
+        }
+        if (labelDefIndex !== -1) {
           definedLabels.add(label);
         }
+      }
+      
+      // Verificar se [final] foi definido
+      if (!definedLabels.has('final')) {
+        console.error('[COMPOSER] ❌ Label [final] não foi definido no filter_complex!');
+        console.error('[COMPOSER] Filter parts:', filterParts);
+        console.error('[COMPOSER] Current label:', currentLabel);
+        return reject(new Error('Label [final] não foi definido no filter_complex'));
       }
       
       // Log completo do filter (limitado a 1000 chars para debug)
       console.log('[COMPOSER] Filter complex (primeiros 1000 chars):', filterComplex.substring(0, 1000));
       console.log('[COMPOSER] Total de filtros:', filterParts.length);
       console.log('[COMPOSER] Labels definidos:', Array.from(definedLabels));
-      console.log('[COMPOSER] Labels usados:', Array.from(usedLabels));
+      console.log('[COMPOSER] Labels usados antes de definição:', Array.from(usedLabels));
       
       // Log completo do filter para debug de erros
       if (filterComplex.length > 1000) {
         console.log('[COMPOSER] Filter complex (restante):', filterComplex.substring(1000));
+      }
+      
+      // Validar que todos os inputs referenciados existem
+      const inputPattern = /\[(\d+):[av]\]/g;
+      const referencedInputs = new Set();
+      while ((match = inputPattern.exec(filterComplex)) !== null) {
+        referencedInputs.add(parseInt(match[1]));
+      }
+      
+      // Verificar se todos os inputs referenciados foram adicionados
+      const maxInputIndex = Math.max(...Array.from(referencedInputs), -1);
+      if (maxInputIndex >= inputCount) {
+        console.error(`[COMPOSER] ❌ Filter complex referencia input ${maxInputIndex} mas apenas ${inputCount} inputs foram adicionados`);
+        return reject(new Error(`Filter complex referencia input ${maxInputIndex} mas apenas ${inputCount} inputs foram adicionados`));
       }
       
       try {
@@ -979,7 +1022,7 @@ export async function composeFinalVideo({
           console.log(`[COMPOSER] ✅ Composição concluída: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
           resolve(outputPath);
         })
-        .on('error', (err) => {
+        .on('error', (err, stdout, stderr) => {
           console.error('[COMPOSER] ❌ ERRO CRÍTICO no FFmpeg:', err.message);
           console.error('[COMPOSER] Stack trace completo:', err.stack);
           console.error('[COMPOSER] Código de saída:', err.code);
@@ -993,6 +1036,26 @@ export async function composeFinalVideo({
           console.error('[COMPOSER] Background fixo:', fixedBackgroundPath || 'NÃO');
           console.error('[COMPOSER] Vídeo de retenção:', retentionVideoPath || 'NÃO');
           console.error('[COMPOSER] Headline:', (headlineText || (headline && headline.text)) || 'NÃO');
+          
+          // Log stderr se disponível (contém detalhes do erro do FFmpeg)
+          if (stderr) {
+            console.error('[COMPOSER] FFmpeg stderr:', stderr);
+          }
+          if (stdout) {
+            console.error('[COMPOSER] FFmpeg stdout:', stdout);
+          }
+          
+          // Verificar se arquivos de entrada ainda existem
+          if (clipPath && !fs.existsSync(clipPath)) {
+            console.error(`[COMPOSER] ❌ Arquivo de vídeo principal foi removido: ${clipPath}`);
+          }
+          if (fixedBackgroundPath && !fs.existsSync(fixedBackgroundPath)) {
+            console.error(`[COMPOSER] ❌ Arquivo de background foi removido: ${fixedBackgroundPath}`);
+          }
+          if (retentionVideoPath && !fs.existsSync(retentionVideoPath)) {
+            console.error(`[COMPOSER] ❌ Arquivo de vídeo de retenção foi removido: ${retentionVideoPath}`);
+          }
+          
           reject(new Error(`[COMPOSER] Erro no FFmpeg: ${err.message}. Verifique os logs acima para detalhes.`));
         })
         .save(outputPath);
