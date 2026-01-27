@@ -1,6 +1,6 @@
 import { videoDownloadQueue } from '../queue/queue.js';
 import { downloadYouTubeVideo } from '../services/youtubeDownloader.js';
-import { videoStore } from '../controllers/videoController.js';
+import { videoStore } from '../controllers/downloadProgressController.js';
 import fs from 'fs';
 import path from 'path';
 

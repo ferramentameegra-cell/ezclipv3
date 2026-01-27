@@ -1,5 +1,5 @@
 import { splitVideoIntoClips } from '../services/videoTrimmer.js';
-import { videoStore } from './downloadController.js';
+import { videoStore } from './downloadProgressController.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
