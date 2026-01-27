@@ -239,7 +239,7 @@ export function getNicheRetentionYoutubeUrl(nicheId) {
 async function downloadRetentionVideoFromYouTube(youtubeUrl, outputPath) {
   return new Promise(async (resolve, reject) => {
     try {
-      console.log(`[RETENTION-DOWNLOAD] Iniciando download sem áudio: ${youtubeUrl}`);
+      console.log(`[RETENTION-DOWNLOAD] Iniciando download com Android Client: ${youtubeUrl}`);
       
       // Criar diretório se não existir
       const outputDir = path.dirname(outputPath);
@@ -262,7 +262,8 @@ async function downloadRetentionVideoFromYouTube(youtubeUrl, outputPath) {
         }
       }
       
-      const userAgent = process.env.YTDLP_USER_AGENT || 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip';
+      // User-Agent Android Client (único permitido - APENAS Android Client)
+      const userAgent = 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip';
       
       // Formato: APENAS vídeo, SEM áudio
       // bestvideo[height<=1080] - melhor vídeo até 1080p, sem áudio
@@ -277,7 +278,7 @@ async function downloadRetentionVideoFromYouTube(youtubeUrl, outputPath) {
         ...(cookiesPath ? ["--cookies", cookiesPath] : []),
         "--user-agent", userAgent,
         "--referer", "https://www.youtube.com/",
-        // Usar Android Client (mais confiável)
+        // APENAS Android Client (única estratégia permitida)
         "--extractor-args", "youtube:player_client=android",
         "--no-check-certificate",
         "--retries", "3",
