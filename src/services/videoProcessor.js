@@ -506,7 +506,33 @@ export const generateVideoSeries = async (job, jobsMap) => {
       console.log(`[PROCESSING] Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
     }
     
-    console.log(`[PROCESSING] Chamando splitVideoIntoClips...`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] CHAMANDO splitVideoIntoClips`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] Parâmetros:`);
+    console.log(`[PROCESSING]   - processedVideoPath: ${processedVideoPath}`);
+    console.log(`[PROCESSING]   - seriesPath: ${seriesPath}`);
+    console.log(`[PROCESSING]   - finalCutDuration: ${finalCutDuration}s`);
+    console.log(`[PROCESSING]   - actualStartTime: ${actualStartTime}s`);
+    console.log(`[PROCESSING]   - actualEndTime: ${actualEndTime}s`);
+    console.log(`[PROCESSING]   - Duração total: ${actualEndTime - actualStartTime}s`);
+    console.log(`[PROCESSING]   - Número esperado de clipes: ${finalNumberOfCuts || 'automático'}`);
+    
+    // VALIDAR arquivo de vídeo processado ANTES de chamar splitVideoIntoClips
+    if (!fs.existsSync(processedVideoPath)) {
+      const error = `[PROCESSING_ERROR] Vídeo processado não encontrado antes de split: ${processedVideoPath}`;
+      console.error(error);
+      throw new Error(error);
+    }
+    
+    const processedStats = fs.statSync(processedVideoPath);
+    if (processedStats.size === 0) {
+      const error = `[PROCESSING_ERROR] Vídeo processado está vazio antes de split: ${processedVideoPath}`;
+      console.error(error);
+      throw new Error(error);
+    }
+    
+    console.log(`[PROCESSING] ✅ Vídeo processado validado antes de split: ${(processedStats.size / 1024 / 1024).toFixed(2)} MB`);
     
     // Atualizar progresso antes de começar a gerar clipes
     updateProgressEvent(job.id, {
@@ -529,22 +555,79 @@ export const generateVideoSeries = async (job, jobsMap) => {
       });
     };
     
-    const clips = await splitVideoIntoClips(
-      processedVideoPath,
-      seriesPath,
-      finalCutDuration,
-      actualStartTime,
-      actualEndTime,
-      progressCallback
-    );
-    console.log(`[PROCESSING] ✅ splitVideoIntoClips retornou ${clips.length} clipe(s)`);
+    let clips = [];
+    try {
+      console.log(`[PROCESSING] Executando splitVideoIntoClips...`);
+      clips = await splitVideoIntoClips(
+        processedVideoPath,
+        seriesPath,
+        finalCutDuration,
+        actualStartTime,
+        actualEndTime,
+        progressCallback
+      );
+      console.log(`[PROCESSING] ✅ splitVideoIntoClips retornou ${clips.length} clipe(s)`);
+      
+      // VALIDAR que clipes foram gerados
+      if (!clips || clips.length === 0) {
+        const error = `[PROCESSING_ERROR] splitVideoIntoClips retornou array vazio! Esperado: ${finalNumberOfCuts || 'pelo menos 1'} clipe(s)`;
+        console.error(error);
+        throw new Error(error);
+      }
+      
+      // VALIDAR que cada clip existe e não está vazio
+      console.log(`[PROCESSING] Validando ${clips.length} clipe(s) gerados...`);
+      for (let i = 0; i < clips.length; i++) {
+        const clipPath = clips[i];
+        if (!fs.existsSync(clipPath)) {
+          const error = `[PROCESSING_ERROR] Clip ${i + 1} não existe: ${clipPath}`;
+          console.error(error);
+          throw new Error(error);
+        }
+        const clipStats = fs.statSync(clipPath);
+        if (clipStats.size === 0) {
+          const error = `[PROCESSING_ERROR] Clip ${i + 1} está vazio: ${clipPath}`;
+          console.error(error);
+          throw new Error(error);
+        }
+        console.log(`[PROCESSING] ✅ Clip ${i + 1} validado: ${clipPath} (${(clipStats.size / 1024 / 1024).toFixed(2)} MB)`);
+      }
+      console.log(`[PROCESSING] ✅ Todos os ${clips.length} clipe(s) foram validados com sucesso`);
+    } catch (splitError) {
+      console.error(`[PROCESSING_ERROR] ========================================`);
+      console.error(`[PROCESSING_ERROR] ERRO ao executar splitVideoIntoClips`);
+      console.error(`[PROCESSING_ERROR] ========================================`);
+      console.error(`[PROCESSING_ERROR] Mensagem: ${splitError.message}`);
+      console.error(`[PROCESSING_ERROR] Stack: ${splitError.stack}`);
+      console.error(`[PROCESSING_ERROR] Input: ${processedVideoPath}`);
+      console.error(`[PROCESSING_ERROR] Output dir: ${seriesPath}`);
+      console.error(`[PROCESSING_ERROR] ========================================`);
+      throw splitError; // Re-lançar erro para ser capturado pelo catch principal
+    }
     
     // Limitar número de clipes se necessário
     const finalClips = clipsQuantity && clipsQuantity > 0 
       ? clips.slice(0, clipsQuantity)
       : clips;
     
-    console.log(`[PROCESSING] Clipes gerados: ${finalClips.length} (solicitado: ${finalNumberOfCuts || 'automático'})`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] CLIPES GERADOS COM SUCESSO`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] Total de clipes gerados: ${finalClips.length}`);
+    console.log(`[PROCESSING] Solicitado: ${finalNumberOfCuts || 'automático'}`);
+    console.log(`[PROCESSING] Clipes criados:`);
+    finalClips.forEach((clip, index) => {
+      const stats = fs.statSync(clip);
+      console.log(`[PROCESSING]   ${index + 1}. ${clip} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    });
+    console.log(`[PROCESSING] ========================================`);
+    
+    // VALIDAÇÃO FINAL: garantir que pelo menos um clip foi gerado
+    if (finalClips.length === 0) {
+      const error = `[PROCESSING_ERROR] Nenhum clip foi gerado! splitVideoIntoClips retornou array vazio.`;
+      console.error(error);
+      throw new Error(error);
+    }
 
     // ===============================
     // GERAR CLIPES DE RETENÇÃO AUTOMATICAMENTE
@@ -784,7 +867,26 @@ export const generateVideoSeries = async (job, jobsMap) => {
       const clipPath = finalClips[i];
       const clipIndex = i + 1;
 
-      console.log(`[PROCESSING] Compondo clip ${clipIndex}/${finalClips.length}...`);
+      console.log(`[PROCESSING] ========================================`);
+      console.log(`[PROCESSING] COMPONDO CLIP ${clipIndex}/${finalClips.length}`);
+      console.log(`[PROCESSING] ========================================`);
+      console.log(`[PROCESSING] Clip path: ${clipPath}`);
+      
+      // VALIDAR clip antes de compor
+      if (!fs.existsSync(clipPath)) {
+        const error = `[PROCESSING_ERROR] Clip ${clipIndex} não existe antes de composição: ${clipPath}`;
+        console.error(error);
+        throw new Error(error);
+      }
+      
+      const clipStatsBefore = fs.statSync(clipPath);
+      if (clipStatsBefore.size === 0) {
+        const error = `[PROCESSING_ERROR] Clip ${clipIndex} está vazio antes de composição: ${clipPath}`;
+        console.error(error);
+        throw new Error(error);
+      }
+      
+      console.log(`[PROCESSING] ✅ Clip ${clipIndex} validado antes de composição: ${(clipStatsBefore.size / 1024 / 1024).toFixed(2)} MB`);
       
       // Emitir evento: iniciando clipe
       updateProgressEvent(job.id, {
@@ -800,6 +902,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
         seriesPath,
         `clip_${String(clipIndex).padStart(3, '0')}_final.mp4`
       );
+      
+      console.log(`[PROCESSING] Output path (final): ${finalClipPath}`);
 
       // Usar clip de retenção correspondente se disponível, senão usar vídeo completo
       let currentRetentionVideoPath = null;
@@ -813,11 +917,18 @@ export const generateVideoSeries = async (job, jobsMap) => {
       }
 
       try {
+        // VALIDAR clip novamente antes de compor (pode ter sido deletado)
+        if (!fs.existsSync(clipPath)) {
+          throw new Error(`Clip ${clipIndex} foi removido durante processamento: ${clipPath}`);
+        }
+        
         // Filtrar legendas para este clip específico
         // IMPORTANTE: Usar overlap ao invés de "contém completamente"
         // Uma legenda deve aparecer se há qualquer overlap com o intervalo do clip
         const clipStartTime = i * finalCutDuration;
         const clipEndTime = (i + 1) * finalCutDuration;
+        
+        console.log(`[PROCESSING] Intervalo do clip ${clipIndex}: ${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s`);
         
         // Filtrar legendas que têm overlap com o intervalo do clip
         // Overlap ocorre quando: cap.start < clipEndTime && cap.end > clipStartTime
@@ -830,7 +941,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
           end: Math.min(finalCutDuration, cap.end - clipStartTime) // Não ultrapassar duração do clip
         })).filter(cap => cap.end > cap.start); // Remover legendas inválidas (end <= start)
         
-        console.log(`[PROCESSING] Clip ${clipIndex}: ${clipCaptions.length} legendas no intervalo [${clipStartTime}s - ${clipEndTime}s]`);
+        console.log(`[PROCESSING] Clip ${clipIndex}: ${clipCaptions.length} legendas no intervalo [${clipStartTime.toFixed(2)}s - ${clipEndTime.toFixed(2)}s]`);
 
         // Headline para este clip (se houver)
         // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
@@ -840,6 +951,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
           endTime: finalCutDuration // Até o final do clip, não apenas 5 segundos
         } : null;
 
+        console.log(`[PROCESSING] Chamando composeFinalVideo para clip ${clipIndex}...`);
+        console.log(`[PROCESSING] Parâmetros de composição:`);
+        console.log(`[PROCESSING]   - clipPath: ${clipPath}`);
+        console.log(`[PROCESSING]   - outputPath: ${finalClipPath}`);
+        console.log(`[PROCESSING]   - legendas: ${clipCaptions.length} blocos`);
+        console.log(`[PROCESSING]   - headline: ${clipHeadline ? 'SIM' : 'NÃO'}`);
+        console.log(`[PROCESSING]   - retenção: ${currentRetentionVideoPath ? 'SIM' : 'NÃO'}`);
+        
         // Aplicar composição final
         // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - OBRIGATÓRIO
         // currentRetentionVideoPath já foi definido antes do loop
@@ -877,6 +996,18 @@ export const generateVideoSeries = async (job, jobsMap) => {
           }
         });
 
+        // VALIDAR clip final ANTES de substituir
+        if (!fs.existsSync(finalClipPath)) {
+          throw new Error(`Clip final ${clipIndex} não foi criado: ${finalClipPath}`);
+        }
+        
+        const finalClipStats = fs.statSync(finalClipPath);
+        if (finalClipStats.size === 0) {
+          throw new Error(`Clip final ${clipIndex} está vazio: ${finalClipPath}`);
+        }
+        
+        console.log(`[PROCESSING] ✅ Clip final ${clipIndex} validado: ${(finalClipStats.size / 1024 / 1024).toFixed(2)} MB`);
+        
         // Substituir clip original pelo clip final no array
         finalClips[i] = finalClipPath;
         
@@ -884,12 +1015,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
         if (fs.existsSync(clipPath) && clipPath !== finalClipPath) {
           try {
             fs.unlinkSync(clipPath);
+            console.log(`[PROCESSING] ✅ Clip original removido: ${clipPath}`);
           } catch (unlinkError) {
-            console.warn(`[PROCESSING] Erro ao remover clip original: ${unlinkError.message}`);
+            console.warn(`[PROCESSING] ⚠️ Erro ao remover clip original: ${unlinkError.message}`);
           }
         }
 
         console.log(`[PROCESSING] ✅ Clip ${clipIndex}/${finalClips.length} composto com sucesso`);
+        console.log(`[PROCESSING] ✅ Clip final salvo em: ${finalClipPath}`);
         
         // Emitir evento: clipe concluído
         const clipProgress = Math.round(compositionProgress + (compositionRange * ((i + 1) / finalClips.length)));
@@ -902,8 +1035,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
         });
 
       } catch (compositionError) {
-        console.error(`[PROCESSING] ❌ ERRO ao compor clip ${clipIndex}:`, compositionError.message);
-        console.error(`[PROCESSING] Stack trace:`, compositionError.stack);
+        console.error(`[PROCESSING_ERROR] ========================================`);
+        console.error(`[PROCESSING_ERROR] ERRO ao compor clip ${clipIndex}/${finalClips.length}`);
+        console.error(`[PROCESSING_ERROR] ========================================`);
+        console.error(`[PROCESSING_ERROR] Mensagem: ${compositionError.message}`);
+        console.error(`[PROCESSING_ERROR] Stack trace: ${compositionError.stack}`);
+        console.error(`[PROCESSING_ERROR] Clip path: ${clipPath}`);
+        console.error(`[PROCESSING_ERROR] Output path: ${finalClipPath}`);
+        console.error(`[PROCESSING_ERROR] ========================================`);
         console.error(`[PROCESSING] ⚠️ Tentando novamente a composição com tratamento de erro melhorado...`);
         
         // Tentar composição novamente com tratamento de erro mais robusto
@@ -1078,9 +1217,31 @@ export const generateVideoSeries = async (job, jobsMap) => {
       seriesId: seriesId
     });
 
-    console.log(`[PROCESSING] ✅ Série finalizada: ${finalClips.length} clips com layout final aplicado`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] ✅ SÉRIE FINALIZADA COM SUCESSO`);
+    console.log(`[PROCESSING] ========================================`);
     console.log(`[PROCESSING] SeriesId: ${seriesId}`);
     console.log(`[PROCESSING] ClipsCount: ${finalClips.length}`);
+    console.log(`[PROCESSING] Clipes finais criados:`);
+    
+    // VALIDAR todos os clipes finais antes de retornar
+    for (let i = 0; i < finalClips.length; i++) {
+      const finalClip = finalClips[i];
+      if (!fs.existsSync(finalClip)) {
+        const error = `[PROCESSING_ERROR] Clip final ${i + 1} não existe: ${finalClip}`;
+        console.error(error);
+        throw new Error(error);
+      }
+      const stats = fs.statSync(finalClip);
+      if (stats.size === 0) {
+        const error = `[PROCESSING_ERROR] Clip final ${i + 1} está vazio: ${finalClip}`;
+        console.error(error);
+        throw new Error(error);
+      }
+      console.log(`[PROCESSING]   ${i + 1}. ${finalClip} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+    }
+    
+    console.log(`[PROCESSING] ========================================`);
 
     const result = {
       seriesId,
@@ -1093,15 +1254,33 @@ export const generateVideoSeries = async (job, jobsMap) => {
       safeMargins
     };
     
-    console.log(`[PROCESSING] Retornando resultado:`, JSON.stringify({ ...result, clips: `[${finalClips.length} clips]` }));
+    console.log(`[PROCESSING] Retornando resultado para BullMQ:`, JSON.stringify({ ...result, clips: `[${finalClips.length} clips]` }));
+    console.log(`[PROCESSING] ========================================`);
     
     return result;
 
   } catch (error) {
-    console.error('❌ Erro ao gerar série:', error);
+    console.error('[PROCESSING_ERROR] ========================================');
+    console.error('[PROCESSING_ERROR] ERRO FATAL NA GERAÇÃO DE SÉRIE');
+    console.error('[PROCESSING_ERROR] ========================================');
+    console.error('[PROCESSING_ERROR] Mensagem:', error.message);
+    console.error('[PROCESSING_ERROR] Stack trace completo:', error.stack);
+    console.error('[PROCESSING_ERROR] Job ID:', job.id);
+    console.error('[PROCESSING_ERROR] Series ID:', jobData.seriesId);
+    console.error('[PROCESSING_ERROR] Video ID:', jobData.videoId);
+    console.error('[PROCESSING_ERROR] ========================================');
+    
+    // Log detalhes adicionais se disponíveis
+    if (error.code) {
+      console.error('[PROCESSING_ERROR] Código de erro:', error.code);
+    }
+    if (error.signal) {
+      console.error('[PROCESSING_ERROR] Signal:', error.signal);
+    }
 
     job.status = 'error';
     job.error = error.message;
+    job.failedAt = new Date();
 
     if (jobsMap) jobsMap.set(job.id, job);
     
@@ -1115,7 +1294,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
       error: error.message
     });
     
-    throw error;
+    // Criar erro detalhado para o BullMQ
+    const detailedError = new Error(`Erro ao gerar série de vídeo: ${error.message}\n\n` +
+                                   `Job ID: ${job.id}\n` +
+                                   `Series ID: ${jobData.seriesId}\n` +
+                                   `Video ID: ${jobData.videoId}\n` +
+                                   `Stack trace: ${error.stack}`);
+    detailedError.stack = error.stack;
+    
+    throw detailedError;
   }
 };
 

@@ -750,16 +750,48 @@ export async function composeFinalVideo({
         fixedBackgroundPath = null;
       }
       
+      // VALIDAR arquivo de entrada ANTES de construir comando FFmpeg
+      if (!fs.existsSync(clipPath)) {
+        const error = `[COMPOSER_ERROR] Arquivo de vídeo principal não existe: ${clipPath}`;
+        console.error(error);
+        return reject(new Error(error));
+      }
+      
+      const clipStats = fs.statSync(clipPath);
+      if (clipStats.size === 0) {
+        const error = `[COMPOSER_ERROR] Arquivo de vídeo principal está vazio: ${clipPath}`;
+        console.error(error);
+        return reject(new Error(error));
+      }
+      
+      console.log(`[COMPOSER] ✅ Vídeo principal validado: ${clipPath} (${(clipStats.size / 1024 / 1024).toFixed(2)} MB)`);
+      
       // Construir comando FFmpeg
       const command = ffmpeg();
+      
+      // Variáveis para capturar stderr e stdout do FFmpeg
+      let ffmpegStderr = '';
+      let ffmpegStdout = '';
 
       // Input 0: vídeo principal
       command.input(clipPath);
 
       // Input 1: Background fixo (se existir) - LAYER 0
       if (fixedBackgroundPath) {
-        command.input(fixedBackgroundPath);
-        console.log(`[COMPOSER] Background fixo adicionado como input 1: ${fixedBackgroundPath}`);
+        // VALIDAR background antes de adicionar
+        if (!fs.existsSync(fixedBackgroundPath)) {
+          console.warn(`[COMPOSER] ⚠️ Background fixo não existe: ${fixedBackgroundPath}. Continuando sem background.`);
+          fixedBackgroundPath = null;
+        } else {
+          const bgStats = fs.statSync(fixedBackgroundPath);
+          if (bgStats.size === 0) {
+            console.warn(`[COMPOSER] ⚠️ Background fixo está vazio: ${fixedBackgroundPath}. Continuando sem background.`);
+            fixedBackgroundPath = null;
+          } else {
+            command.input(fixedBackgroundPath);
+            console.log(`[COMPOSER] ✅ Background fixo validado e adicionado como input 1: ${fixedBackgroundPath} (${(bgStats.size / 1024).toFixed(2)} KB)`);
+          }
+        }
       }
 
       // Input 2 (ou 1 se não houver background): vídeo de retenção (OBRIGATÓRIO se especificado)
@@ -806,15 +838,27 @@ export async function composeFinalVideo({
         }
         
         if (retentionVideoPath && retentionStats) {
-          // Adicionar input do vídeo de retenção
-          // O vídeo será loopado automaticamente pelo FFmpeg no overlay se for mais curto
-          // usando shortest=0 no overlay (já configurado abaixo)
-          // Configurar loop infinito ANTES de adicionar o input
-          const retentionInput = command.input(retentionVideoPath);
-          retentionInput.inputOptions(['-stream_loop', '-1']); // Loopar vídeo de retenção infinitamente
-          console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${fixedBackgroundPath ? 2 : 1} com loop infinito: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
-          console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente durante toda a duração do vídeo principal`);
-          console.log(`[COMPOSER] ✅ Vídeo de retenção será concatenado/sobreposto ao final da timeline durante todo o render`);
+          // VALIDAR vídeo de retenção ANTES de adicionar
+          if (!fs.existsSync(retentionVideoPath)) {
+            console.warn(`[COMPOSER] ⚠️ Vídeo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+            retentionVideoPath = null;
+          } else {
+            const retentionStatsCheck = fs.statSync(retentionVideoPath);
+            if (retentionStatsCheck.size === 0) {
+              console.warn(`[COMPOSER] ⚠️ Vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
+              retentionVideoPath = null;
+            } else {
+              // Adicionar input do vídeo de retenção
+              // O vídeo será loopado automaticamente pelo FFmpeg no overlay se for mais curto
+              // usando shortest=0 no overlay (já configurado abaixo)
+              // Configurar loop infinito ANTES de adicionar o input
+              const retentionInput = command.input(retentionVideoPath);
+              retentionInput.inputOptions(['-stream_loop', '-1']); // Loopar vídeo de retenção infinitamente
+              console.log(`[COMPOSER] ✅ Vídeo de retenção validado e adicionado como input ${fixedBackgroundPath ? 2 : 1} com loop infinito: ${retentionVideoPath} (${(retentionStatsCheck.size / 1024 / 1024).toFixed(2)} MB)`);
+              console.log(`[COMPOSER] ✅ Vídeo de retenção será loopado automaticamente durante toda a duração do vídeo principal`);
+              console.log(`[COMPOSER] ✅ Vídeo de retenção será concatenado/sobreposto ao final da timeline durante todo o render`);
+            }
+          }
         }
       } else if (retentionVideoId && retentionVideoId !== 'none') {
         // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
@@ -951,14 +995,41 @@ export async function composeFinalVideo({
       // O complexFilter já força as dimensões através do [final] que tem 1080x1920
       command
         .on('start', (cmdline) => {
-          console.log('[COMPOSER] Comando iniciado');
+          console.log('[COMPOSER] ========================================');
+          console.log('[COMPOSER] INICIANDO COMPOSIÇÃO FINAL');
+          console.log('[COMPOSER] ========================================');
+          console.log('[FFMPEG_COMMAND] Comando FFmpeg completo:');
+          console.log('[FFMPEG_COMMAND]', cmdline);
+          console.log('[COMPOSER] Input 0 (vídeo principal):', clipPath);
+          if (fixedBackgroundPath) {
+            console.log('[COMPOSER] Input 1 (background):', fixedBackgroundPath);
+          }
+          if (retentionVideoPath) {
+            console.log(`[COMPOSER] Input ${fixedBackgroundPath ? 2 : 1} (retenção):`, retentionVideoPath);
+          }
+          console.log('[COMPOSER] Output:', outputPath);
           console.log(`[COMPOSER] ✅ Saída FORÇADA: 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
           console.log(`[COMPOSER] ✅ Aspect ratio FORÇADO: 9:16 (OBRIGATÓRIO)`);
           console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento aplicadas para garantir 1080x1920`);
           console.log(`[COMPOSER] Background fixo: ${fixedBackgroundPath ? 'SIM ✅' : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Headline: ${(headlineText || (headline && headline.text)) ? 'SIM ✅' : 'NÃO ❌'}`);
+          console.log(`[COMPOSER] Vídeo de retenção: ${retentionVideoPath ? 'SIM ✅' : 'NÃO ❌'}`);
+          console.log(`[COMPOSER] Legendas: ${captions && captions.length > 0 ? `${captions.length} blocos ✅` : 'NÃO ❌'}`);
           console.log(`[COMPOSER] Safe zones: topo ${safeZones.top}px, rodapé ${safeZones.bottom}px`);
-          console.log(`[COMPOSER] Comando FFmpeg: ${cmdline}`);
+          console.log('[COMPOSER] ========================================');
+        })
+        .on('stderr', (stderrLine) => {
+          // Capturar stderr do FFmpeg (contém warnings e erros)
+          ffmpegStderr += stderrLine + '\n';
+          // Log warnings importantes
+          if (stderrLine.includes('error') || stderrLine.includes('Error') || stderrLine.includes('ERROR') || 
+              stderrLine.includes('failed') || stderrLine.includes('Failed') || stderrLine.includes('FAILED')) {
+            console.error('[FFMPEG_ERROR] stderr:', stderrLine);
+          }
+        })
+        .on('stdout', (stdoutLine) => {
+          // Capturar stdout do FFmpeg
+          ffmpegStdout += stdoutLine + '\n';
         })
         .on('progress', (progress) => {
           if (progress.percent !== undefined && progress.percent !== null) {
@@ -970,14 +1041,32 @@ export async function composeFinalVideo({
           }
         })
         .on('end', () => {
+          console.log('[COMPOSER] Comando FFmpeg finalizado (end event)');
+          
+          // VALIDAR arquivo de saída ANTES de continuar
           if (!fs.existsSync(outputPath)) {
-            return reject(new Error('Arquivo de saída não foi criado'));
+            console.error('[COMPOSER_ERROR] ========================================');
+            console.error('[COMPOSER_ERROR] Arquivo de saída não foi criado');
+            console.error('[COMPOSER_ERROR] ========================================');
+            console.error('[COMPOSER_ERROR] Output path:', outputPath);
+            console.error('[COMPOSER_ERROR] FFmpeg stderr completo:', ffmpegStderr);
+            console.error('[COMPOSER_ERROR] FFmpeg stdout completo:', ffmpegStdout);
+            console.error('[COMPOSER_ERROR] ========================================');
+            return reject(new Error(`Arquivo de saída não foi criado: ${outputPath}. FFmpeg stderr: ${ffmpegStderr.slice(-1000)}`));
           }
 
           const stats = fs.statSync(outputPath);
           if (stats.size === 0) {
-            return reject(new Error('Arquivo de saída está vazio'));
+            console.error('[COMPOSER_ERROR] ========================================');
+            console.error('[COMPOSER_ERROR] Arquivo de saída está vazio');
+            console.error('[COMPOSER_ERROR] ========================================');
+            console.error('[COMPOSER_ERROR] Output path:', outputPath);
+            console.error('[COMPOSER_ERROR] FFmpeg stderr completo:', ffmpegStderr);
+            console.error('[COMPOSER_ERROR] ========================================');
+            return reject(new Error(`Arquivo de saída está vazio: ${outputPath}. FFmpeg stderr: ${ffmpegStderr.slice(-1000)}`));
           }
+          
+          console.log(`[COMPOSER] ✅ Arquivo de saída validado: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
           
           // VALIDAR resolução final do vídeo gerado
           ffmpeg.ffprobe(outputPath, (err, metadata) => {
@@ -1031,40 +1120,88 @@ export async function composeFinalVideo({
           resolve(outputPath);
         })
         .on('error', (err, stdout, stderr) => {
-          console.error('[COMPOSER] ❌ ERRO CRÍTICO no FFmpeg:', err.message);
-          console.error('[COMPOSER] Stack trace completo:', err.stack);
-          console.error('[COMPOSER] Código de saída:', err.code);
-          console.error('[COMPOSER] Signal:', err.signal);
-          console.error('[COMPOSER] Output path:', outputPath);
-          console.error('[COMPOSER] Filter complex (primeiros 1000 chars):', filterComplex.substring(0, 1000));
-          if (filterComplex.length > 1000) {
-            console.error('[COMPOSER] Filter complex (restante):', filterComplex.substring(1000));
-          }
-          console.error('[COMPOSER] Total de inputs:', inputCount);
-          console.error('[COMPOSER] Background fixo:', fixedBackgroundPath || 'NÃO');
-          console.error('[COMPOSER] Vídeo de retenção:', retentionVideoPath || 'NÃO');
-          console.error('[COMPOSER] Headline:', (headlineText || (headline && headline.text)) || 'NÃO');
+          // Capturar stderr completo
+          const fullStderr = stderr || ffmpegStderr || '';
+          const fullStdout = stdout || ffmpegStdout || '';
           
-          // Log stderr se disponível (contém detalhes do erro do FFmpeg)
-          if (stderr) {
-            console.error('[COMPOSER] FFmpeg stderr:', stderr);
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error('[COMPOSER_ERROR] ERRO CRÍTICO NO FFMPEG COMPOSIÇÃO');
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error('[COMPOSER_ERROR] Mensagem:', err.message);
+          console.error('[COMPOSER_ERROR] Código de saída:', err.code);
+          console.error('[COMPOSER_ERROR] Signal:', err.signal);
+          console.error('[COMPOSER_ERROR] Stack trace completo:', err.stack);
+          console.error('[COMPOSER_ERROR] Output path:', outputPath);
+          console.error('[COMPOSER_ERROR] Input 0 (vídeo principal):', clipPath);
+          if (fixedBackgroundPath) {
+            console.error('[COMPOSER_ERROR] Input 1 (background):', fixedBackgroundPath);
           }
-          if (stdout) {
-            console.error('[COMPOSER] FFmpeg stdout:', stdout);
+          if (retentionVideoPath) {
+            console.error(`[COMPOSER_ERROR] Input ${fixedBackgroundPath ? 2 : 1} (retenção):`, retentionVideoPath);
+          }
+          console.error('[COMPOSER_ERROR] Total de inputs:', inputCount);
+          console.error('[COMPOSER_ERROR] Background fixo:', fixedBackgroundPath || 'NÃO');
+          console.error('[COMPOSER_ERROR] Vídeo de retenção:', retentionVideoPath || 'NÃO');
+          console.error('[COMPOSER_ERROR] Headline:', (headlineText || (headline && headline.text)) || 'NÃO');
+          console.error('[COMPOSER_ERROR] Legendas:', captions && captions.length > 0 ? `${captions.length} blocos` : 'NÃO');
+          
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error('[COMPOSER_ERROR] FILTER COMPLEX COMPLETO:');
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error(filterComplex);
+          console.error('[COMPOSER_ERROR] ========================================');
+          
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error('[COMPOSER_ERROR] FFMPEG STDERR COMPLETO:');
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error(fullStderr);
+          console.error('[COMPOSER_ERROR] ========================================');
+          
+          if (fullStdout) {
+            console.error('[COMPOSER_ERROR] FFMPEG STDOUT:');
+            console.error(fullStdout);
           }
           
           // Verificar se arquivos de entrada ainda existem
-          if (clipPath && !fs.existsSync(clipPath)) {
-            console.error(`[COMPOSER] ❌ Arquivo de vídeo principal foi removido: ${clipPath}`);
+          console.error('[COMPOSER_ERROR] ========================================');
+          console.error('[COMPOSER_ERROR] VALIDAÇÃO DE ARQUIVOS DE ENTRADA:');
+          console.error('[COMPOSER_ERROR] ========================================');
+          if (clipPath) {
+            if (fs.existsSync(clipPath)) {
+              const stats = fs.statSync(clipPath);
+              console.error(`[COMPOSER_ERROR] ✅ Input 0 (vídeo principal) existe: ${clipPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+            } else {
+              console.error(`[COMPOSER_ERROR] ❌ Input 0 (vídeo principal) NÃO existe: ${clipPath}`);
+            }
           }
-          if (fixedBackgroundPath && !fs.existsSync(fixedBackgroundPath)) {
-            console.error(`[COMPOSER] ❌ Arquivo de background foi removido: ${fixedBackgroundPath}`);
+          if (fixedBackgroundPath) {
+            if (fs.existsSync(fixedBackgroundPath)) {
+              const stats = fs.statSync(fixedBackgroundPath);
+              console.error(`[COMPOSER_ERROR] ✅ Input 1 (background) existe: ${fixedBackgroundPath} (${(stats.size / 1024).toFixed(2)} KB)`);
+            } else {
+              console.error(`[COMPOSER_ERROR] ❌ Input 1 (background) NÃO existe: ${fixedBackgroundPath}`);
+            }
           }
-          if (retentionVideoPath && !fs.existsSync(retentionVideoPath)) {
-            console.error(`[COMPOSER] ❌ Arquivo de vídeo de retenção foi removido: ${retentionVideoPath}`);
+          if (retentionVideoPath) {
+            if (fs.existsSync(retentionVideoPath)) {
+              const stats = fs.statSync(retentionVideoPath);
+              console.error(`[COMPOSER_ERROR] ✅ Input ${fixedBackgroundPath ? 2 : 1} (retenção) existe: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+            } else {
+              console.error(`[COMPOSER_ERROR] ❌ Input ${fixedBackgroundPath ? 2 : 1} (retenção) NÃO existe: ${retentionVideoPath}`);
+            }
           }
+          console.error('[COMPOSER_ERROR] ========================================');
           
-          reject(new Error(`[COMPOSER] Erro no FFmpeg: ${err.message}. Verifique os logs acima para detalhes.`));
+          // Criar mensagem de erro detalhada
+          const detailedError = `[COMPOSER] Erro no FFmpeg durante composição: ${err.message}\n\n` +
+                               `Output: ${outputPath}\n` +
+                               `Input 0: ${clipPath}\n` +
+                               (fixedBackgroundPath ? `Input 1: ${fixedBackgroundPath}\n` : '') +
+                               (retentionVideoPath ? `Input ${fixedBackgroundPath ? 2 : 1}: ${retentionVideoPath}\n` : '') +
+                               `Filter complex (primeiros 500 chars): ${filterComplex.substring(0, 500)}\n` +
+                               `FFmpeg stderr (últimos 2000 chars):\n${fullStderr.slice(-2000)}`;
+          
+          reject(new Error(detailedError));
         })
         .save(outputPath);
     });
