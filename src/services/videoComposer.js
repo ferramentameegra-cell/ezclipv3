@@ -642,6 +642,8 @@ export async function composeFinalVideo({
         // Numeração SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
         // Sem enable= para aparecer em todos os frames, ou usar enable='gte(t,0)' para garantir
         const partTextEscaped = escapeText(partText);
+        // CORREÇÃO: Garantir que o label de saída seja válido
+        // Não usar [with_part_number] como final - será renomeado para [final] na etapa 8
         const partFilter = `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number]`;
         filterParts.push(partFilter);
         currentLabel = '[with_part_number]';
@@ -649,8 +651,10 @@ export async function composeFinalVideo({
         console.log(`[COMPOSER] Numeração posicionada no canto superior direito (x=${partX}, y=${partY}px)`);
         console.log(`[COMPOSER] Numeração sempre visível durante todo o vídeo (sem fade-out)`);
         console.log(`[COMPOSER] Fonte usada para numeração: ${finalPartFontPath}`);
+        console.log(`[COMPOSER] ✅ currentLabel atualizado para: ${currentLabel} (será renomeado para [final] na etapa 8)`);
       } else {
         console.log(`[COMPOSER] ⚠️ Numeração não será adicionada (clipNumber=${clipNumber}, totalClips=${totalClips})`);
+        console.log(`[COMPOSER] ✅ currentLabel mantido: ${currentLabel} (será renomeado para [final] na etapa 8)`);
       }
 
       // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
@@ -719,15 +723,31 @@ export async function composeFinalVideo({
         return reject(new Error('currentLabel não está definido - não é possível criar [final]'));
       }
       
-      // Usar force_original_aspect_ratio=increase para garantir que preencha todo o espaço
-      // Depois crop para garantir dimensões EXATAS 1080x1920 sem distorção
-      filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
-      // Crop para garantir dimensões EXATAS 1080x1920 (sem distorção, sem margem)
-      filterParts.push(`[final_scaled]crop=1080:1920:0:0[final]`);
+      // CORREÇÃO CRÍTICA: Garantir que [final] sempre seja criado
+      // Se currentLabel já é [final], não criar novamente (evitar duplicação)
+      // Caso contrário, criar [final] a partir do currentLabel atual
+      if (currentLabel === '[final]') {
+        // Se já é [final], apenas garantir dimensões
+        console.log(`[COMPOSER] ✅ currentLabel já é [final], garantindo dimensões 1080x1920`);
+        filterParts.push(`[final]scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
+        filterParts.push(`[final_scaled]crop=1080:1920:0:0[final]`);
+      } else {
+        // Usar force_original_aspect_ratio=increase para garantir que preencha todo o espaço
+        // Depois crop para garantir dimensões EXATAS 1080x1920 sem distorção
+        // IMPORTANTE: Sempre terminar com [final] para garantir que o mapeamento funcione
+        filterParts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=increase[final_scaled]`);
+        // Crop para garantir dimensões EXATAS 1080x1920 (sem distorção, sem margem)
+        // CRÍTICO: Este é o último filtro e DEVE produzir [final]
+        filterParts.push(`[final_scaled]crop=1080:1920:0:0[final]`);
+      }
+      
+      // Atualizar currentLabel para [final] para garantir consistência
+      currentLabel = '[final]';
+      
       console.log(`[COMPOSER] ✅ FORÇANDO resolução final para 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
       console.log(`[COMPOSER] ✅ Formato vertical garantido: scale=1080:1920:force_original_aspect_ratio=increase + crop=1080:1920:0:0`);
       console.log(`[COMPOSER] ✅ Dimensões finais EXATAS: 1080x1920 (sem exceções)`);
-      console.log(`[COMPOSER] ✅ Label [final] criado a partir de: ${currentLabel}`);
+      console.log(`[COMPOSER] ✅ Label [final] criado e garantido como último filtro`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso

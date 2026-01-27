@@ -1045,6 +1045,33 @@ export const generateVideoSeries = async (job, jobsMap) => {
         console.error(`[PROCESSING_ERROR] ========================================`);
         console.error(`[PROCESSING] ⚠️ Tentando novamente a composição com tratamento de erro melhorado...`);
         
+        // CORREÇÃO CRÍTICA: Garantir que clipCaptions esteja definida no escopo do catch
+        // Se o erro ocorreu antes da definição de clipCaptions, definir como array vazio
+        let retryClipCaptions = [];
+        try {
+          // Tentar recriar clipCaptions se captions estiver disponível
+          if (captions && Array.isArray(captions)) {
+            const clipStartTime = i * finalCutDuration;
+            const clipEndTime = (i + 1) * finalCutDuration;
+            
+            retryClipCaptions = captions.filter(
+              cap => cap.start < clipEndTime && cap.end > clipStartTime
+            ).map(cap => ({
+              ...cap,
+              start: Math.max(0, cap.start - clipStartTime),
+              end: Math.min(finalCutDuration, cap.end - clipStartTime)
+            })).filter(cap => cap.end > cap.start);
+            
+            console.log(`[PROCESSING] ✅ clipCaptions recriada para recuperação: ${retryClipCaptions.length} legendas`);
+          } else {
+            console.warn(`[PROCESSING] ⚠️ captions não disponível, usando array vazio para recuperação`);
+            retryClipCaptions = [];
+          }
+        } catch (captionsError) {
+          console.warn(`[PROCESSING] ⚠️ Erro ao recriar clipCaptions: ${captionsError.message}, usando array vazio`);
+          retryClipCaptions = [];
+        }
+        
         // Tentar composição novamente com tratamento de erro mais robusto
         try {
           console.log(`[PROCESSING] 🔄 Tentativa de recuperação: recompondo clip ${clipIndex}...`);
@@ -1066,7 +1093,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
             headline: retryClipHeadline,
             headlineStyle: headlineStyleObj,
             headlineText: headlineText,
-            captions: clipCaptions,
+            captions: retryClipCaptions, // Usar clipCaptions recriada no escopo do catch
             captionStyle: captionStyleObj,
             backgroundColor: backgroundColor,
             format: '9:16',
