@@ -2190,64 +2190,119 @@ async function downloadWithProgress(url) {
 }
 
 /**
- * Atualizar progresso do download sobre o thumbnail
+ * Atualizar progresso do download - barra de loading visível
  */
 function updateDownloadProgress(percent, message) {
-    const container = document.getElementById('video-player-container');
-    if (!container) return;
-    
-    // Encontrar ou criar overlay de progresso
-    let progressOverlay = container.querySelector('.download-progress-overlay');
-    if (!progressOverlay) {
-        progressOverlay = document.createElement('div');
-        progressOverlay.className = 'download-progress-overlay';
-        progressOverlay.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
+    // Criar ou atualizar barra de progresso visível abaixo do input
+    let progressContainer = document.getElementById('youtube-download-progress');
+    if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'youtube-download-progress';
+        progressContainer.className = 'youtube-download-progress';
+        progressContainer.style.cssText = `
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(18, 11, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(179, 140, 255, 0.3);
+            border-radius: 16px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            z-index: 10;
-            border-radius: 12px;
-            pointer-events: none;
+            gap: 1rem;
+            animation: slideDown 0.3s ease-out;
         `;
         
-        const preview = container.querySelector('.youtube-preview');
-        if (preview) {
-            preview.style.position = 'relative';
-            preview.appendChild(progressOverlay);
+        // Inserir após o input-group-large
+        const inputGroup = document.querySelector('#input-youtube .input-group-large');
+        if (inputGroup && inputGroup.parentNode) {
+            inputGroup.parentNode.insertBefore(progressContainer, inputGroup.nextSibling);
         } else {
-            container.appendChild(progressOverlay);
+            // Fallback: inserir no card do YouTube
+            const youtubeCard = document.querySelector('[data-step-card="youtube"]');
+            if (youtubeCard) {
+                youtubeCard.appendChild(progressContainer);
+            }
         }
     }
     
-    progressOverlay.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div style="font-size: 2rem; font-weight: 700; margin-bottom: 12px;">${Math.round(percent)}%</div>
-            <div style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 20px;">${message}</div>
-            <div style="width: 200px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden;">
-                <div style="width: ${percent}%; height: 100%; background: #4F46E5; transition: width 0.3s ease;"></div>
+    // Atualizar conteúdo da barra de progresso
+    progressContainer.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #EAEAF0;">
+                ${message || 'Baixando vídeo do YouTube...'}
+            </div>
+            <div style="font-size: 1rem; font-weight: 700; color: #B38CFF;">
+                ${Math.round(percent)}%
+            </div>
+        </div>
+        <div style="width: 100%; height: 12px; background: rgba(179, 140, 255, 0.2); border-radius: 8px; overflow: hidden; position: relative;">
+            <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, #B38CFF 0%, #FF6EC7 100%); border-radius: 8px; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 12px rgba(179, 140, 255, 0.5); position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 2s infinite;"></div>
             </div>
         </div>
     `;
+    
+    // Também atualizar overlay no player (se existir)
+    const container = document.getElementById('video-player-container');
+    if (container) {
+        let progressOverlay = container.querySelector('.download-progress-overlay');
+        if (!progressOverlay) {
+            progressOverlay = document.createElement('div');
+            progressOverlay.className = 'download-progress-overlay';
+            progressOverlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(15, 10, 31, 0.9);
+                backdrop-filter: blur(10px);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                z-index: 10;
+                border-radius: 12px;
+                pointer-events: none;
+            `;
+            container.appendChild(progressOverlay);
+        }
+        
+        progressOverlay.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <div style="font-size: 2rem; font-weight: 700; margin-bottom: 12px; background: linear-gradient(135deg, #B38CFF 0%, #FF6EC7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                    ${Math.round(percent)}%
+                </div>
+                <div style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 20px; color: #B8B6C9;">${message || 'Baixando...'}</div>
+                <div style="width: 200px; height: 6px; background: rgba(179, 140, 255, 0.2); border-radius: 3px; overflow: hidden;">
+                    <div style="width: ${percent}%; height: 100%; background: linear-gradient(90deg, #B38CFF 0%, #FF6EC7 100%); transition: width 0.3s ease; box-shadow: 0 0 8px rgba(179, 140, 255, 0.5);"></div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 /**
  * Limpar overlay de progresso
  */
 function clearDownloadProgress() {
-    const container = document.getElementById('video-player-container');
-    if (!container) return;
+    // Remover barra de progresso principal
+    const progressContainer = document.getElementById('youtube-download-progress');
+    if (progressContainer) {
+        progressContainer.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => {
+            progressContainer.remove();
+        }, 300);
+    }
     
-    const progressOverlay = container.querySelector('.download-progress-overlay');
-    if (progressOverlay) {
-        progressOverlay.remove();
+    // Remover overlay do player
+    const container = document.getElementById('video-player-container');
+    if (container) {
+        const progressOverlay = container.querySelector('.download-progress-overlay');
+        if (progressOverlay) {
+            progressOverlay.remove();
+        }
     }
 }
 
