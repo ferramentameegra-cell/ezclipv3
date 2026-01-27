@@ -407,6 +407,199 @@ export async function downloadWithProgress(req, res) {
     console.warn('[DOWNLOAD] Erro ao limpar cache:', cacheError.message);
   }
   
+  /**
+   * Lista todos os formatos disponíveis para um vídeo do YouTube
+   * Retorna array de formatos ordenados por qualidade (melhor primeiro)
+   */
+  async function listAvailableFormats(videoUrl, strategy) {
+    return new Promise((resolve, reject) => {
+      const cookiesPath = createCookiesFile();
+      const userAgent = getUserAgent();
+      const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent || userAgent;
+      
+      const listArgs = [
+        '--list-formats',
+        '--no-playlist',
+        '--no-warnings',
+        ...(cookiesPath ? ['--cookies', cookiesPath] : []),
+        '--user-agent', finalUserAgent,
+        '--referer', 'https://www.youtube.com/',
+        '--extractor-args', strategy.extractorArgs,
+        '--no-check-certificate',
+        videoUrl
+      ];
+      
+      const { executable, args } = buildYtDlpArgs(listArgs);
+      const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      ytdlp.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      ytdlp.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      ytdlp.on('close', (code) => {
+        if (code !== 0) {
+          console.warn(`[DOWNLOAD] ⚠️ Erro ao listar formatos com ${strategy.name}:`, stderr.slice(-200));
+          resolve([]); // Retornar array vazio em caso de erro
+          return;
+        }
+        
+        // Parsear formatos do stdout
+        const formats = [];
+        const lines = stdout.split('\n');
+        
+        for (const line of lines) {
+          // Formato: ID  EXT   RESOLUTION FPS │ FILESIZE   TBR PROTO │ VCODEC  VBR ACODEC      ABR ASR MORE INFO
+          // Exemplo: 18  mp4   640x360    30   │ 5.52MiB    396k https │ avc1.42001E  396k video only           │ 640x360    30 │ 396k https
+          const match = line.match(/^\s*(\d+)\s+(\w+)\s+([\dx]+)?\s*(\d+)?\s*\|/);
+          if (match) {
+            const formatId = match[1];
+            const ext = match[2];
+            const resolution = match[3] || 'unknown';
+            const fps = match[4] || '0';
+            
+            // Extrair codec e outras informações
+            const codecMatch = line.match(/avc1|vp9|av01|h264|h265/i);
+            const codec = codecMatch ? codecMatch[0].toLowerCase() : 'unknown';
+            
+            // Extrair filesize se disponível
+            const sizeMatch = line.match(/([\d.]+)\s*(MiB|KiB|GiB)/i);
+            const size = sizeMatch ? parseFloat(sizeMatch[1]) : 0;
+            const sizeUnit = sizeMatch ? sizeMatch[2].toUpperCase() : 'MB';
+            
+            // Calcular prioridade (maior resolução e melhor codec = maior prioridade)
+            let priority = 0;
+            if (resolution !== 'unknown') {
+              const [width, height] = resolution.split('x').map(Number);
+              if (width && height) {
+                priority += width * height; // Priorizar maior resolução
+              }
+            }
+            if (codec.includes('avc1') || codec.includes('h264')) priority += 10000; // Preferir H.264
+            if (ext === 'mp4') priority += 5000; // Preferir MP4
+            
+            formats.push({
+              id: formatId,
+              ext,
+              resolution,
+              fps: parseInt(fps) || 0,
+              codec,
+              size,
+              sizeUnit,
+              priority,
+              line: line.trim()
+            });
+          }
+        }
+        
+        // Ordenar por prioridade (maior primeiro)
+        formats.sort((a, b) => b.priority - a.priority);
+        
+        console.log(`[DOWNLOAD] ✅ Encontrados ${formats.length} formatos disponíveis com ${strategy.name}`);
+        if (formats.length > 0) {
+          console.log(`[DOWNLOAD] Melhores formatos: ${formats.slice(0, 5).map(f => `${f.id} (${f.resolution}, ${f.ext})`).join(', ')}`);
+        }
+        
+        resolve(formats);
+      });
+      
+      ytdlp.on('error', (error) => {
+        console.warn(`[DOWNLOAD] ⚠️ Erro ao executar list-formats: ${error.message}`);
+        resolve([]);
+      });
+    });
+  }
+  
+  /**
+   * Tenta fazer download usando um formato específico
+   */
+  async function tryDownloadWithFormat(videoUrl, outputTemplate, formatId, strategy) {
+    return new Promise((resolve, reject) => {
+      const cookiesPath = createCookiesFile();
+      const userAgent = getUserAgent();
+      const finalUserAgent = process.env.YTDLP_USER_AGENT || strategy.userAgent || userAgent;
+      
+      const downloadArgs = [
+        '-f', formatId,
+        '--merge-output-format', 'mp4',
+        '--no-playlist',
+        '--no-warnings',
+        '--newline',
+        ...(cookiesPath ? ['--cookies', cookiesPath] : []),
+        '--user-agent', finalUserAgent,
+        '--referer', 'https://www.youtube.com/',
+        '--extractor-args', strategy.extractorArgs,
+        '--no-check-certificate',
+        '--retries', '2',
+        '--fragment-retries', '2',
+        '-o', outputTemplate,
+        videoUrl
+      ];
+      
+      const { executable, args } = buildYtDlpArgs(downloadArgs);
+      const ytdlp = spawn(executable, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      
+      let stderr = '';
+      let stdout = '';
+      let hasResolved = false;
+      
+      ytdlp.stderr.on('data', (data) => {
+        stderr += data.toString();
+        const progressMatch = data.toString().match(/\[download\]\s+(\d{1,3}\.\d+)%/i);
+        if (progressMatch) {
+          const percent = Math.min(100, Math.max(0, parseFloat(progressMatch[1])));
+          res.write(`data: ${JSON.stringify({
+            progress: percent,
+            status: 'downloading',
+            state: 'downloading',
+            message: `Testando formato ${formatId} (${strategy.name})... ${percent.toFixed(1)}%`
+          })}\n\n`);
+        }
+      });
+      
+      ytdlp.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      ytdlp.on('close', (code) => {
+        if (hasResolved) return;
+        hasResolved = true;
+        
+        if (code === 0) {
+          // Procurar arquivo baixado
+          const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
+          const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
+          const videoId = path.basename(outputTemplate, '.%(ext)s');
+          
+          for (const ext of possibleExtensions) {
+            const testPath = path.join(uploadsDir, `${videoId}.${ext}`);
+            if (fs.existsSync(testPath)) {
+              const stats = fs.statSync(testPath);
+              if (stats.size > 0) {
+                resolve({ success: true, filePath: testPath, formatId, strategy: strategy.name });
+                return;
+              }
+            }
+          }
+        }
+        
+        reject({ code, stderr, stdout, formatId, strategy: strategy.name });
+      });
+      
+      ytdlp.on('error', (error) => {
+        if (hasResolved) return;
+        hasResolved = true;
+        reject({ error: error.message, formatId, strategy: strategy.name });
+      });
+    });
+  }
+  
   // ESTRATÉGIAS MÚLTIPLAS PARA CONTORNAR ERRO 403
   // Tentar com diferentes clientes do YouTube em ordem de prioridade
   // Verificar se há cookies disponíveis para usar android_with_cookies (mais confiável)
@@ -812,30 +1005,99 @@ export async function downloadWithProgress(req, res) {
     }
   }
   
-  // Se nenhuma estratégia funcionou
+  // Se nenhuma estratégia funcionou, tentar listar e testar TODOS os formatos disponíveis
   if (!downloadResult) {
-    // Limpar arquivo de cookies apenas no final se todas as estratégias falharam
-    if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+    console.log('[DOWNLOAD] 🔄 Todas as estratégias padrão falharam. Listando TODOS os formatos disponíveis...');
+    
+    // Tentar com cada estratégia para listar formatos
+    let allFormats = [];
+    for (const strategy of strategies) {
       try {
-        fs.unlinkSync(cookiesPathCache);
-        console.log('[DOWNLOAD] Arquivo de cookies removido após falha de todas as estratégias');
-      } catch (unlinkError) {
-        console.warn('[DOWNLOAD] Erro ao remover cookies:', unlinkError.message);
+        const formats = await listAvailableFormats(cleanUrl, strategy);
+        if (formats.length > 0) {
+          console.log(`[DOWNLOAD] ✅ Encontrados ${formats.length} formatos com ${strategy.name}`);
+          // Adicionar estratégia a cada formato para rastreamento
+          formats.forEach(f => f.strategy = strategy);
+          allFormats.push(...formats);
+        }
+      } catch (error) {
+        console.warn(`[DOWNLOAD] ⚠️ Erro ao listar formatos com ${strategy.name}:`, error.message);
       }
-      cookiesPathCache = null;
-      cookiesContentCache = null;
     }
     
-    const errorMessage = parseYtDlpError(lastError?.stderr || '', lastError?.code || 1);
-    console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam. Último erro: ${errorMessage}`);
+    // Remover duplicatas (mesmo formatId)
+    const uniqueFormats = [];
+    const seenIds = new Set();
+    for (const format of allFormats) {
+      if (!seenIds.has(format.id)) {
+        seenIds.add(format.id);
+        uniqueFormats.push(format);
+      }
+    }
     
-    res.write(`data: ${JSON.stringify({
-      success: false,
-      error: errorMessage,
-      state: "error"
-    })}\n\n`);
-    res.end();
-    return;
+    // Ordenar por prioridade
+    uniqueFormats.sort((a, b) => b.priority - a.priority);
+    
+    console.log(`[DOWNLOAD] 📋 Total de ${uniqueFormats.length} formatos únicos encontrados. Testando cada um...`);
+    
+    // Testar cada formato até encontrar um que funcione
+    for (const format of uniqueFormats) {
+      try {
+        console.log(`[DOWNLOAD] 🧪 Testando formato ${format.id} (${format.resolution}, ${format.ext}, ${format.codec}) com ${format.strategy.name}...`);
+        
+        res.write(`data: ${JSON.stringify({
+          progress: 0,
+          status: 'testing',
+          state: 'testing',
+          message: `Testando formato ${format.id} (${format.resolution})...`
+        })}\n\n`);
+        
+        const result = await tryDownloadWithFormat(cleanUrl, outputTemplate, format.id, format.strategy);
+        
+        if (result.success) {
+          console.log(`[DOWNLOAD] ✅ SUCESSO com formato ${format.id} (${format.resolution}, ${format.ext}) usando ${format.strategy.name}!`);
+          downloadResult = {
+            success: true,
+            strategy: `${format.strategy.name} (formato ${format.id})`,
+            filePath: result.filePath
+          };
+          break;
+        }
+      } catch (error) {
+        console.warn(`[DOWNLOAD] ⚠️ Formato ${format.id} falhou:`, error.code || error.error);
+        // Continuar para próximo formato
+      }
+      
+      // Pequeno delay entre tentativas
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Se ainda não funcionou após testar todos os formatos
+    if (!downloadResult) {
+      // Limpar arquivo de cookies apenas no final se todas as estratégias falharam
+      if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+        try {
+          fs.unlinkSync(cookiesPathCache);
+          console.log('[DOWNLOAD] Arquivo de cookies removido após falha de todas as estratégias');
+        } catch (unlinkError) {
+          console.warn('[DOWNLOAD] Erro ao remover cookies:', unlinkError.message);
+        }
+        cookiesPathCache = null;
+        cookiesContentCache = null;
+      }
+      
+      const errorMessage = parseYtDlpError(lastError?.stderr || '', lastError?.code || 1);
+      console.error(`[DOWNLOAD] ❌ Todos os formatos testados falharam. Último erro: ${errorMessage}`);
+      console.error(`[DOWNLOAD] ❌ Total de formatos testados: ${uniqueFormats.length}`);
+      
+      res.write(`data: ${JSON.stringify({
+        success: false,
+        error: `Nenhum formato disponível funcionou. ${errorMessage}`,
+        state: "error"
+      })}\n\n`);
+      res.end();
+      return;
+    }
   }
   
   // Limpar arquivo de cookies após sucesso
