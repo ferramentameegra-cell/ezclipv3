@@ -4524,9 +4524,33 @@ async function monitorProgress(jobId) {
                     progressText.textContent = `${progress}%`;
                 }
                 
+                // Atualizar informações de clipes (fallback)
+                const currentClipNumber = document.getElementById('current-clip-number');
+                const totalClipsNumber = document.getElementById('total-clips-number');
+                const clipsProgressText = document.getElementById('clips-progress-text');
+                
+                if (currentClipNumber && data.currentClip) {
+                    currentClipNumber.textContent = data.currentClip;
+                }
+                if (totalClipsNumber && data.totalClips) {
+                    totalClipsNumber.textContent = data.totalClips;
+                }
+                if (clipsProgressText) {
+                    if (data.totalClips > 0 && data.currentClip > 0) {
+                        clipsProgressText.textContent = `${data.currentClip} / ${data.totalClips}`;
+                    } else {
+                        clipsProgressText.textContent = '0 / 0';
+                    }
+                }
+                
+                // Atualizar etapas do processamento (fallback)
+                if (data.message) {
+                    updateProcessingSteps(data.message, data.currentClip || 0, data.totalClips || 0);
+                }
+                
                 // Mensagem genérica quando usando fallback
                 if (progressMessage && !progressMessage.textContent) {
-                    progressMessage.textContent = 'Processando...';
+                    progressMessage.textContent = data.message || 'Processando...';
                 }
                 
                 // Verificar conclusão
