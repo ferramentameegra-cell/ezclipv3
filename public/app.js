@@ -4235,6 +4235,17 @@ async function monitorProgress(jobId) {
     const progressText = document.getElementById('loading-percent');
     const progressMessage = document.getElementById('loading-message');
     
+    // Garantir que elementos existem
+    if (!progressFill || !progressText || !progressMessage) {
+        console.error('[GENERATE] Elementos de progresso não encontrados!');
+        return;
+    }
+    
+    // Inicializar progresso
+    progressFill.style.width = '0%';
+    progressText.textContent = '0%';
+    progressMessage.textContent = 'Iniciando processamento...';
+    
     console.log(`[GENERATE] Iniciando monitoramento via SSE do job ${jobId}`);
     
     // Fallback para polling se SSE não estiver disponível
@@ -4262,6 +4273,17 @@ async function monitorProgress(jobId) {
             try {
                 const data = JSON.parse(event.data);
                 console.log(`[GENERATE-SSE] Evento recebido:`, data);
+                
+                // Atualizar progresso visual IMEDIATAMENTE
+                if (data.progress !== undefined) {
+                    const progress = Math.min(100, Math.max(0, data.progress));
+                    if (progressFill) progressFill.style.width = `${progress}%`;
+                    if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+                }
+                
+                if (data.message) {
+                    if (progressMessage) progressMessage.textContent = data.message;
+                }
                 
                 const {
                     status,
@@ -4369,6 +4391,13 @@ async function monitorProgress(jobId) {
                 
                 if (progress !== lastProgress || status !== 'processing') {
                     console.log(`[GENERATE-POLL] Progresso: ${lastProgress}% -> ${progress}% | Status: ${status}`);
+                    
+                    // Atualizar progresso visual
+                    if (progressFill) progressFill.style.width = `${progress}%`;
+                    if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+                    if (progressMessage && data.message) {
+                        progressMessage.textContent = data.message;
+                    }
                     lastProgress = progress;
                 }
                 
