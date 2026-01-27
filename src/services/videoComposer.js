@@ -526,6 +526,8 @@ export async function composeFinalVideo({
       // 5. Adicionar vídeo de retenção (OPCIONAL - não bloquear geração se não disponível)
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
       // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
+      let retentionStats = null;
+      
       if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
         console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não encontrado. Continuando sem vídeo de retenção.`);
         retentionVideoPath = null; // Continuar sem vídeo de retenção
@@ -537,31 +539,18 @@ export async function composeFinalVideo({
           console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
           retentionVideoPath = null; // Continuar sem vídeo de retenção
         } else {
-          const retentionStats = fs.statSync(retentionVideoPath);
-          if (retentionStats.size === 0) {
-            console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
-            retentionVideoPath = null; // Continuar sem vídeo de retenção
-          }
-        }
-      }
-      
-      if (retentionVideoPath) {
-        // Validar novamente antes de usar no ffmpeg
-        let retentionStats = null;
-        try {
-          if (!fs.existsSync(retentionVideoPath)) {
-            console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
-            retentionVideoPath = null;
-          } else {
+          try {
             retentionStats = fs.statSync(retentionVideoPath);
             if (retentionStats.size === 0) {
               console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
-              retentionVideoPath = null;
+              retentionVideoPath = null; // Continuar sem vídeo de retenção
+              retentionStats = null;
             }
+          } catch (error) {
+            console.error(`[COMPOSER] ❌ Erro ao validar vídeo de retenção: ${error.message}. Continuando sem vídeo de retenção.`);
+            retentionVideoPath = null;
+            retentionStats = null;
           }
-        } catch (error) {
-          console.error(`[COMPOSER] ❌ Erro ao validar vídeo de retenção: ${error.message}. Continuando sem vídeo de retenção.`);
-          retentionVideoPath = null;
         }
       }
       
