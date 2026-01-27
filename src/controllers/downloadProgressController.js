@@ -953,7 +953,7 @@ export async function downloadWithProgress(req, res) {
   let downloadResult = null;
   
   for (const strategy of strategies) {
-    if (downloadResult) break;
+    if (downloadResult && downloadResult.success) break;
     
     try {
       console.log(`[DOWNLOAD] Tentando estratégia: ${strategy.name}`);
@@ -964,8 +964,9 @@ export async function downloadWithProgress(req, res) {
         message: `Tentando download com ${strategy.name}...`
       })}\n\n`);
       
-      downloadResult = await tryDownloadWithStrategy(strategy);
-      if (downloadResult) {
+      const result = await tryDownloadWithStrategy(strategy);
+      if (result && result.success) {
+        downloadResult = result;
         console.log(`[DOWNLOAD] ✅ Download bem-sucedido com ${strategy.name}`);
         break;
       }
@@ -1101,7 +1102,7 @@ export async function downloadWithProgress(req, res) {
   }
   
   // Se todas as estratégias falharam
-  if (!downloadResult) {
+  if (!downloadResult || !downloadResult.success) {
     // Limpar arquivo de cookies
     if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
       try {
