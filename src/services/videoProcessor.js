@@ -523,6 +523,92 @@ export const generateVideoSeries = async (job, jobsMap) => {
     
     console.log(`[PROCESSING] Clipes gerados: ${finalClips.length} (solicitado: ${finalNumberOfCuts || 'automático'})`);
 
+    // ===============================
+    // GERAR CLIPES DE RETENÇÃO AUTOMATICAMENTE
+    // ===============================
+    let retentionClips = [];
+    let retentionVideoPath = null;
+    
+    // Obter vídeo de retenção se especificado
+    if (retentionVideoId && retentionVideoId !== 'none') {
+      try {
+        if (retentionVideoId === 'niche-default' && nicheId) {
+          // Usar vídeo de retenção do nicho (será baixado automaticamente se necessário)
+          const { getNicheRetentionVideo } = await import('./retentionVideoManager.js');
+          console.log(`[PROCESSING] 📥 Obtendo vídeo de retenção do nicho ${nicheId} para gerar clipes...`);
+          retentionVideoPath = await getNicheRetentionVideo(nicheId);
+        } else {
+          // Sistema legado
+          const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
+          retentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
+        }
+        
+        if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
+          const stats = fs.statSync(retentionVideoPath);
+          if (stats.size > 0) {
+            console.log(`[PROCESSING] ✅ Vídeo de retenção encontrado: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+            console.log(`[PROCESSING] 🎬 Gerando clipes de retenção com os mesmos intervalos do vídeo principal...`);
+            
+            // Criar diretório para clipes de retenção
+            const retentionClipsDir = path.join(seriesPath, 'retention-clips');
+            if (!fs.existsSync(retentionClipsDir)) {
+              fs.mkdirSync(retentionClipsDir, { recursive: true });
+            }
+            
+            // Gerar clipes de retenção com os mesmos intervalos
+            // Calcular intervalos dos clipes principais
+            const clipIntervals = [];
+            for (let i = 0; i < finalClips.length; i++) {
+              const clipStart = actualStartTime + (i * finalCutDuration);
+              const clipEnd = clipStart + finalCutDuration;
+              clipIntervals.push({ start: clipStart, end: clipEnd, index: i });
+            }
+            
+            console.log(`[PROCESSING] Gerando ${clipIntervals.length} clipes de retenção com intervalos:`, clipIntervals.map(ci => `${ci.start.toFixed(2)}s-${ci.end.toFixed(2)}s`).join(', '));
+            
+            // Gerar cada clip de retenção usando FFmpeg
+            for (const interval of clipIntervals) {
+              const retentionClipPath = path.join(
+                retentionClipsDir,
+                `retention_clip_${String(interval.index + 1).padStart(3, '0')}.mp4`
+              );
+              
+              console.log(`[PROCESSING] Gerando clip de retenção ${interval.index + 1}/${clipIntervals.length}: ${interval.start.toFixed(2)}s - ${interval.end.toFixed(2)}s`);
+              
+              try {
+                await trimVideo(retentionVideoPath, retentionClipPath, interval.start, interval.end);
+                
+                // Validar clip gerado
+                if (fs.existsSync(retentionClipPath)) {
+                  const clipStats = fs.statSync(retentionClipPath);
+                  if (clipStats.size > 0) {
+                    retentionClips.push(retentionClipPath);
+                    console.log(`[PROCESSING] ✅ Clip de retenção ${interval.index + 1} gerado: ${(clipStats.size / 1024 / 1024).toFixed(2)} MB`);
+                  } else {
+                    console.warn(`[PROCESSING] ⚠️ Clip de retenção ${interval.index + 1} está vazio`);
+                  }
+                } else {
+                  console.warn(`[PROCESSING] ⚠️ Clip de retenção ${interval.index + 1} não foi criado`);
+                }
+              } catch (clipError) {
+                console.error(`[PROCESSING] ❌ Erro ao gerar clip de retenção ${interval.index + 1}: ${clipError.message}`);
+                // Continuar mesmo se um clip falhar
+              }
+            }
+            
+            console.log(`[PROCESSING] ✅ ${retentionClips.length}/${clipIntervals.length} clipes de retenção gerados com sucesso`);
+          } else {
+            console.warn(`[PROCESSING] ⚠️ Vídeo de retenção está vazio, pulando geração de clipes`);
+          }
+        } else {
+          console.warn(`[PROCESSING] ⚠️ Vídeo de retenção não encontrado, pulando geração de clipes`);
+        }
+      } catch (retentionError) {
+        console.error(`[PROCESSING] ❌ Erro ao gerar clipes de retenção: ${retentionError.message}`);
+        // Continuar mesmo se houver erro na geração de clipes de retenção
+      }
+    }
+
     // Atualizar progresso após gerar clipes
     if (typeof job.progress === 'function') {
       await job.progress(60);
@@ -535,7 +621,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
     updateProgressEvent(job.id, {
       status: 'processing',
       progress: 60,
-      message: `${finalClips.length} clipe(s) gerado(s), iniciando composição...`,
+      message: `${finalClips.length} clipe(s) gerado(s)${retentionClips.length > 0 ? ` + ${retentionClips.length} clipe(s) de retenção` : ''}, iniciando composição...`,
       totalClips: finalClips.length,
       currentClip: 0
     });
@@ -667,40 +753,9 @@ export const generateVideoSeries = async (job, jobsMap) => {
       message: `Iniciando composição de ${finalClips.length} clipes...`
     });
 
-    // Definir retentionVideoPath uma vez antes do loop (para evitar problemas de escopo)
-    // IMPORTANTE: Se retentionVideoId é 'niche-default' ou 'random', usar vídeo do nicho (será baixado automaticamente)
-    let currentRetentionVideoPath = null;
-    try {
-      // Tentar obter caminho do vídeo de retenção se especificado
-      if (retentionVideoId && retentionVideoId !== 'none') {
-        if (retentionVideoId === 'niche-default' && nicheId) {
-          // Usar vídeo de retenção do nicho (será baixado automaticamente se necessário)
-          const { getNicheRetentionVideo } = await import('./retentionVideoManager.js');
-          console.log(`[PROCESSING] 📥 Obtendo vídeo de retenção do nicho ${nicheId} (será baixado se necessário)...`);
-          currentRetentionVideoPath = await getNicheRetentionVideo(nicheId);
-          if (currentRetentionVideoPath && fs.existsSync(currentRetentionVideoPath)) {
-            const stats = fs.statSync(currentRetentionVideoPath);
-            if (stats.size > 0) {
-              console.log(`[PROCESSING] ✅ Vídeo de retenção do nicho obtido: ${currentRetentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-            } else {
-              console.warn(`[PROCESSING] ⚠️ Vídeo de retenção do nicho está vazio, continuando sem vídeo de retenção`);
-              currentRetentionVideoPath = null;
-            }
-          } else {
-            console.warn(`[PROCESSING] ⚠️ Vídeo de retenção do nicho não encontrado, continuando sem vídeo de retenção`);
-            currentRetentionVideoPath = null;
-          }
-        } else {
-          // Sistema legado
-          const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
-          currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
-          console.log(`[PROCESSING] Vídeo de retenção para todos os clipes: ${currentRetentionVideoPath || 'não encontrado (continuando sem vídeo de retenção)'}`);
-        }
-      }
-    } catch (retentionError) {
-      console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção: ${retentionError.message}. Continuando sem vídeo de retenção.`);
-      currentRetentionVideoPath = null; // Garantir que seja null se houver erro
-    }
+    // Usar clipes de retenção gerados automaticamente se disponíveis
+    // Se não houver clipes de retenção, usar vídeo completo (fallback)
+    console.log(`[PROCESSING] Clipes de retenção disponíveis: ${retentionClips.length}/${finalClips.length}`);
 
     for (let i = 0; i < finalClips.length; i++) {
       const clipPath = finalClips[i];
@@ -722,6 +777,17 @@ export const generateVideoSeries = async (job, jobsMap) => {
         seriesPath,
         `clip_${String(clipIndex).padStart(3, '0')}_final.mp4`
       );
+
+      // Usar clip de retenção correspondente se disponível, senão usar vídeo completo
+      let currentRetentionVideoPath = null;
+      if (retentionClips.length > i && retentionClips[i] && fs.existsSync(retentionClips[i])) {
+        currentRetentionVideoPath = retentionClips[i];
+        console.log(`[PROCESSING] ✅ Usando clip de retenção ${clipIndex}: ${currentRetentionVideoPath}`);
+      } else if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
+        // Fallback: usar vídeo completo se clip não estiver disponível
+        currentRetentionVideoPath = retentionVideoPath;
+        console.log(`[PROCESSING] ⚠️ Clip de retenção ${clipIndex} não disponível, usando vídeo completo como fallback`);
+      }
 
       try {
         // Filtrar legendas para este clip específico
