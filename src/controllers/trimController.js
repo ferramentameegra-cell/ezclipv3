@@ -1,5 +1,6 @@
 import { trimVideo as trimVideoService } from '../services/videoTrimmer.js';
 import { videoStore } from './downloadProgressController.js';
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,8 +8,6 @@ import { getVideoState, VIDEO_STATES } from '../services/videoStateManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 /**
  * POST /api/trim
@@ -78,7 +77,9 @@ export const applyTrim = async (req, res) => {
     }
 
     // Aplicar trim
-    const trimmedPath = path.join(TMP_UPLOADS_DIR, `${videoId}_trimmed.mp4`);
+    // Usar STORAGE_CONFIG para caminho correto
+    const trimmedPath = STORAGE_CONFIG.getTrimmedVideoPath(videoId);
+    console.log(`[TRIM_DEBUG] Salvando vídeo trimado em: ${trimmedPath}`);
     
     console.log(`[TRIM] Aplicando trim: ${start}s - ${end}s em ${video.path}`);
     

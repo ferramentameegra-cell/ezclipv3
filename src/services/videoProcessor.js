@@ -88,6 +88,16 @@ export const generateVideoSeries = async (job, jobsMap) => {
         STORAGE_CONFIG.getTrimmedVideoPath(videoId), // Vídeo trimado
       ];
       
+      // Logs de debug
+      console.log(`[SEARCH_DEBUG] Procurando vídeo ${videoId} nos seguintes caminhos:`);
+      possiblePaths.forEach(p => {
+        const exists = fs.existsSync(p);
+        const size = exists ? fs.statSync(p).size : 0;
+        console.log(`[SEARCH_DEBUG]   - ${p} (existe: ${exists}, tamanho: ${(size / 1024 / 1024).toFixed(2)} MB)`);
+      });
+      console.log(`[SEARCH_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
+      console.log(`[SEARCH_DEBUG] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+      
       // Tentar encontrar arquivo existente
       let foundPath = null;
       for (const possiblePath of possiblePaths) {

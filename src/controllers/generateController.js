@@ -67,10 +67,41 @@ export const generateSeries = async (req, res) => {
     }
 
     const videoPath = STORAGE_CONFIG.getVideoPath(videoId);
+    
+    // Logs de debug para rastrear o problema
+    console.log(`[SEARCH_DEBUG] Procurando vídeo em: ${videoPath}`);
+    console.log(`[SEARCH_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
+    console.log(`[SEARCH_DEBUG] Arquivo existe? ${fs.existsSync(videoPath)}`);
+    
+    // Tentar múltiplos caminhos possíveis antes de falhar
+    const possiblePaths = [
+      videoPath,
+      STORAGE_CONFIG.getDownloadedVideoPath(videoId),
+      STORAGE_CONFIG.getTrimmedVideoPath(videoId),
+    ];
+    
+    let foundPath = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        const stats = fs.statSync(possiblePath);
+        if (stats.size > 0) {
+          foundPath = possiblePath;
+          console.log(`[SEARCH_DEBUG] ✅ Vídeo encontrado em: ${foundPath}`);
+          break;
+        }
+      }
+    }
 
-    if (!fs.existsSync(videoPath)) {
+    if (!foundPath) {
+      console.error(`[SEARCH_DEBUG] ❌ Vídeo não encontrado em nenhum dos caminhos:`);
+      possiblePaths.forEach(p => console.error(`[SEARCH_DEBUG]   - ${p} (existe: ${fs.existsSync(p)})`));
       return res.status(404).json({
-        error: `Vídeo não encontrado em ${videoPath}`
+        error: `Vídeo não encontrado em ${videoPath}`,
+        searchedPaths: possiblePaths,
+        storageConfig: {
+          UPLOADS_DIR: STORAGE_CONFIG.UPLOADS_DIR,
+          BASE_DIR: process.env.NODE_ENV === 'production' ? '/tmp' : 'development'
+        }
       });
     }
 

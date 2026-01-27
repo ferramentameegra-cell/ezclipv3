@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { downloadYouTubeVideo, isVideoDownloaded } from '../services/youtubeDownloader.js';
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,7 +127,11 @@ export const processVideo = async (req, res) => {
         console.error('Todas as tentativas falharam, usando fallback:', errorDetails);
         
         const storedVideoId = uuidv4();
-        const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
+        // Usar STORAGE_CONFIG para caminho correto
+        const videoPath = STORAGE_CONFIG.getVideoPath(storedVideoId);
+        
+        console.log(`[VIDEO_CONTROLLER_DEBUG] Salvando vídeo em: ${videoPath}`);
+        console.log(`[VIDEO_CONTROLLER_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
         
         // Criar diretório se não existir
         const uploadDir = path.dirname(videoPath);
@@ -172,7 +177,11 @@ export const processVideo = async (req, res) => {
     }
 
     const storedVideoId = uuidv4();
-    const videoPath = path.join(__dirname, '../../uploads', `${storedVideoId}.mp4`);
+    // Usar STORAGE_CONFIG para caminho correto
+    const videoPath = STORAGE_CONFIG.getVideoPath(storedVideoId);
+    
+    console.log(`[VIDEO_CONTROLLER_DEBUG] Salvando vídeo em: ${videoPath}`);
+    console.log(`[VIDEO_CONTROLLER_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
 
     // Criar diretório se não existir
     const uploadDir = path.dirname(videoPath);

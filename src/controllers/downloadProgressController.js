@@ -338,17 +338,18 @@ export async function downloadWithProgress(req, res) {
       progress: 0
     })}\n\n`);
 
-  // Criar diretório
-  const uploadsDir = "/tmp/uploads";
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
+  // Usar STORAGE_CONFIG para caminhos centralizados
+  const { STORAGE_CONFIG } = await import('../config/storage.config.js');
+  
   const videoId = uuidv4();
+  // Usar STORAGE_CONFIG para obter caminho correto
+  const outputPath = STORAGE_CONFIG.getVideoPath(videoId);
   // Usar placeholder genérico - yt-dlp adicionará extensão correta
-  const outputTemplate = path.join(uploadsDir, `${videoId}.%(ext)s`);
-  const outputPath = path.join(uploadsDir, `${videoId}.mp4`); // Fallback para compatibilidade
+  const outputTemplate = outputPath.replace('.mp4', '.%(ext)s');
 
+  // Logs de debug
+  console.log(`[DOWNLOAD_DEBUG] Salvando vídeo em: ${outputPath}`);
+  console.log(`[DOWNLOAD_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
   console.log(`[DOWNLOAD] Iniciando: ${cleanUrl} -> ${outputPath}`);
 
   // Detectar comando yt-dlp disponível ANTES de iniciar o processo

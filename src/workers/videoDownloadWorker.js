@@ -1,13 +1,9 @@
 import { videoDownloadQueue } from '../queue/queue.js';
 import { downloadYouTubeVideo } from '../services/youtubeDownloader.js';
 import { videoStore } from '../controllers/downloadProgressController.js';
+import { STORAGE_CONFIG } from '../config/storage.config.js';
 import fs from 'fs';
 import path from 'path';
-
-/**
- * Diretório TEMPORÁRIO seguro no Railway
- */
-const TMP_UPLOADS_DIR = '/tmp/uploads';
 
 /**
  * Worker para processar downloads de vídeos do YouTube
@@ -15,15 +11,18 @@ const TMP_UPLOADS_DIR = '/tmp/uploads';
 videoDownloadQueue.process('download-youtube-video', async (job) => {
   const { videoId, youtubeVideoId } = job.data;
 
-  const videoPath = path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`);
+  // Usar STORAGE_CONFIG para caminho correto
+  const videoPath = STORAGE_CONFIG.getVideoPath(videoId);
 
   console.log(`[WORKER] Download iniciado: ${youtubeVideoId}`);
-  console.log(`[WORKER] Salvando em: ${videoPath}`);
+  console.log(`[WORKER_DEBUG] Salvando vídeo em: ${videoPath}`);
+  console.log(`[WORKER_DEBUG] STORAGE_CONFIG.UPLOADS_DIR: ${STORAGE_CONFIG.UPLOADS_DIR}`);
 
   try {
     // Garantir diretório
-    if (!fs.existsSync(TMP_UPLOADS_DIR)) {
-      fs.mkdirSync(TMP_UPLOADS_DIR, { recursive: true });
+    const uploadsDir = STORAGE_CONFIG.UPLOADS_DIR;
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
     await job.progress(5);
