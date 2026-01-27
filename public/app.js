@@ -63,21 +63,16 @@ class ApiClient {
       });
 
       // Tratar erros de autenticação
+      // NÃO limpar sessão automaticamente - manter usuário conectado
+      // Apenas logar o erro mas não deslogar o usuário
       if (response.status === 401 || response.status === 403) {
-        // Token expirado ou inválido - limpar autenticação mas NÃO bloquear interface
-        console.warn('[API] Token inválido ou expirado, limpando autenticação...');
-        appState.currentUser = null;
-        appState.userToken = null;
-        appState.userVideos = null;
-        localStorage.removeItem('ezv2_user');
-        localStorage.removeItem('ezv2_token');
-        updateUserUI();
-        updateGenerateButtonState();
-        
-        // NÃO bloquear interface - usuário pode continuar usando a plataforma
+        // Token pode ter expirado, mas NÃO limpar sessão automaticamente
+        // Manter token no localStorage para tentar novamente depois
+        console.warn('[API] Token pode ter expirado, mas mantendo sessão ativa...');
+        // NÃO limpar localStorage - manter usuário conectado
         // Apenas lançar erro para que a função chamadora trate
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Autenticação obrigatória. Faça login para continuar.');
+        throw new Error(errorData.error || 'Erro de autenticação. Tente novamente.');
       }
       
       // Tratar erros de limite de vídeos
@@ -431,8 +426,10 @@ async function checkAuth() {
             }
         } catch (error) {
             console.error('[AUTH] Erro ao verificar token:', error);
-            // Token inválido, limpar mas NÃO bloquear acesso
-            clearAuth();
+            // NÃO limpar sessão automaticamente - manter usuário conectado
+            // Apenas logar o erro mas continuar com token salvo
+            console.warn('[AUTH] Token pode ter expirado, mas mantendo sessão ativa. Usuário permanece conectado.');
+            // NÃO chamar clearAuth() - manter token no localStorage
         }
     }
     
