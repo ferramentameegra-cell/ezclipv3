@@ -159,7 +159,8 @@ export async function splitVideoIntoClips(
   outputDir,
   clipDuration,
   startTime = 0,
-  endTime = null
+  endTime = null,
+  progressCallback = null // Callback para atualizar progresso no frontend
 ) {
   // Validações iniciais
   if (!inputPath) {
@@ -246,6 +247,15 @@ export async function splitVideoIntoClips(
 
     console.log(`[CLIP] Gerando clip ${i + 1}/${numberOfClips}: ${clipStart.toFixed(2)}s - ${clipEnd.toFixed(2)}s`);
 
+    // Atualizar progresso no frontend antes de gerar o clip
+    if (progressCallback) {
+      progressCallback({
+        currentClip: i + 1,
+        totalClips: numberOfClips,
+        message: `Gerando clip ${i + 1} de ${numberOfClips} com FFmpeg...`
+      });
+    }
+
     try {
       await trimVideo(inputPath, clipPath, clipStart, clipEnd);
       
@@ -261,6 +271,15 @@ export async function splitVideoIntoClips(
 
       clips.push(clipPath);
       console.log(`[CLIP] ✅ Clip ${i + 1}/${numberOfClips} concluído: ${(clipStats.size / 1024 / 1024).toFixed(2)} MB`);
+      
+      // Atualizar progresso no frontend após clip gerado
+      if (progressCallback) {
+        progressCallback({
+          currentClip: i + 1,
+          totalClips: numberOfClips,
+          message: `Clip ${i + 1} de ${numberOfClips} gerado com sucesso!`
+        });
+      }
     } catch (clipError) {
       console.error(`[CLIP] ❌ Erro ao gerar clip ${i + 1}/${numberOfClips}: ${clipError.message}`);
       throw new Error(`Falha ao gerar clip ${i + 1}/${numberOfClips}: ${clipError.message}`);

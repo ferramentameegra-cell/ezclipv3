@@ -507,12 +507,35 @@ export const generateVideoSeries = async (job, jobsMap) => {
     }
     
     console.log(`[PROCESSING] Chamando splitVideoIntoClips...`);
+    
+    // Atualizar progresso antes de começar a gerar clipes
+    updateProgressEvent(job.id, {
+      status: 'processing',
+      progress: 55,
+      message: `Iniciando geração de ${finalNumberOfCuts || 'clipes'} com FFmpeg...`,
+      totalClips: finalNumberOfCuts || 0,
+      currentClip: 0
+    });
+    
+    // Callback para atualizar progresso durante geração de clipes
+    const progressCallback = (clipProgress) => {
+      const clipProgressPercent = 55 + Math.floor((clipProgress.currentClip / (clipProgress.totalClips || 1)) * 5); // 55% a 60%
+      updateProgressEvent(job.id, {
+        status: 'processing',
+        progress: clipProgressPercent,
+        message: clipProgress.message,
+        totalClips: clipProgress.totalClips,
+        currentClip: clipProgress.currentClip
+      });
+    };
+    
     const clips = await splitVideoIntoClips(
       processedVideoPath,
       seriesPath,
       finalCutDuration,
       actualStartTime,
-      actualEndTime
+      actualEndTime,
+      progressCallback
     );
     console.log(`[PROCESSING] ✅ splitVideoIntoClips retornou ${clips.length} clipe(s)`);
     
