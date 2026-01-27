@@ -3931,6 +3931,11 @@ function proceedToGenerate() {
     }
 }
 
+// Garantir que proceedToGenerate esteja acessível globalmente
+if (typeof window !== 'undefined') {
+    window.proceedToGenerate = proceedToGenerate;
+}
+
 /**
  * Aplicar quebra de texto no preview (mesma lógica do FFmpeg)
  */
