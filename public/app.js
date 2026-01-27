@@ -3827,98 +3827,108 @@ function goBackToHeadline() {
 }
 
 function proceedToGenerate() {
-    // AUTENTICAÇÃO OBRIGATÓRIA - Mostrar modal em vez de alert
-    if (!appState.currentUser || !appState.userToken) {
-        // Salvar estado atual para retomar após login
-        appState.pendingGeneration = {
+    console.log('[GENERATE] proceedToGenerate() chamada');
+    
+    try {
+        // AUTENTICAÇÃO OBRIGATÓRIA - Mostrar modal em vez de alert
+        if (!appState.currentUser || !appState.userToken) {
+            console.log('[GENERATE] Usuário não autenticado, mostrando modal de login');
+            // Salvar estado atual para retomar após login
+            appState.pendingGeneration = {
+                videoId: appState.videoId,
+                nicheId: appState.nicheId,
+                numberOfCuts: appState.numberOfCuts,
+                trimStart: appState.trimStart,
+                trimEnd: appState.trimEnd,
+                cutDuration: appState.cutDuration,
+                headlineStyle: appState.headlineStyle,
+                headlineText: appState.headlineText,
+                headlineSize: appState.headlineSize,
+                headlineColor: appState.headlineColor,
+                font: appState.font,
+                backgroundColor: appState.backgroundColor,
+                retentionVideoId: appState.retentionVideoId,
+                configurations: { ...appState.configurations }
+            };
+            showLoginRequiredModal();
+            return;
+        }
+        
+        console.log('[GENERATE] Iniciando processo de geração...');
+        console.log('[GENERATE] Estado atual:', {
             videoId: appState.videoId,
             nicheId: appState.nicheId,
             numberOfCuts: appState.numberOfCuts,
             trimStart: appState.trimStart,
             trimEnd: appState.trimEnd,
             cutDuration: appState.cutDuration,
-            headlineStyle: appState.headlineStyle,
-            headlineText: appState.headlineText,
-            headlineSize: appState.headlineSize,
-            headlineColor: appState.headlineColor,
-            font: appState.font,
-            backgroundColor: appState.backgroundColor,
-            retentionVideoId: appState.retentionVideoId,
-            configurations: { ...appState.configurations }
-        };
-        showLoginRequiredModal();
-        return;
-    }
-    
-    console.log('[GENERATE] Iniciando processo de geração...');
-    console.log('[GENERATE] Estado atual:', {
-        videoId: appState.videoId,
-        nicheId: appState.nicheId,
-        numberOfCuts: appState.numberOfCuts,
-        trimStart: appState.trimStart,
-        trimEnd: appState.trimEnd,
-        cutDuration: appState.cutDuration,
-        videos_used: appState.userVideos?.videos_used || 0,
-        videos_limit: appState.userVideos?.videos_limit,
-        is_unlimited: appState.userVideos?.is_unlimited || false
-    });
-    
-    // Verificar dados mínimos necessários
-    if (!appState.videoId) {
-        alert('Erro: Vídeo não encontrado. Por favor, baixe o vídeo primeiro.');
-        return;
-    }
-    
-    if (!appState.nicheId) {
-        alert('Erro: Nicho não selecionado. Por favor, selecione um nicho antes de gerar.');
-        return;
-    }
-    
-    // Calcular número de clipes baseado no intervalo e duração
-    if (!appState.numberOfCuts) {
-        if (appState.trimStart !== undefined && appState.trimEnd !== undefined && appState.cutDuration) {
-            const duration = appState.trimEnd - appState.trimStart;
-            appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
-            console.log('[GENERATE] Número de clipes calculado:', appState.numberOfCuts);
-        } else {
-            // Valores padrão se não houver trim definido
-            appState.trimStart = appState.trimStart || 0;
-            appState.trimEnd = appState.trimEnd || appState.videoDuration || 60;
-            appState.cutDuration = appState.cutDuration || 60;
-            const duration = appState.trimEnd - appState.trimStart;
-            appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
-            console.log('[GENERATE] Usando valores padrão. Clipes calculados:', appState.numberOfCuts);
+            videos_used: appState.userVideos?.videos_used || 0,
+            videos_limit: appState.userVideos?.videos_limit,
+            is_unlimited: appState.userVideos?.is_unlimited || false
+        });
+        
+        // Verificar dados mínimos necessários
+        if (!appState.videoId) {
+            console.error('[GENERATE] Erro: videoId não encontrado');
+            alert('Erro: Vídeo não encontrado. Por favor, baixe o vídeo primeiro.');
+            return;
         }
+        
+        if (!appState.nicheId) {
+            console.error('[GENERATE] Erro: nicheId não encontrado');
+            alert('Erro: Nicho não selecionado. Por favor, selecione um nicho antes de gerar.');
+            return;
+        }
+    
+        // Calcular número de clipes baseado no intervalo e duração
+        if (!appState.numberOfCuts) {
+            if (appState.trimStart !== undefined && appState.trimEnd !== undefined && appState.cutDuration) {
+                const duration = appState.trimEnd - appState.trimStart;
+                appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
+                console.log('[GENERATE] Número de clipes calculado:', appState.numberOfCuts);
+            } else {
+                // Valores padrão se não houver trim definido
+                appState.trimStart = appState.trimStart || 0;
+                appState.trimEnd = appState.trimEnd || appState.videoDuration || 60;
+                appState.cutDuration = appState.cutDuration || 60;
+                const duration = appState.trimEnd - appState.trimStart;
+                appState.numberOfCuts = Math.max(1, Math.floor(duration / appState.cutDuration));
+                console.log('[GENERATE] Usando valores padrão. Clipes calculados:', appState.numberOfCuts);
+            }
+        }
+        
+        // Verificação de vídeos será feita no backend
+        // Aqui apenas mostramos confirmação
+        const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
+        const isAdmin = appState.currentUser?.role === 'admin';
+        const isUnlimited = appState.userVideos?.is_unlimited || false;
+        const videosRemaining = appState.userVideos?.videos_remaining;
+        
+        // Confirmar antes de gerar
+        let confirmMessage;
+        if (isAdmin || isUnlimited) {
+            confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nVocê tem vídeos ilimitados. Cortes por vídeo são ilimitados.\n\nDeseja continuar?`;
+        } else {
+            const videoText = videosRemaining === 1 ? 'vídeo' : 'vídeos';
+            confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\n${videosRemaining === 0 ? '⚠️ ATENÇÃO: Este será seu último vídeo disponível!' : `Você tem ${videosRemaining} ${videoText} restante(s).`}\n\nCortes por vídeo são ilimitados.\n\nDeseja continuar?`;
+        }
+        
+        if (!confirm(confirmMessage)) {
+            console.log('[GENERATE] Usuário cancelou a geração.');
+            return;
+        }
+        
+        // Atualizar progresso para step de geração
+        updateProgressSteps('generate');
+        updateGenerateSummary();
+        
+        console.log('[GENERATE] Usuário confirmou. Iniciando geração...');
+        // Gerar clipes diretamente
+        generateSeries();
+    } catch (error) {
+        console.error('[GENERATE] Erro em proceedToGenerate():', error);
+        alert('Erro ao iniciar geração: ' + (error.message || 'Erro desconhecido'));
     }
-    
-    // Verificação de vídeos será feita no backend
-    // Aqui apenas mostramos confirmação
-    const clipsCount = appState.numberOfCuts || appState.configurations?.clipsQuantity || 1;
-    const isAdmin = appState.currentUser?.role === 'admin';
-    const isUnlimited = appState.userVideos?.is_unlimited || false;
-    const videosRemaining = appState.userVideos?.videos_remaining;
-    
-    // Confirmar antes de gerar
-    let confirmMessage;
-    if (isAdmin || isUnlimited) {
-        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\nVocê tem vídeos ilimitados. Cortes por vídeo são ilimitados.\n\nDeseja continuar?`;
-    } else {
-        const videoText = videosRemaining === 1 ? 'vídeo' : 'vídeos';
-        confirmMessage = `Você está prestes a gerar ${clipsCount} ${clipsCount === 1 ? 'clip' : 'clipes'}.\n\n${videosRemaining === 0 ? '⚠️ ATENÇÃO: Este será seu último vídeo disponível!' : `Você tem ${videosRemaining} ${videoText} restante(s).`}\n\nCortes por vídeo são ilimitados.\n\nDeseja continuar?`;
-    }
-    
-    if (!confirm(confirmMessage)) {
-        console.log('[GENERATE] Usuário cancelou a geração.');
-        return;
-    }
-    
-    // Atualizar progresso para step de geração
-    updateProgressSteps('generate');
-    updateGenerateSummary();
-    
-    console.log('[GENERATE] Usuário confirmou. Iniciando geração...');
-    // Gerar clipes diretamente
-    generateSeries();
 }
 
 /**
