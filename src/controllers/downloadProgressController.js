@@ -346,6 +346,9 @@ export async function downloadWithProgress(req, res) {
   const outputPath = STORAGE_CONFIG.getVideoPath(videoId);
   // Usar placeholder genérico - yt-dlp adicionará extensão correta
   const outputTemplate = outputPath.replace('.mp4', '.%(ext)s');
+  
+  // Definir uploadsDir para uso em callbacks
+  const uploadsDir = STORAGE_CONFIG.UPLOADS_DIR;
 
   // Logs de debug
   console.log(`[DOWNLOAD_DEBUG] Salvando vídeo em: ${outputPath}`);
@@ -671,7 +674,7 @@ export async function downloadWithProgress(req, res) {
             
             if (codeBest === 0) {
               const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
-              const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
+              // Usar STORAGE_CONFIG para consistência (uploadsDir já definido no escopo da função)
               const videoId = path.basename(outputTemplate, '.%(ext)s');
               
               for (const ext of possibleExtensions) {
@@ -824,7 +827,7 @@ export async function downloadWithProgress(req, res) {
         
         if (code === 0) {
           const possibleExtensions = ['mp4', 'webm', 'mkv', 'm4a'];
-          const uploadsDir = path.dirname(outputTemplate.replace('%(ext)s', 'mp4'));
+          // Usar STORAGE_CONFIG para consistência (uploadsDir já definido no escopo da função)
           const videoId = path.basename(outputTemplate, '.%(ext)s');
           
           for (const ext of possibleExtensions) {
