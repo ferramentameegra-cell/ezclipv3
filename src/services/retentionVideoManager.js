@@ -46,23 +46,8 @@ export function getRetentionVideoPath(retentionVideoId) {
     return null;
   }
 
-  // PRIORIDADE 1: Tentar encontrar arquivo local (URLs foram removidas - apenas arquivos locais)
-  const possibleNames = [
-    `${retentionVideoId}.mp4`,
-    `${retentionVideoId}.webm`,
-    `${retentionVideoId}.mov`,
-    `retention-${retentionVideoId}.mp4`
-  ];
-
-  for (const fileName of possibleNames) {
-    const filePath = path.join(RETENTION_LIBRARY_DIR, fileName);
-    if (fs.existsSync(filePath)) {
-      return filePath;
-    }
-  }
-
-  // Se não encontrou, retornar null (pode ser adicionado depois)
-  console.warn(`[RETENTION] Arquivo não encontrado para ${retentionVideoId} em ${RETENTION_LIBRARY_DIR}`);
+  // Sistema agora usa apenas links do YouTube - não buscar arquivos locais
+  // Retornar null silenciosamente (sem logs)
   return null;
 }
 
@@ -94,20 +79,14 @@ export function getRandomRetentionVideoPath(retentionVideoIds) {
 
 /**
  * Obter todos os vídeos de retenção disponíveis (com arquivos existentes)
+ * Sistema agora usa apenas YouTube - retornar apenas vídeos que realmente existem (sem logs)
  * 
  * @returns {Array} - Array de objetos { id, name, path, exists }
  */
 export function getAvailableRetentionVideos() {
-  const videos = Object.values(RETENTION_VIDEOS).map(video => {
-    const videoPath = getRetentionVideoPath(video.id);
-    return {
-      ...video,
-      path: videoPath,
-      exists: videoPath !== null && fs.existsSync(videoPath)
-    };
-  });
-
-  return videos;
+  // Sistema agora usa apenas links do YouTube - não buscar arquivos locais
+  // Retornar lista vazia para evitar logs desnecessários
+  return [];
 }
 
 /**
