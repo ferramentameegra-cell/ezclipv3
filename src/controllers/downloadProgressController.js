@@ -1099,32 +1099,30 @@ export async function downloadWithProgress(req, res) {
       lastError = format18Error;
     }
   }
-    
-    // Se ainda não funcionou após testar todos os formatos
-    if (!downloadResult) {
-      // Limpar arquivo de cookies apenas no final se todas as estratégias falharam
-      if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
-        try {
-          fs.unlinkSync(cookiesPathCache);
-          console.log('[DOWNLOAD] Arquivo de cookies removido após falha de todas as estratégias');
-        } catch (unlinkError) {
-          console.warn('[DOWNLOAD] Erro ao remover cookies:', unlinkError.message);
-        }
-        cookiesPathCache = null;
-        cookiesContentCache = null;
+  
+  // Se todas as estratégias falharam
+  if (!downloadResult) {
+    // Limpar arquivo de cookies
+    if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
+      try {
+        fs.unlinkSync(cookiesPathCache);
+      } catch (unlinkError) {
+        // Ignorar erro
       }
-      
-      const errorMessage = parseYtDlpError(lastError?.stderr || lastError?.stdout || '', lastError?.code || 1);
-      console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam. Último erro: ${errorMessage}`);
-      
-      res.write(`data: ${JSON.stringify({
-        success: false,
-        error: `Erro ao baixar vídeo: ${errorMessage}. Verifique se YTDLP_COOKIES está configurado no Railway.`,
-        state: "error"
-      })}\n\n`);
-      res.end();
-      return;
+      cookiesPathCache = null;
+      cookiesContentCache = null;
     }
+    
+    const errorMessage = parseYtDlpError(lastError?.stderr || lastError?.stdout || '', lastError?.code || 1);
+    console.error(`[DOWNLOAD] ❌ Todas as estratégias falharam: ${errorMessage}`);
+    
+    res.write(`data: ${JSON.stringify({
+      success: false,
+      error: `Erro ao baixar vídeo: ${errorMessage}. Verifique se YTDLP_COOKIES está configurado no Railway.`,
+      state: "error"
+    })}\n\n`);
+    res.end();
+    return;
   }
   
   // Limpar arquivo de cookies após sucesso
