@@ -92,17 +92,33 @@ export const generateVideoSeries = async (job, jobsMap) => {
       console.log(`[PROCESSING] ⚠️ Vídeo ${videoId} não encontrado no videoStore, verificando download...`);
       
       // Verificar se há arquivo baixado mesmo sem estar no store
-      const possibleDownloadPath = path.join(TMP_UPLOADS_DIR, `${videoId}_downloaded.mp4`);
-      const possibleUploadPath = path.join(process.cwd(), 'uploads', `${videoId}.mp4`);
+      // Tentar múltiplos caminhos possíveis onde o arquivo pode estar
+      const possiblePaths = [
+        path.join(TMP_UPLOADS_DIR, `${videoId}.mp4`), // Caminho padrão no Railway
+        path.join(TMP_UPLOADS_DIR, `${videoId}_downloaded.mp4`), // Nome alternativo
+        path.join(process.cwd(), 'uploads', `${videoId}.mp4`), // Caminho local
+        path.join(process.cwd(), 'tmp', `${videoId}.mp4`), // Caminho tmp local
+        path.join('/tmp', `${videoId}.mp4`), // /tmp direto
+        path.join('/tmp/uploads', `${videoId}.mp4`), // /tmp/uploads
+        path.join(process.cwd(), 'tmp', 'uploads', `${videoId}.mp4`) // tmp/uploads local
+      ];
       
       // Tentar encontrar arquivo existente
       let foundPath = null;
-      if (fs.existsSync(possibleDownloadPath) && fs.statSync(possibleDownloadPath).size > 0) {
-        foundPath = possibleDownloadPath;
-        console.log(`[PROCESSING] ✅ Arquivo encontrado em: ${foundPath}`);
-      } else if (fs.existsSync(possibleUploadPath) && fs.statSync(possibleUploadPath).size > 0) {
-        foundPath = possibleUploadPath;
-        console.log(`[PROCESSING] ✅ Arquivo encontrado em: ${foundPath}`);
+      for (const possiblePath of possiblePaths) {
+        try {
+          if (fs.existsSync(possiblePath)) {
+            const stats = fs.statSync(possiblePath);
+            if (stats.size > 0) {
+              foundPath = possiblePath;
+              console.log(`[PROCESSING] ✅ Arquivo encontrado em: ${foundPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+              break;
+            }
+          }
+        } catch (err) {
+          // Continuar procurando em outros caminhos
+          continue;
+        }
       }
       
       // Se encontrou arquivo, criar entrada no videoStore

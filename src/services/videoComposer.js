@@ -479,7 +479,51 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
       console.log(`[COMPOSER] Overlay preserva dimensões do background: 1080x1920 (HARDCODED)`);
 
-      // 4. Adicionar vídeo de retenção (OPCIONAL - não bloquear geração se não disponível)
+      // 4. Adicionar headline ANTES do vídeo de retenção (CENTRO VERTICAL)
+      // Headline fica no centro, acima do vídeo de retenção
+      const hasHeadline = headlineText || (headline && headline.text);
+      console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
+      
+      if (hasHeadline) {
+        const headlineTextValue = headlineText || headline.text;
+        const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
+        const fontSize = headlineStyle.fontSize || 72;
+        const color = headlineStyle.color || '#FFFFFF';
+        const startTime = 0;
+        const endTime = videoDuration;
+
+        // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
+        const yPos = `(h-text_h)/2`;
+        
+        const HEADLINE_SAFE_MARGIN = 80;
+        const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2);
+        
+        const lineSpacing = Math.round(fontSize * 0.1);
+        const boxBorderWidth = 0;
+        const boxColor = '0x00000000';
+        
+        const fontPath = getFontPath(font);
+        const wrappedText = wrapText(headlineTextValue, maxTextWidth, fontSize);
+        const escapedText = escapeText(wrappedText);
+        
+        let finalFontPath = fontPath;
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+        if (fs.existsSync && !fs.existsSync(fontPath)) {
+          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada: ${fontPath}, usando fallback`);
+          finalFontPath = isProduction 
+            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+            : '/System/Library/Fonts/Helvetica.ttc';
+        }
+        
+        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline]`;
+        filterParts.push(headlineFilter);
+        currentLabel = '[with_headline]';
+        console.log(`[COMPOSER] ✅ Headline adicionada no centro: "${headlineTextValue}"`);
+      } else {
+        console.log(`[COMPOSER] ⚠️ Headline não será adicionada`);
+      }
+
+      // 5. Adicionar vídeo de retenção (OPCIONAL - não bloquear geração se não disponível)
       // IMPORTANTE: Ajustar índice do input baseado na presença do background
       // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
       if (retentionVideoId && retentionVideoId !== 'none' && !retentionVideoPath) {
@@ -565,87 +609,6 @@ export async function composeFinalVideo({
       } else if (retentionVideoId && retentionVideoId !== 'none') {
         // Se retentionVideoId foi especificado mas não há caminho, continuar sem vídeo de retenção (não bloquear)
         console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não foi encontrado. Continuando sem vídeo de retenção.`);
-      }
-
-      // 5. Adicionar headline (CENTRO VERTICAL do frame)
-      // Headline fica acima de tudo (exceto legendas que ficam na parte inferior)
-      const hasHeadline = headlineText || (headline && headline.text);
-      console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
-      
-      if (hasHeadline) {
-        const headlineTextValue = headlineText || headline.text;
-        const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
-        const fontSize = headlineStyle.fontSize || 72;
-        const color = headlineStyle.color || '#FFFFFF';
-        // HEADLINE SEMPRE VISÍVEL: Do primeiro ao último frame (100% da duração)
-        // Removido startTime e endTime - headline permanece visível sempre
-        const startTime = 0;
-        const endTime = videoDuration; // Até o final do vídeo
-
-        // Posição Y: centro vertical exato - meio do frame (960px em 1920px)
-        // Usar (h-text_h)/2 para centralizar verticalmente considerando altura do texto
-        // Centralizar horizontalmente: x=(w-text_w)/2
-        
-        // QUEBRA DE TEXTO AUTOMÁTICA: Usar box com largura limitada
-        // Margens laterais de 80px de cada lado (conforme especificação)
-        // Largura máxima = 1080 - 80 - 80 = 920px
-        // HARDCODED: largura sempre 1080
-        const HEADLINE_SAFE_MARGIN = 80; // Margens de segurança de 80px
-        const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2); // 1080 - 160 = 920px (HARDCODED)
-        const marginX = HEADLINE_SAFE_MARGIN; // 80px de cada lado
-        
-        const yPos = `(h-text_h)/2`;
-        
-        // drawtext com quebra de texto automática usando box:
-        // - box=1: habilita caixa de texto (necessário para quebra automática)
-        // - boxw: largura máxima da caixa (força quebra de texto)
-        // - boxcolor: cor da caixa (transparente para não aparecer)
-        // - text_align: alinhamento do texto dentro da caixa (centro)
-        // - x: centralizado (w-text_w)/2 garante centralização
-        // - fix_bounds=1: garante que o texto não ultrapasse os limites
-        // - line_spacing: espaçamento entre linhas (10% do tamanho da fonte)
-        const lineSpacing = Math.round(fontSize * 0.1);
-        
-        // Usar box transparente para forçar quebra de texto automática
-        // box=1 habilita caixa, boxw limita largura (força quebra), boxcolor transparente
-        // x=(w-text_w)/2 centraliza horizontalmente, y=(h-text_h)/2 centraliza verticalmente
-        const boxBorderWidth = 0;
-        const boxColor = '0x00000000'; // Transparente
-        
-        // Obter caminho da fonte e validar
-        const fontPath = getFontPath(font);
-        
-        // Quebrar texto automaticamente baseado na largura máxima
-        // HARDCODED: largura sempre 1080, então maxTextWidth = 1080 - 160 = 920
-        const wrappedText = wrapText(headlineTextValue, maxTextWidth, fontSize);
-        const escapedText = escapeText(wrappedText);
-        
-        // Validar se a fonte existe (em produção pode não existir)
-        // Se não existir, usar fonte padrão do sistema
-        let finalFontPath = fontPath;
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-        if (fs.existsSync && !fs.existsSync(fontPath)) {
-          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada: ${fontPath}, usando fallback`);
-          finalFontPath = isProduction 
-            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-            : '/System/Library/Fonts/Helvetica.ttc';
-        }
-        
-        // Construir filter de headline
-        // NOTA: boxw só disponível no FFmpeg 6.x, então usamos quebra manual via wrapText
-        // box=1 com boxcolor transparente para melhor renderização (opcional)
-        // HEADLINE SEMPRE VISÍVEL: Removido enable para aparecer em todos os frames
-        // Se necessário, usar enable='gte(t,0)' para garantir do início ao fim
-        const headlineFilter = `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline]`;
-        filterParts.push(headlineFilter);
-        currentLabel = '[with_headline]';
-        console.log(`[COMPOSER] ✅ Headline adicionada: "${headlineTextValue}"`);
-        console.log(`[COMPOSER] Headline quebrada automaticamente: "${wrappedText}"`);
-        console.log(`[COMPOSER] Headline configurada: tamanho=${fontSize}px, cor=${color}, largura máxima=${maxTextWidth}px`);
-        console.log(`[COMPOSER] Headline posicionada no centro vertical (y=(h-text_h)/2), centralizada horizontalmente`);
-        console.log(`[COMPOSER] Fonte usada: ${finalFontPath}`);
-      } else {
-        console.log(`[COMPOSER] ⚠️ Headline não será adicionada (headlineText e headline.text estão vazios)`);
       }
 
       // 6. Adicionar numeração "Parte X/Y" - CANTO SUPERIOR DIREITO
