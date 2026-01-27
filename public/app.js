@@ -4274,17 +4274,6 @@ async function monitorProgress(jobId) {
                 const data = JSON.parse(event.data);
                 console.log(`[GENERATE-SSE] Evento recebido:`, data);
                 
-                // Atualizar progresso visual IMEDIATAMENTE
-                if (data.progress !== undefined) {
-                    const progress = Math.min(100, Math.max(0, data.progress));
-                    if (progressFill) progressFill.style.width = `${progress}%`;
-                    if (progressText) progressText.textContent = `${Math.round(progress)}%`;
-                }
-                
-                if (data.message) {
-                    if (progressMessage) progressMessage.textContent = data.message;
-                }
-                
                 const {
                     status,
                     progress = 0,
