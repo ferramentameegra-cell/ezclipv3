@@ -161,14 +161,23 @@ export async function composeFinalVideo({
     // NOVO SISTEMA: Usar vídeo de retenção do nicho (YouTube, sem áudio)
     console.log(`[COMPOSER] 📥 Obtendo vídeo de retenção do nicho: ${nicheId}`);
     try {
+      // getNicheRetentionVideo já faz o download automaticamente se necessário
       retentionVideoPath = await getNicheRetentionVideo(nicheId);
-      if (retentionVideoPath) {
-        console.log(`[COMPOSER] ✅ Usando vídeo de retenção do nicho ${nicheId}: ${retentionVideoPath}`);
+      if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
+        const stats = fs.statSync(retentionVideoPath);
+        if (stats.size > 0) {
+          console.log(`[COMPOSER] ✅ Usando vídeo de retenção do nicho ${nicheId}: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+        } else {
+          console.warn(`[COMPOSER] ⚠️ Vídeo de retenção do nicho está vazio, tentando fallback...`);
+          retentionVideoPath = null;
+        }
       } else {
         console.warn(`[COMPOSER] ⚠️ Não foi possível obter vídeo de retenção do nicho ${nicheId}, tentando fallback...`);
+        retentionVideoPath = null;
       }
     } catch (error) {
       console.error(`[COMPOSER] ❌ Erro ao obter vídeo de retenção do nicho: ${error.message}`);
+      retentionVideoPath = null; // Continuar sem vídeo de retenção
     }
   }
   

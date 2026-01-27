@@ -638,13 +638,34 @@ export const generateVideoSeries = async (job, jobsMap) => {
     });
 
     // Definir retentionVideoPath uma vez antes do loop (para evitar problemas de escopo)
+    // IMPORTANTE: Se retentionVideoId é 'niche-default' ou 'random', usar vídeo do nicho (será baixado automaticamente)
     let currentRetentionVideoPath = null;
     try {
       // Tentar obter caminho do vídeo de retenção se especificado
       if (retentionVideoId && retentionVideoId !== 'none') {
-        const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
-        currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
-        console.log(`[PROCESSING] Vídeo de retenção para todos os clipes: ${currentRetentionVideoPath || 'não encontrado (continuando sem vídeo de retenção)'}`);
+        if (retentionVideoId === 'niche-default' && nicheId) {
+          // Usar vídeo de retenção do nicho (será baixado automaticamente se necessário)
+          const { getNicheRetentionVideo } = await import('./retentionVideoManager.js');
+          console.log(`[PROCESSING] 📥 Obtendo vídeo de retenção do nicho ${nicheId} (será baixado se necessário)...`);
+          currentRetentionVideoPath = await getNicheRetentionVideo(nicheId);
+          if (currentRetentionVideoPath && fs.existsSync(currentRetentionVideoPath)) {
+            const stats = fs.statSync(currentRetentionVideoPath);
+            if (stats.size > 0) {
+              console.log(`[PROCESSING] ✅ Vídeo de retenção do nicho obtido: ${currentRetentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+            } else {
+              console.warn(`[PROCESSING] ⚠️ Vídeo de retenção do nicho está vazio, continuando sem vídeo de retenção`);
+              currentRetentionVideoPath = null;
+            }
+          } else {
+            console.warn(`[PROCESSING] ⚠️ Vídeo de retenção do nicho não encontrado, continuando sem vídeo de retenção`);
+            currentRetentionVideoPath = null;
+          }
+        } else {
+          // Sistema legado
+          const { getRetentionVideoPath } = await import('./retentionVideoManager.js');
+          currentRetentionVideoPath = getRetentionVideoPath(retentionVideoId, nicheId);
+          console.log(`[PROCESSING] Vídeo de retenção para todos os clipes: ${currentRetentionVideoPath || 'não encontrado (continuando sem vídeo de retenção)'}`);
+        }
       }
     } catch (retentionError) {
       console.warn(`[PROCESSING] ⚠️ Não foi possível obter vídeo de retenção: ${retentionError.message}. Continuando sem vídeo de retenção.`);
