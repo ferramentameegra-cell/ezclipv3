@@ -709,7 +709,7 @@ body {
 .step-line {
     flex: 1;
     height: 2px;
-    background: var(--border);
+    background: rgba(179, 140, 255, 0.2);
     margin: 0 -20px;
     transition: all 0.3s ease;
     position: relative;
@@ -759,7 +759,8 @@ body {
 }
 
 .progress-step.completed ~ .progress-step .step-line {
-    background: var(--success);
+    background: linear-gradient(90deg, #B38CFF 0%, #FF6EC7 100%);
+    box-shadow: 0 0 8px rgba(179, 140, 255, 0.4);
 }
 
 .tool-card {
@@ -1339,11 +1340,13 @@ body {
     position: relative;
     width: 100%;
     height: 60px;
-    background: var(--bg-tertiary);
-    border-radius: 0.5rem;
+    background: rgba(26, 18, 56, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
     cursor: pointer;
     user-select: none;
     touch-action: none;
+    border: 1px solid rgba(179, 140, 255, 0.2);
 }
 
 .timeline-bg {
@@ -1406,10 +1409,10 @@ body {
 .handle-icon {
     width: 16px;
     height: 16px;
-    background: var(--primary);
-    border: 2px solid var(--bg);
+    background: linear-gradient(135deg, #B38CFF 0%, #FF6EC7 100%);
+    border: 2px solid rgba(15, 10, 31, 0.8);
     border-radius: 50%;
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 12px rgba(179, 140, 255, 0.5);
     position: absolute;
     top: 50%;
     left: 50%;
@@ -2069,7 +2072,11 @@ body {
 .curso-price {
     font-size: 2rem;
     font-weight: 800;
-    color: var(--primary);
+    background: linear-gradient(135deg, #B38CFF 0%, #FF6EC7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 8px rgba(179, 140, 255, 0.4));
 }
 
 .curso-price-old {
