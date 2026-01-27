@@ -39,33 +39,32 @@ function createCookiesFile() {
  * Suporta cookies para evitar detecção de bot
  * @param {string} videoId
  * @param {string} outputPath
- * @param {string} strategy - Estratégia de player client ('web' ou 'android_with_cookies')
+ * @param {string} strategy - Ignorado (sempre usa Android Client)
  */
-export function downloadYouTubeVideo(videoId, outputPath, strategy = 'web') {
+export function downloadYouTubeVideo(videoId, outputPath, strategy = 'android') {
   return new Promise((resolve, reject) => {
     const url = `https://www.youtube.com/watch?v=${videoId}`;
     
     // Criar arquivo de cookies se disponível
     const cookiesPath = createCookiesFile();
     
-    // Determinar estratégia de player client
-    // android_with_cookies é mais confiável para evitar bloqueios 403
-    const playerClient = strategy === 'android_with_cookies' ? 'android_with_cookies' : 'web';
+    // APENAS Android Client (única estratégia permitida)
+    const playerClient = 'android';
     
-    // Construir comando com múltiplas estratégias
+    // Construir comando - APENAS Android Client
     const baseArgs = [
       'yt-dlp',
       '-f "bv*[ext=mp4]+ba[ext=m4a]/mp4"',
       '--merge-output-format mp4',
       '--no-warnings',
       '--no-playlist',
-      // User-Agent moderno
-      '--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"',
+      // User-Agent Android Client (único permitido)
+      '--user-agent "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip"',
       // Referer para parecer mais legítimo
       '--referer "https://www.youtube.com/"',
-      // Cookies se disponível (OBRIGATÓRIO para android_with_cookies)
+      // Cookies se disponível
       ...(cookiesPath ? [`--cookies "${cookiesPath}"`] : []),
-      // Estratégia de player client (android_with_cookies é mais confiável)
+      // APENAS Android Client (única estratégia)
       `--extractor-args "youtube:player_client=${playerClient}"`,
       '--geo-bypass',
       '--no-check-certificate',
@@ -75,16 +74,12 @@ export function downloadYouTubeVideo(videoId, outputPath, strategy = 'web') {
     
     const cmd = baseArgs.join(' ');
 
-    console.log(`[YT-DLP] Download usando estratégia: ${playerClient}`);
+    console.log(`[YT-DLP] Download usando APENAS Android Client`);
     console.log('[YT-DLP] Comando:', cmd);
     if (cookiesPath) {
       console.log('[YT-DLP] ✅ Usando cookies de variável de ambiente');
     } else {
-      if (playerClient === 'android_with_cookies') {
-        console.warn('[YT-DLP] ⚠️ AVISO: android_with_cookies requer cookies. Configure YTDLP_COOKIES para evitar bloqueios 403.');
-      } else {
-        console.warn('[YT-DLP] ⚠️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
-      }
+      console.log('[YT-DLP] ℹ️ Nenhum cookie configurado (YTDLP_COOKIES não definido)');
     }
 
     exec(cmd, { maxBuffer: 1024 * 1024 * 100 }, (error, stdout, stderr) => {
@@ -109,7 +104,7 @@ export function downloadYouTubeVideo(videoId, outputPath, strategy = 'web') {
         console.log('[YT-DLP] stderr:', stderr);
       }
       
-      console.log(`[YT-DLP] ✅ Download concluído usando ${playerClient}`);
+      console.log(`[YT-DLP] ✅ Download concluído usando Android Client`);
       resolve(true);
     });
   });

@@ -79,22 +79,11 @@ function getStrategyArgs(strategyBase, cookiesPath) {
   return baseArgs;
 }
 
+// APENAS Android Client (única estratégia permitida)
 const DOWNLOAD_STRATEGIES = [
   {
-    name: 'ios_with_cookies',
-    description: 'iOS com cookies e referer',
-    args: [
-      '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-      '--referer', 'https://www.youtube.com/',
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=ios'
-    ],
-    useCookies: true
-  },
-  {
-    name: 'android_with_cookies',
-    description: 'Android com cookies e referer',
+    name: 'android',
+    description: 'Android Client (única estratégia)',
     args: [
       '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
       '--referer', 'https://www.youtube.com/',
@@ -102,60 +91,6 @@ const DOWNLOAD_STRATEGIES = [
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=android'
     ],
-    useCookies: true
-  },
-  {
-    name: 'desktop_with_cookies',
-    description: 'Desktop com cookies e referer',
-    args: [
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      '--referer', 'https://www.youtube.com/',
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=web'
-    ],
-    useCookies: true
-  },
-  {
-    name: 'ios_basic',
-    description: 'iOS básico sem cookies',
-    args: [
-      '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-      '--referer', 'https://www.youtube.com/',
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=ios'
-    ],
-    useCookies: false
-  },
-  {
-    name: 'android_basic',
-    description: 'Android básico sem cookies',
-    args: [
-      '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-      '--referer', 'https://www.youtube.com/',
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=android'
-    ],
-    useCookies: false
-  },
-  {
-    name: 'desktop_basic',
-    description: 'Desktop básico sem cookies',
-    args: [
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      '--referer', 'https://www.youtube.com/',
-      '--geo-bypass',
-      '--no-check-certificate',
-      '--extractor-args', 'youtube:player_client=web'
-    ],
-    useCookies: false
-  },
-  {
-    name: 'default',
-    description: 'Estratégia padrão do yt-dlp',
-    args: [],
     useCookies: false
   }
 ];
