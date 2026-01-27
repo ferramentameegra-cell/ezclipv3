@@ -454,9 +454,25 @@ export const generateVideoSeries = async (job, jobsMap) => {
     console.log(`[PROCESSING] Validação final: actualStartTime=${actualStartTime}s, actualEndTime=${actualEndTime}s, duração total=${finalTotalDuration}s`);
 
     // ===============================
+    // VERIFICAR FFMPEG ANTES DE GERAR CLIPS
+    // ===============================
+    try {
+      const { configureFfmpeg } = await import('../utils/ffmpegDetector.js');
+      const ffmpegConfigured = await configureFfmpeg();
+      if (!ffmpegConfigured) {
+        console.warn('[PROCESSING] ⚠️ FFmpeg pode não estar configurado corretamente, mas continuando...');
+      }
+    } catch (ffmpegError) {
+      console.warn('[PROCESSING] ⚠️ Erro ao verificar FFmpeg:', ffmpegError.message);
+      // Continuar mesmo assim - pode estar no PATH
+    }
+
+    // ===============================
     // GERAR CLIPS
     // ===============================
-    console.log(`[PROCESSING] Gerando clips`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] INICIANDO GERAÇÃO DE CLIPS`);
+    console.log(`[PROCESSING] ========================================`);
     console.log(`[PROCESSING] Parâmetros para splitVideoIntoClips:`);
     console.log(`[PROCESSING]   - processedVideoPath: ${processedVideoPath}`);
     console.log(`[PROCESSING]   - seriesPath: ${seriesPath}`);
@@ -464,6 +480,18 @@ export const generateVideoSeries = async (job, jobsMap) => {
     console.log(`[PROCESSING]   - actualStartTime: ${actualStartTime}s`);
     console.log(`[PROCESSING]   - actualEndTime: ${actualEndTime}s`);
     console.log(`[PROCESSING]   - Duração total: ${actualEndTime - actualStartTime}s`);
+
+    // Validar que o arquivo de vídeo existe antes de gerar clipes
+    if (!fs.existsSync(processedVideoPath)) {
+      throw new Error(`Vídeo processado não encontrado: ${processedVideoPath}`);
+    }
+
+    const processedVideoStats = fs.statSync(processedVideoPath);
+    if (processedVideoStats.size === 0) {
+      throw new Error(`Vídeo processado está vazio: ${processedVideoPath}`);
+    }
+
+    console.log(`[PROCESSING] ✅ Vídeo processado validado: ${(processedVideoStats.size / 1024 / 1024).toFixed(2)} MB`);
 
     // Se clipsQuantity foi especificado, ajustar cutDuration para gerar exatamente essa quantidade
     let finalCutDuration = cutDuration;
@@ -478,6 +506,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
       console.log(`[PROCESSING] Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
     }
     
+    console.log(`[PROCESSING] Chamando splitVideoIntoClips...`);
     const clips = await splitVideoIntoClips(
       processedVideoPath,
       seriesPath,
@@ -485,6 +514,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
       actualStartTime,
       actualEndTime
     );
+    console.log(`[PROCESSING] ✅ splitVideoIntoClips retornou ${clips.length} clipe(s)`);
     
     // Limitar número de clipes se necessário
     const finalClips = clipsQuantity && clipsQuantity > 0 
