@@ -11,6 +11,9 @@ import { updateProgressEvent } from '../controllers/progressEvents.js';
 // CONFIGURAÇÃO RAILWAY (OBRIGATÓRIA)
 // ===============================
 const TMP_UPLOADS_DIR = '/tmp/uploads';
+
+/** Timeout (s) para FFmpeg de fallback na composição */
+const FFMPEG_FALLBACK_TIMEOUT = parseInt(process.env.FFMPEG_COMPOSE_TIMEOUT || process.env.FFMPEG_TRIM_TIMEOUT || '300', 10);
 const SERIES_DIR = path.join(TMP_UPLOADS_DIR, 'series');
 
 // Garantir diretórios
@@ -979,19 +982,26 @@ export const generateVideoSeries = async (job, jobsMap) => {
           safeMargins: 10,
           clipNumber: clipIndex, // Número do clipe atual (1-based)
           totalClips: finalClips.length, // Total de clipes gerados
-          onProgress: async (percent) => {
-            // Progresso individual do clip
-            // Garantir que percent está entre 0 e 100
+          onProgress: async (progress) => {
+            const percent = progress && typeof progress.percent === 'number' ? progress.percent : 0;
             const safePercent = Math.min(100, Math.max(0, percent));
             const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (safePercent / 100) / finalClips.length);
             const finalProgress = Math.min(100, Math.max(compositionProgress, Math.round(clipProgress)));
-            // Atualizar progresso usando função do BullMQ
+            // Atualizar progresso no BullMQ
             if (typeof job.progress === 'function') {
               await job.progress(finalProgress);
             } else {
               job.progress = finalProgress;
             }
             if (jobsMap) jobsMap.set(job.id, job);
+            // Enviar progresso ao frontend via SSE para evitar tela “presa” em 60%
+            updateProgressEvent(job.id, {
+              status: 'processing',
+              totalClips: finalClips.length,
+              currentClip: clipIndex,
+              progress: finalProgress,
+              message: `Compondo clipe ${clipIndex} de ${finalClips.length}: ${Math.round(safePercent)}%`
+            });
             console.log(`[PROCESSING] Progresso clip ${clipIndex}: ${safePercent}% -> Progresso geral: ${finalProgress}%`);
           }
         });
@@ -1089,18 +1099,34 @@ export const generateVideoSeries = async (job, jobsMap) => {
             clipPath: clipPath,
             outputPath: finalClipPath,
             retentionVideoId: retentionVideoId,
-            retentionVideoPath: currentRetentionVideoPath, // Usar variável definida antes do loop
+            retentionVideoPath: currentRetentionVideoPath,
             headline: retryClipHeadline,
             headlineStyle: headlineStyleObj,
             headlineText: headlineText,
-            captions: retryClipCaptions, // Usar clipCaptions recriada no escopo do catch
+            captions: retryClipCaptions,
             captionStyle: captionStyleObj,
             backgroundColor: backgroundColor,
             format: '9:16',
             platforms: { tiktok: true, reels: true, shorts: true },
             safeMargins: 10,
             clipNumber: clipIndex,
-            totalClips: finalClips.length
+            totalClips: finalClips.length,
+            onProgress: async (progress) => {
+              const percent = progress && typeof progress.percent === 'number' ? progress.percent : 0;
+              const safePercent = Math.min(100, Math.max(0, percent));
+              const clipProgress = compositionProgress + (compositionRange * (i / finalClips.length)) + (compositionRange * (safePercent / 100) / finalClips.length);
+              const finalProgress = Math.min(100, Math.max(compositionProgress, Math.round(clipProgress)));
+              if (typeof job.progress === 'function') await job.progress(finalProgress);
+              else job.progress = finalProgress;
+              if (jobsMap) jobsMap.set(job.id, job);
+              updateProgressEvent(job.id, {
+                status: 'processing',
+                totalClips: finalClips.length,
+                currentClip: clipIndex,
+                progress: finalProgress,
+                message: `Compondo clipe ${clipIndex} de ${finalClips.length}: ${Math.round(safePercent)}%`
+              });
+            }
           });
           
           if (retryComposition && fs.existsSync(retryComposition) && fs.statSync(retryComposition).size > 0) {
@@ -1130,7 +1156,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
               const mainVideoHeight = Math.round(1080 * 9 / 16); // Altura para vídeo 16:9 com largura 1080px = 607px
               const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600); // Máximo 1600px de altura
               
-              ffmpeg(clipPath)
+              ffmpeg(clipPath, { timeout: FFMPEG_FALLBACK_TIMEOUT })
                 .complexFilter([
                   // Criar background preto 1080x1920
                   `color=c=black:s=1080x1920[bg]`,
@@ -1167,6 +1193,10 @@ export const generateVideoSeries = async (job, jobsMap) => {
                   resolve();
                 })
                 .on('error', (err) => {
+                  const isTimeout = err.message && (err.message.includes('timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('SIGKILL'));
+                  if (isTimeout) {
+                    console.error(`[PROCESSING] ❌ Timeout no fallback após ${FFMPEG_FALLBACK_TIMEOUT}s`);
+                  }
                   console.error(`[PROCESSING] ❌ Erro ao criar fallback: ${err.message}`);
                   reject(err);
                 })

@@ -2,6 +2,9 @@ import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
 import fs from 'fs';
 
+/** Timeout em segundos para operações de trim (evitar travamento indefinido) */
+const FFMPEG_TRIM_TIMEOUT = parseInt(process.env.FFMPEG_TRIM_TIMEOUT || '300', 10);
+
 /**
  * Aplica trim em um vídeo
  */
@@ -57,7 +60,7 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
     // Usar -t para duração exata
     // IMPORTANTE: NÃO forçar formato aqui - vídeo principal mantém proporção original (16:9)
     // O formato 1080x1920 será forçado apenas na composição final
-    const command = ffmpeg(inputPath)
+    const command = ffmpeg(inputPath, { timeout: FFMPEG_TRIM_TIMEOUT })
       .seekInput(startTime) // Seeking antes do input é mais preciso
       .output(outputPath)
       .outputOptions([
@@ -151,6 +154,11 @@ export async function trimVideo(inputPath, outputPath, startTime, endTime) {
       .on('error', (err, stdout, stderr) => {
         if (hasResolved) return;
         hasResolved = true;
+
+        const isTimeout = err.message && (err.message.includes('timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('SIGKILL'));
+        if (isTimeout) {
+          console.error(`[FFMPEG_ERROR] TIMEOUT no trim após ${FFMPEG_TRIM_TIMEOUT}s. Aumente FFMPEG_TRIM_TIMEOUT ou verifique o vídeo.`);
+        }
 
         console.error('[FFMPEG_ERROR] ========================================');
         console.error('[FFMPEG_ERROR] ERRO CRÍTICO NO FFMPEG TRIM');

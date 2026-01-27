@@ -22,6 +22,9 @@ import { RETENTION_VIDEOS, NICHES } from '../models/niches.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Timeout em segundos para composição (evitar travamento indefinido) */
+const FFMPEG_COMPOSE_TIMEOUT = parseInt(process.env.FFMPEG_COMPOSE_TIMEOUT || '300', 10);
+
 // ===============================
 // BACKGROUND FIXO (OBRIGATÓRIO)
 // ===============================
@@ -770,8 +773,9 @@ export async function composeFinalVideo({
         fixedBackgroundPath = null;
       }
       
-      // Construir comando FFmpeg
-      const command = ffmpeg();
+      // Construir comando FFmpeg com timeout para evitar travamento indefinido
+      const command = ffmpeg({ timeout: FFMPEG_COMPOSE_TIMEOUT });
+      console.log(`[COMPOSER] Timeout da composição: ${FFMPEG_COMPOSE_TIMEOUT}s`);
       
       // Variáveis para capturar stderr e stdout do FFmpeg
       let ffmpegStderr = '';
@@ -1036,12 +1040,16 @@ export async function composeFinalVideo({
           ffmpegStdout += stdoutLine + '\n';
         })
         .on('progress', (progress) => {
-          if (progress.percent !== undefined && progress.percent !== null) {
-            const percent = Math.min(100, Math.max(0, Math.round(progress.percent)));
-            if (onProgress) {
-              onProgress(percent);
-            }
+          const percent = progress.percent != null
+            ? Math.min(100, Math.max(0, Math.round(progress.percent)))
+            : null;
+          if (onProgress) {
+            onProgress({ ...progress, percent: percent ?? 0 });
+          }
+          if (percent != null) {
             console.log(`[COMPOSER] Progresso: ${percent}%`);
+          } else if (progress.timemark) {
+            console.log(`[COMPOSER] Progresso: ${progress.timemark}`);
           }
         })
         .on('end', () => {
@@ -1124,9 +1132,18 @@ export async function composeFinalVideo({
           resolve(outputPath);
         })
         .on('error', (err, stdout, stderr) => {
-          // Capturar stderr completo
           const fullStderr = stderr || ffmpegStderr || '';
           const fullStdout = stdout || ffmpegStdout || '';
+          const isTimeout = err.message && (
+            err.message.includes('timeout') ||
+            err.message.includes('ETIMEDOUT') ||
+            err.message.includes('SIGKILL') ||
+            err.message.includes('Exceeded')
+          );
+          if (isTimeout) {
+            console.error(`[COMPOSER_ERROR] TIMEOUT na composição após ${FFMPEG_COMPOSE_TIMEOUT}s. Aumente FFMPEG_COMPOSE_TIMEOUT ou simplifique o vídeo.`);
+          }
+          // Log stderr completo abaixo
           
           console.error('[COMPOSER_ERROR] ========================================');
           console.error('[COMPOSER_ERROR] ERRO CRÍTICO NO FFMPEG COMPOSIÇÃO');
@@ -1197,7 +1214,8 @@ export async function composeFinalVideo({
           console.error('[COMPOSER_ERROR] ========================================');
           
           // Criar mensagem de erro detalhada
-          const detailedError = `[COMPOSER] Erro no FFmpeg durante composição: ${err.message}\n\n` +
+          const errPrefix = isTimeout ? `TIMEOUT após ${FFMPEG_COMPOSE_TIMEOUT}s. ` : '';
+          const detailedError = `[COMPOSER] ${errPrefix}Erro no FFmpeg durante composição: ${err.message}\n\n` +
                                `Output: ${outputPath}\n` +
                                `Input 0: ${clipPath}\n` +
                                (fixedBackgroundPath ? `Input 1: ${fixedBackgroundPath}\n` : '') +
