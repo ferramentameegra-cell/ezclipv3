@@ -158,10 +158,15 @@ export async function composeFinalVideo({
 
   // Obter vídeo de retenção usando APENAS o novo sistema retentionManager
   // Sistema antigo foi completamente removido
+  // TESTE 4: Validar Sistema de Retenção Unificado
   let retentionVideoPath = null;
   
   // Se há nicheId e retenção não foi desabilitada, usar o sistema de retenção por nicho
   if (nicheId && retentionVideoId !== 'none') {
+    console.log(`[RETENTION] ========================================`);
+    console.log(`[RETENTION] Usando retentionManager (sistema unificado)`);
+    console.log(`[RETENTION] Nicho: ${nicheId}`);
+    console.log(`[RETENTION] ========================================`);
     console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${nicheId}`);
     try {
       // getRetentionClip faz todo o trabalho: download, processamento em clipes, seleção aleatória
@@ -170,23 +175,29 @@ export async function composeFinalVideo({
       if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
         const stats = fs.statSync(retentionVideoPath);
         if (stats.size > 0) {
+          console.log(`[RETENTION] ✅ Vídeo de retenção obtido: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
           console.log(`[COMPOSER] ✅ Clipe de retenção obtido do nicho ${nicheId}: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
         } else {
+          console.warn(`[RETENTION] ⚠️ Nenhum vídeo de retenção disponível para o nicho (arquivo vazio)`);
           console.warn(`[COMPOSER] ⚠️ Clipe de retenção está vazio, continuando sem retenção.`);
           retentionVideoPath = null;
         }
       } else {
+        console.warn(`[RETENTION] ⚠️ Nenhum vídeo de retenção disponível para o nicho`);
         console.warn(`[COMPOSER] ⚠️ Nenhum vídeo de retenção disponível para o nicho ${nicheId}, continuando sem.`);
         retentionVideoPath = null;
       }
     } catch (error) {
+      console.error(`[RETENTION] ❌ Erro ao obter clipe de retenção: ${error.message}`);
       console.error(`[COMPOSER] ❌ Erro ao obter clipe de retenção do nicho: ${error.message}`);
       console.error(`[COMPOSER] Continuando sem vídeo de retenção.`);
       retentionVideoPath = null; // Continuar sem vídeo de retenção
     }
   } else if (retentionVideoId === 'none') {
+    console.log(`[RETENTION] Vídeo de retenção desabilitado (retentionVideoId='none')`);
     console.log(`[COMPOSER] Vídeo de retenção desabilitado (retentionVideoId='none')`);
   } else if (!nicheId) {
+    console.warn(`[RETENTION] ⚠️ Nenhum nicheId fornecido, não é possível obter vídeo de retenção.`);
     console.warn(`[COMPOSER] ⚠️ Nenhum nicheId fornecido, não é possível obter vídeo de retenção.`);
   }
   

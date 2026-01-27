@@ -42,10 +42,23 @@ import { ensureAdminExists } from "./utils/ensureAdmin.js";
 // Importar videoStore e configurar no videoProcessor
 import { videoStore } from "./controllers/downloadProgressController.js";
 import { setVideoStore } from "./services/videoProcessor.js";
+import { STORAGE_CONFIG } from "./config/storage.config.js";
 
 // Configurar videoStore no videoProcessor ANTES de importar o worker
 setVideoStore(videoStore);
 console.log('[INIT] ✅ VideoStore configurado no videoProcessor');
+
+// ===============================
+// TESTE 1: Validar Configuração de Caminhos
+// ===============================
+console.log('[STARTUP] ========================================');
+console.log('[STARTUP] Configuração de armazenamento:');
+console.log('[STARTUP]   UPLOADS_DIR:', STORAGE_CONFIG.UPLOADS_DIR);
+console.log('[STARTUP]   SERIES_DIR:', STORAGE_CONFIG.SERIES_DIR);
+console.log('[STARTUP]   RETENTION_DIR:', STORAGE_CONFIG.RETENTION_DIR);
+console.log('[STARTUP]   CAPTIONS_DIR:', STORAGE_CONFIG.CAPTIONS_DIR);
+console.log('[STARTUP] Ambiente:', process.env.NODE_ENV || 'development');
+console.log('[STARTUP] ========================================');
 
 // Importar e configurar worker para processar jobs (funciona mesmo sem Redis)
 import "./workers/videoProcessWorker.js";

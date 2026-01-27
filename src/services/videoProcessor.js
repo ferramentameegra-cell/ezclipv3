@@ -281,8 +281,10 @@ export const generateVideoSeries = async (job, jobsMap) => {
     // CALCULAR TRIM
     // ===============================
     // SEMPRE obter duração via ffprobe (fonte única de verdade)
+    // TESTE 2: Validar Obtenção de Duração
     let videoDuration = 0;
     try {
+      console.log(`[DURATION_TEST] Testando duração para: ${sourceVideoPath}`);
       const videoValidation = await validateVideoWithFfprobe(sourceVideoPath);
       videoDuration = Math.floor(videoValidation.durationFloat || videoValidation.duration || 0);
       
@@ -290,12 +292,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
         throw new Error(`Duração inválida retornada pelo ffprobe: ${videoDuration}s`);
       }
       
+      console.log(`[DURATION_TEST] ✅ Duração obtida: ${videoDuration}s`);
       console.log(`[PROCESSING] ✅ Duração obtida via ffprobe: ${videoDuration}s`);
       
       // Atualizar no store para referência futura
       video.duration = videoDuration;
       videoStore.set(videoId, video);
     } catch (validationError) {
+      console.error(`[DURATION_TEST] ❌ Erro ao obter duração: ${validationError.message}`);
       throw new Error(`Não foi possível obter a duração do vídeo via ffprobe: ${validationError.message}`);
     }
     
@@ -380,6 +384,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
         throw new Error(`Erro de Trim: a duração do vídeo trimado não corresponde ao esperado. Esperado: ${expectedTrimDuration}s, Obtido: ${actualTrimmedDuration}s`);
       }
       
+      // TESTE 3: Validar Trim e Validação Pós-Trim
+      console.log(`[TRIM_VALIDATION] ========================================`);
+      console.log(`[TRIM_VALIDATION] ✅ Trim validado com sucesso`);
+      console.log(`[TRIM_VALIDATION]   Arquivo: ${trimmedPath}`);
+      console.log(`[TRIM_VALIDATION]   Duração esperada: ${expectedTrimDuration}s`);
+      console.log(`[TRIM_VALIDATION]   Duração obtida: ${actualTrimmedDuration}s`);
+      console.log(`[TRIM_VALIDATION]   Diferença: ${Math.abs(actualTrimmedDuration - expectedTrimDuration)}s`);
+      console.log(`[TRIM_VALIDATION] ========================================`);
       console.log(`[PROCESSING] ✅ Trim validado com sucesso. Duração: ${actualTrimmedDuration}s (esperado: ${expectedTrimDuration}s)`);
 
       // Após o trim, o vídeo processado começa em 0 e termina em trimmedDuration
