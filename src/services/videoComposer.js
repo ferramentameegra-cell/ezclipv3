@@ -121,6 +121,7 @@ function getSafeZones(format, platforms, safeMarginsPercent) {
  * @param {Object} options.headlineStyle - Estilo da headline {font, fontSize, color, fontStyle}
  * @param {string} options.headlineText - Texto da headline
  * @param {string} options.retentionVideoId - ID do vídeo de retenção ('random', 'none' ou ID específico)
+ * @param {string} options.retentionVideoPath - Caminho explícito do clipe de retenção (quando pré-gerado pelo processor)
  * @param {string} options.nicheId - ID do nicho (para randomizar retenção)
  * @param {string} options.backgroundColor - Cor de fundo (hex, ex: '#000000')
  * @param {number} options.clipNumber - Número do clipe atual (1-based)
@@ -137,6 +138,7 @@ export async function composeFinalVideo({
   headlineStyle = {},
   headlineText = null,
   retentionVideoId = 'random',
+  retentionVideoPath: optionRetentionPath = null,
   nicheId = null,
   backgroundColor = '#000000',
   format = '9:16', // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical - IGNORAR parâmetro recebido
@@ -156,58 +158,29 @@ export async function composeFinalVideo({
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // Obter vídeo de retenção usando APENAS o novo sistema retentionManager
-  // Sistema antigo foi completamente removido
-  // TESTE 4: Validar Sistema de Retenção Unificado
+  // Vídeo de retenção: usar caminho explícito (pré-gerado) ou obter via retentionManager
   let retentionVideoPath = null;
-  
-  // Se há nicheId e retenção não foi desabilitada, usar o sistema de retenção por nicho
-  if (nicheId && retentionVideoId !== 'none') {
-    // CORREÇÃO: Normalizar nicheId removendo prefixo "niche-" se existir
-    // Ex: "niche-default" -> "default", "niche-podcast" -> "podcast"
-    let normalizedNicheId = nicheId;
-    if (typeof nicheId === 'string' && nicheId.startsWith('niche-')) {
-      normalizedNicheId = nicheId.replace(/^niche-/, '');
-      console.log(`[RETENTION] ⚠️ Nicho normalizado: "${nicheId}" -> "${normalizedNicheId}"`);
-    }
-    
-    console.log(`[RETENTION] ========================================`);
-    console.log(`[RETENTION] Usando retentionManager (sistema unificado)`);
-    console.log(`[RETENTION] Nicho original: ${nicheId}`);
-    console.log(`[RETENTION] Nicho normalizado: ${normalizedNicheId}`);
-    console.log(`[RETENTION] ========================================`);
-    console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${normalizedNicheId}`);
+  if (optionRetentionPath && fs.existsSync(optionRetentionPath) && fs.statSync(optionRetentionPath).size > 0) {
+    retentionVideoPath = optionRetentionPath;
+    console.log(`[COMPOSER] ✅ Usando clipe de retenção pré-gerado: ${optionRetentionPath}`);
+  } else if (nicheId && retentionVideoId !== 'none') {
+    const normalizedNicheId = typeof nicheId === 'string' && nicheId.startsWith('niche-')
+      ? nicheId.replace(/^niche-/, '') : (nicheId || 'default');
     try {
-      // getRetentionClip faz todo o trabalho: download, processamento em clipes, seleção aleatória
       retentionVideoPath = await getRetentionClip(normalizedNicheId);
-      
-      if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
-        const stats = fs.statSync(retentionVideoPath);
-        if (stats.size > 0) {
-          console.log(`[RETENTION] ✅ Vídeo de retenção obtido: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-          console.log(`[COMPOSER] ✅ Clipe de retenção obtido do nicho ${nicheId}: ${retentionVideoPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-        } else {
-          console.warn(`[RETENTION] ⚠️ Nenhum vídeo de retenção disponível para o nicho (arquivo vazio)`);
-          console.warn(`[COMPOSER] ⚠️ Clipe de retenção está vazio, continuando sem retenção.`);
-          retentionVideoPath = null;
-        }
+      if (retentionVideoPath && fs.existsSync(retentionVideoPath) && fs.statSync(retentionVideoPath).size > 0) {
+        console.log(`[COMPOSER] ✅ Clipe de retenção obtido do nicho: ${retentionVideoPath}`);
       } else {
-        console.warn(`[RETENTION] ⚠️ Nenhum vídeo de retenção disponível para o nicho`);
-        console.warn(`[COMPOSER] ⚠️ Nenhum vídeo de retenção disponível para o nicho ${nicheId}, continuando sem.`);
         retentionVideoPath = null;
       }
-    } catch (error) {
-      console.error(`[RETENTION] ❌ Erro ao obter clipe de retenção: ${error.message}`);
-      console.error(`[COMPOSER] ❌ Erro ao obter clipe de retenção do nicho: ${error.message}`);
-      console.error(`[COMPOSER] Continuando sem vídeo de retenção.`);
-      retentionVideoPath = null; // Continuar sem vídeo de retenção
+    } catch (e) {
+      console.warn(`[COMPOSER] ⚠️ Erro ao obter clipe de retenção: ${e.message}`);
+      retentionVideoPath = null;
     }
   } else if (retentionVideoId === 'none') {
-    console.log(`[RETENTION] Vídeo de retenção desabilitado (retentionVideoId='none')`);
     console.log(`[COMPOSER] Vídeo de retenção desabilitado (retentionVideoId='none')`);
   } else if (!nicheId) {
-    console.warn(`[RETENTION] ⚠️ Nenhum nicheId fornecido, não é possível obter vídeo de retenção.`);
-    console.warn(`[COMPOSER] ⚠️ Nenhum nicheId fornecido, não é possível obter vídeo de retenção.`);
+    console.warn(`[COMPOSER] ⚠️ Nenhum nicheId fornecido, retenção não disponível.`);
   }
   
   // FORMATO FIXO: Sempre 9:16 (1080x1920) vertical para todos os vídeos gerados
@@ -221,14 +194,12 @@ export async function composeFinalVideo({
   console.log(`[COMPOSER] ⚠️ FORMATO FORÇADO: 9:16 (1080x1920) - formato recebido: ${format} foi IGNORADO`);
   console.log(`[COMPOSER] ✅ Dimensões HARDCODED: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (vertical)`);
   
-  // POSIÇÕES FIXAS E VALIDADAS (1080x1920):
-  // - Margem superior: 180px (vídeo principal começa aqui)
-  // - Margem inferior livre: 140px (área inferior deve permanecer sempre livre)
-  // - Vídeo principal: y=180px (topo fixo)
-  // - Vídeo de retenção: base a 140px acima da margem inferior
-  //   O conteúdo será dimensionado para o maior tamanho possível mantendo proporção
-  const TOP_MARGIN = 180; // Margem superior fixa
-  const BOTTOM_FREE_SPACE = 140; // Área inferior livre (base do conteúdo de retenção deve ficar aqui)
+  // LAYOUT FINAL 9:16 (1080x1920) – fixo
+  // - Resolução: 1080x1920. Vídeo principal (16:9): topo, margem superior 180px.
+  // - Headline: centralizada verticalmente no espaço entre principal e retenção.
+  // - Vídeo de retenção (16:9): base, margem inferior 140px.
+  const TOP_MARGIN = 180;
+  const BOTTOM_FREE_SPACE = 140;
   
   // O cálculo da altura e posição do vídeo de retenção será feito dinamicamente
   // após obter as dimensões originais do vídeo (dentro do ffprobe)
@@ -438,7 +409,7 @@ export async function composeFinalVideo({
       let currentLabel = '[0:v]'; // Input do vídeo principal (sempre começa aqui)
 
       // 1. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
-      const fixedBackgroundPath = getFixedBackgroundPath();
+      let fixedBackgroundPath = getFixedBackgroundPath();
       let backgroundInputIndex = null;
       let inputCount = 1; // clipPath é input 0
       
@@ -472,7 +443,7 @@ export async function composeFinalVideo({
       currentLabel = '[composed]';
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px (TOPO)`);
 
-      // 4. Adicionar headline ANTES do vídeo de retenção (CENTRO VERTICAL)
+      // 4. Adicionar headline (CENTRO VERTICAL no espaço entre vídeo principal e retenção)
       const hasHeadline = headlineText || (headline && headline.text);
       console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
       
@@ -481,10 +452,12 @@ export async function composeFinalVideo({
         const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
         const fontSize = headlineStyle.fontSize || 72;
         const color = headlineStyle.color || '#FFFFFF';
-        // CENTRO VERTICAL: y = (1920 - altura_texto_headline) / 2
-        // Estimar altura do texto como fontSize * número_de_linhas (aproximação)
-        const estimatedTextHeight = fontSize * (headlineTextValue.split('\\n').length || 1);
-        const headlineY = Math.round((1920 - estimatedTextHeight) / 2);
+        const numLines = Math.max(1, (headlineTextValue.split(/\n/).length));
+        const estimatedTextHeight = fontSize * numLines;
+        // Centro do espaço entre principal (topo, margem 180) e retenção (base, margem 140)
+        const gapTop = MAIN_VIDEO_Y + mainVideoHeightFinal;
+        const gapBottom = retentionVideoPath ? retentionY : (1920 - 140);
+        const headlineY = Math.round(gapTop + Math.max(0, (gapBottom - gapTop - estimatedTextHeight) / 2));
         const HEADLINE_SAFE_MARGIN = 80;
         const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2);
         const boxBorderWidth = 0;
