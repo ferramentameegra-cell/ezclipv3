@@ -17,14 +17,32 @@ let cookiesPathCache = null;
 let cookiesContentCache = null;
 
 /**
- * Cria arquivo temporário de cookies a partir da variável de ambiente
- * Retorna o caminho do arquivo ou null se não houver cookies
- * Reutiliza arquivo se conteúdo não mudou
+ * Retorna caminho de cookies: prioriza YTDLP_COOKIES_PATH (arquivo); senão cria temp a partir de YTDLP_COOKIES.
+ * Retorna null se não houver cookies configurados.
  */
 function createCookiesFile() {
+  const pathFromEnv = process.env.YTDLP_COOKIES_PATH;
+  if (pathFromEnv && typeof pathFromEnv === 'string') {
+    const p = pathFromEnv.trim();
+    if (p) {
+      try {
+        if (fs.existsSync(p)) {
+          const st = fs.statSync(p);
+          if (st.size > 0) {
+            console.log('[DOWNLOAD] ✅ Usando cookies de YTDLP_COOKIES_PATH:', p);
+            return p;
+          }
+          console.warn('[DOWNLOAD] ⚠️ YTDLP_COOKIES_PATH existe mas está vazio:', p);
+        } else {
+          console.warn('[DOWNLOAD] ⚠️ YTDLP_COOKIES_PATH não existe:', p);
+        }
+      } catch (e) {
+        console.warn('[DOWNLOAD] ⚠️ Erro ao validar YTDLP_COOKIES_PATH:', e.message);
+      }
+    }
+  }
+
   const cookiesContent = process.env.YTDLP_COOKIES;
-  
-  // Se não há cookies, limpar cache e retornar null
   if (!cookiesContent || cookiesContent.trim() === '') {
     if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
       try {
@@ -38,34 +56,26 @@ function createCookiesFile() {
     return null;
   }
 
-  // Se conteúdo não mudou e arquivo existe, reutilizar
   if (cookiesPathCache && cookiesContentCache === cookiesContent && fs.existsSync(cookiesPathCache)) {
     console.log('[DOWNLOAD] ✅ Reutilizando arquivo de cookies existente:', cookiesPathCache);
     return cookiesPathCache;
   }
 
   try {
-    // Criar arquivo temporário
     const tempDir = os.tmpdir();
     const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
-    
-    // Escrever conteúdo dos cookies
     fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
-    
-    // Remover arquivo antigo se existir
+
     if (cookiesPathCache && fs.existsSync(cookiesPathCache) && cookiesPathCache !== cookiesPath) {
       try {
         fs.unlinkSync(cookiesPathCache);
       } catch (e) {
-        // Ignorar erro ao remover arquivo antigo
+        // Ignorar
       }
     }
-    
-    // Atualizar cache
     cookiesPathCache = cookiesPath;
     cookiesContentCache = cookiesContent;
-    
-    console.log('[DOWNLOAD] ✅ Arquivo de cookies criado:', cookiesPath);
+    console.log('[DOWNLOAD] ✅ Arquivo de cookies criado (YTDLP_COOKIES):', cookiesPath);
     console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', fs.statSync(cookiesPath).size, 'bytes');
     return cookiesPath;
   } catch (error) {
@@ -242,9 +252,18 @@ function parseYtDlpError(stderr, exitCode) {
   }
   
   if (errorLower.includes('sign in to confirm') || errorLower.includes('sign in to confirm you\'re not a bot') || errorLower.includes('bot') || errorLower.includes('use --cookies') || errorLower.includes('--cookies-from-browser')) {
-    const hasCookies = process.env.YTDLP_COOKIES && process.env.YTDLP_COOKIES.trim() !== '';
+    const hasCookiesEnv = process.env.YTDLP_COOKIES && process.env.YTDLP_COOKIES.trim() !== '';
+    let hasCookiesPath = false;
+    const cp = process.env.YTDLP_COOKIES_PATH;
+    if (cp && typeof cp === 'string' && cp.trim()) {
+      try {
+        const p = cp.trim();
+        if (fs.existsSync(p) && fs.statSync(p).size > 0) hasCookiesPath = true;
+      } catch (_) {}
+    }
+    const hasCookies = hasCookiesEnv || hasCookiesPath;
     if (!hasCookies) {
-      return '❌ ERRO CRÍTICO: YouTube detectou acesso automatizado. É OBRIGATÓRIO configurar cookies do navegador na variável YTDLP_COOKIES no Railway. Sem cookies, o download não funcionará. Veja o arquivo COMO_CONFIGURAR_COOKIES_YOUTUBE.md para instruções detalhadas.';
+      return '❌ ERRO CRÍTICO: YouTube detectou acesso automatizado. É OBRIGATÓRIO configurar cookies: use YTDLP_COOKIES (conteúdo) ou YTDLP_COOKIES_PATH (caminho do arquivo) no Railway. Veja COMO_CONFIGURAR_COOKIES_YOUTUBE.md.';
     } else {
       // Verificar se o arquivo de cookies foi criado corretamente
       const cookiesPath = createCookiesFile();
@@ -477,7 +496,7 @@ export async function downloadWithProgress(req, res) {
                 console.warn('[DOWNLOAD] ⚠️ Arquivo de cookies está vazio');
                 cookiesPath = null;
               } else {
-                console.log('[DOWNLOAD] ✅ Usando cookies de variável de ambiente (YTDLP_COOKIES)');
+                console.log('[DOWNLOAD] ✅ Usando cookies (YTDLP_COOKIES ou YTDLP_COOKIES_PATH)');
                 console.log('[DOWNLOAD] ✅ Tamanho do arquivo de cookies:', stats.size, 'bytes');
               }
             }
