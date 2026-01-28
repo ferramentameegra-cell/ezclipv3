@@ -37,9 +37,12 @@ const FFMPEG_COMPOSE_TIMEOUT = parseInt(process.env.FFMPEG_COMPOSE_TIMEOUT || '3
 function getFixedBackgroundPath() {
   // Ordem de prioridade: 1) projeto (ezv2/assets/backgrounds), 2) /tmp (Railway), 3) env
   const projectRoot = path.join(__dirname, '../..');
+  const cwdRoot = process.cwd();
   const possiblePaths = [
     path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.jpg'),
+    path.join(cwdRoot, 'assets', 'backgrounds', 'ezclip-background.png'),
+    path.join(cwdRoot, 'assets', 'backgrounds', 'ezclip-background.jpg'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.jpg'),
     ...(process.env.FIXED_BACKGROUND_PATH ? [process.env.FIXED_BACKGROUND_PATH] : [])
@@ -436,7 +439,7 @@ export async function composeFinalVideo({
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px - TOPO)
       const MAIN_VIDEO_Y = 180; // Margem superior fixa de 180px
-      filterComplex += `[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed];`;
+      filterComplex += `[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}:shortest=1[composed];`;
       currentLabel = '[composed]';
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px (TOPO)`);
 
@@ -522,16 +525,18 @@ export async function composeFinalVideo({
         } else if (retentionY < 0) {
           console.warn(`[COMPOSER] ⚠️ Vídeo de retenção com posição inválida, desabilitando: y=${retentionY}px`);
         } else {
-          // Overlay do vídeo de retenção
-          filterComplex += `${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}:shortest=0[with_retention];`;
+          // Overlay do vídeo de retenção (parte inferior, margem 140px; shortest=1 = duração do principal)
+          filterComplex += `${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}:shortest=1[with_retention];`;
           currentLabel = '[with_retention]';
-          console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px`);
+          console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px (base 140px)`);
         }
       }
 
-      // 6. Adicionar numeração "Parte X/Y" - CANTO SUPERIOR DIREITO
-      if (clipNumber !== null && clipNumber !== undefined && totalClips !== null && totalClips !== undefined) {
-        const partText = `Parte ${clipNumber}/${totalClips}`;
+      // 6. Adicionar contador "Parte X/Y" - CANTO SUPERIOR DIREITO (sempre que totalClips; fonte bold)
+      const showPartNumber = totalClips != null && totalClips !== undefined && totalClips > 0;
+      if (showPartNumber) {
+        const partNum = (clipNumber != null && clipNumber !== undefined) ? clipNumber : 1;
+        const partText = `Parte ${partNum}/${totalClips}`;
         const partFontSize = 48;
         const partColor = '#FFFFFF';
         const partStrokeColor = '#000000';
@@ -539,23 +544,15 @@ export async function composeFinalVideo({
         const PART_MARGIN = 80;
         const partX = `(w-text_w-${PART_MARGIN})`;
         const partY = PART_MARGIN;
-        
-        const partFont = headlineStyle.font || headlineStyle.fontFamily || 'Inter';
-        const partFontPath = getFontPath(partFont);
-        
-        let finalPartFontPath = partFontPath;
         const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-        if (fs.existsSync && !fs.existsSync(partFontPath)) {
-          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada para numeração: ${partFontPath}, usando fallback`);
-          finalPartFontPath = isProduction 
-            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-            : '/System/Library/Fonts/Helvetica.ttc';
+        let finalPartFontPath = isProduction ? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' : '/System/Library/Fonts/Helvetica.ttc';
+        if (typeof fs.existsSync === 'function' && !fs.existsSync(finalPartFontPath)) {
+          finalPartFontPath = isProduction ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf' : '/System/Library/Fonts/Helvetica.ttc';
         }
-        
         const partTextEscaped = escapeText(partText);
         filterComplex += `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number];`;
         currentLabel = '[with_part_number]';
-        console.log(`[COMPOSER] ✅ Numeração adicionada: "${partText}"`);
+        console.log(`[COMPOSER] ✅ Contador adicionado (canto sup. dir.): "${partText}"`);
       }
 
       // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
@@ -650,8 +647,8 @@ export async function composeFinalVideo({
             console.warn(`[COMPOSER] ⚠️ Background fixo está vazio: ${fixedBackgroundPath}. Continuando sem background.`);
             fixedBackgroundPath = null;
           } else {
-            command.input(fixedBackgroundPath);
-            console.log(`[COMPOSER] ✅ Background fixo validado e adicionado como input 1: ${fixedBackgroundPath} (${(bgStats.size / 1024).toFixed(2)} KB)`);
+            command.inputOptions(['-loop', '1']).input(fixedBackgroundPath);
+            console.log(`[COMPOSER] ✅ Background fixo validado e adicionado como input 1 (-loop 1): ${fixedBackgroundPath} (${(bgStats.size / 1024).toFixed(2)} KB)`);
           }
         }
       }
