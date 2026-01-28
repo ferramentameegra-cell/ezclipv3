@@ -661,6 +661,7 @@ export async function composeFinalVideo({
           // Adicionar input do vídeo de retenção com loop infinito
           const retentionInput = command.input(retentionVideoPath);
           retentionInput.inputOptions(['-stream_loop', '-1']); // Loopar vídeo de retenção infinitamente
+          inputCount++; // Crítico: incluir no count para validação maxInputIndex >= inputCount
           const retentionStats = fs.statSync(retentionVideoPath);
           console.log(`[COMPOSER] ✅ Vídeo de retenção adicionado como input ${retentionInputIndex} com loop infinito: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
         } else {
