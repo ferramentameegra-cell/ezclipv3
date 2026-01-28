@@ -1224,8 +1224,7 @@ export const generateVideoSeries = async (job, jobsMap) => {
               // FALLBACK: Apenas background preto + vídeo principal (sem headlines, retenção, etc.)
               const filterComplex = `color=c=black:s=1080x1920:d=60[bg];[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled];[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`;
               
-              // Validar que [final] existe
-              if (!filterComplex.includes('[final]') || !filterComplex.includes('=[final]')) {
+              if (!filterComplex.includes('[final]')) {
                 return reject(new Error('Filter complex do fallback não contém [final]'));
               }
               

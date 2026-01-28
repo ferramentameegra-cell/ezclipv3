@@ -602,13 +602,11 @@ export async function composeFinalVideo({
         return reject(new Error('currentLabel não está definido - não é possível criar [final]'));
       }
       
-      // CORREÇÃO: Remover filtro copy inválido - não é necessário criar [final] explicitamente
-      // O currentLabel já contém o vídeo processado, então apenas renomeamos para [final]
-      // Usar format=yuv420p para garantir compatibilidade (filtro válido do FFmpeg)
-      filterComplex += `${currentLabel}format=yuv420p[final]`;
+      // Forçar 1080x1920 no filter + format=yuv420p para [final] (evita sobrescrita por outros fluxos)
+      filterComplex += `${currentLabel}scale=1080:1920,format=yuv420p[final]`;
       currentLabel = '[final]';
       
-      console.log(`[COMPOSER] ✅ Label [final] criado usando format=yuv420p (filtro válido)`);
+      console.log(`[COMPOSER] ✅ Label [final] criado: scale=1080:1920,format=yuv420p (saída fixa 1080x1920)`);
       console.log(`[COMPOSER] ✅ currentLabel final: ${currentLabel}`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
@@ -867,7 +865,7 @@ export async function composeFinalVideo({
                 console.log(`[COMPOSER] ✅ Resolução de saída verificada: ${actualWidth}x${actualHeight} (aspect ratio: ${actualAspectRatio})`);
                 if (actualWidth !== 1080 || actualHeight !== 1920) {
                   console.error(`[COMPOSER] ❌ ERRO CRÍTICO: Resolução esperada 1080x1920, mas obteve ${actualWidth}x${actualHeight}`);
-                  console.error(`[COMPOSER] ❌ O vídeo NÃO está no formato correto! Verifique as opções de saída do FFmpeg.`);
+                  console.error(`[COMPOSER] ❌ Verifique [FFMPEG_COMMAND] no log: deve conter -s 1080x1920 -aspect 9:16 e scale=1080:1920 no filter.`);
                   // Não rejeitar aqui, apenas logar o erro - o vídeo pode ainda estar funcional
                 } else {
                   console.log(`[COMPOSER] ✅ Resolução correta confirmada: 1080x1920 (9:16 vertical)`);
