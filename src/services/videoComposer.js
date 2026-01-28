@@ -41,8 +41,10 @@ function getFixedBackgroundPath() {
   const possiblePaths = [
     path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.jpg'),
+    path.join(projectRoot, 'ezv2', 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join(cwdRoot, 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join(cwdRoot, 'assets', 'backgrounds', 'ezclip-background.jpg'),
+    path.join(cwdRoot, 'ezv2', 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.jpg'),
     ...(process.env.FIXED_BACKGROUND_PATH ? [process.env.FIXED_BACKGROUND_PATH] : [])
@@ -403,31 +405,35 @@ export async function composeFinalVideo({
 
       // ============================================================
       // REFATORAÇÃO: Construir filter_complex de forma sequencial
+      // Background = input 0, Vídeo principal = input 1 (quando há bg) ou 0 (sem bg)
       // ============================================================
-      // Construir filter_complex como string diretamente (não usar array)
-      let filterComplex = '';
-      let currentLabel = '[0:v]'; // Input do vídeo principal (sempre começa aqui)
-
-      // 1. BACKGROUND EM TODOS OS CLIPES (LAYER 0 - OBRIGATÓRIO). Sempre 1080x1920 vertical.
       let fixedBackgroundPath = getFixedBackgroundPath();
-      let backgroundInputIndex = null;
-      let inputCount = 1; // clipPath é input 0
-      
+      if (fixedBackgroundPath) {
+        if (!fs.existsSync(fixedBackgroundPath) || fs.statSync(fixedBackgroundPath).size === 0) {
+          fixedBackgroundPath = null;
+        }
+      }
+      const mainVideoInputIndex = fixedBackgroundPath ? 1 : 0; // Índice do vídeo principal nos inputs
+      const audioInputIndex = mainVideoInputIndex; // Áudio vem do mesmo input do vídeo principal
+      let inputCount = fixedBackgroundPath ? 2 : 1; // bg=0 + clip=1, ou só clip=0
+      let retentionInputIndexWhenUsed = fixedBackgroundPath ? 2 : 1;
+
+      let filterComplex = '';
+      // 1. BACKGROUND EM TODOS OS CLIPES (LAYER 0). Sempre 1080x1920 vertical.
       if (fixedBackgroundPath && fs.existsSync(fixedBackgroundPath)) {
-        backgroundInputIndex = inputCount;
-        inputCount++;
-        filterComplex += `[${backgroundInputIndex}:v]scale=1080:1920:force_original_aspect_ratio=increase[bg_scaled];`;
+        filterComplex += `[0:v]scale=1080:1920:force_original_aspect_ratio=increase[bg_scaled];`;
         filterComplex += `[bg_scaled]crop=1080:1920[bg_fixed];`;
-        console.log(`[COMPOSER] ✅ Background (imagem) em TODOS os clipes - layer 0`);
+        console.log(`[COMPOSER] ✅ Background (imagem) como input 0 - layer 0 - 1080x1920`);
       } else {
         filterComplex += `color=c=${backgroundColor.replace('#', '')}:s=1080:1920:d=${videoDuration}[bg_fixed];`;
-        console.log(`[COMPOSER] ✅ Background (cor sólida) em TODOS os clipes - fallback 1080x1920`);
+        console.log(`[COMPOSER] ✅ Background (cor sólida) - fallback 1080x1920`);
       }
 
-      // 2. Redimensionar vídeo principal mantendo proporção 16:9 (horizontal)
-      const mainVideoWidth = 1080; // Largura fixa: 1080px
-      const mainVideoHeight16_9 = Math.round(mainVideoWidth * 9 / 16); // Altura para 16:9 = 607px
-      const mainVideoHeightFinal = Math.min(mainVideoHeight16_9, MAIN_VIDEO_HEIGHT); // Não ultrapassar espaço disponível
+      // 2. Redimensionar vídeo principal (input 1 ou 0) mantendo proporção 16:9
+      let currentLabel = `[${mainVideoInputIndex}:v]`;
+      const mainVideoWidth = 1080;
+      const mainVideoHeight16_9 = Math.round(mainVideoWidth * 9 / 16);
+      const mainVideoHeightFinal = Math.min(mainVideoHeight16_9, MAIN_VIDEO_HEIGHT);
       
       filterComplex += `${currentLabel}scale=${mainVideoWidth}:${mainVideoHeightFinal}:force_original_aspect_ratio=decrease[main_scaled];`;
       currentLabel = '[main_scaled]';
@@ -491,8 +497,7 @@ export async function composeFinalVideo({
             const retentionStats = fs.statSync(retentionVideoPath);
             if (retentionStats.size > 0) {
               retentionVideoExists = true;
-              // Se background existe, retention é input 2, senão é input 1
-              retentionInputIndex = fixedBackgroundPath ? 2 : 1;
+              retentionInputIndex = retentionInputIndexWhenUsed;
               console.log(`[COMPOSER] ✅ Vídeo de retenção validado: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
             } else {
               console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
@@ -614,10 +619,9 @@ export async function composeFinalVideo({
       
       console.log(`[COMPOSER] ✅ Vídeo principal validado: ${clipPath} (${(clipStats.size / 1024 / 1024).toFixed(2)} MB)`);
       
-      // Validar background fixo se especificado
+      // Não alterar fixedBackgroundPath aqui: o filter já foi construído com esses índices.
       if (fixedBackgroundPath && !fs.existsSync(fixedBackgroundPath)) {
-        console.warn(`[COMPOSER] ⚠️ Background fixo não existe: ${fixedBackgroundPath}. Continuando sem background.`);
-        fixedBackgroundPath = null;
+        return reject(new Error(`[COMPOSER] Background fixo foi usado no filter mas arquivo não existe: ${fixedBackgroundPath}`));
       }
       
       // Construir comando FFmpeg com timeout para evitar travamento indefinido
@@ -628,25 +632,17 @@ export async function composeFinalVideo({
       let ffmpegStderr = '';
       let ffmpegStdout = '';
 
-      // Input 0: vídeo principal
-      command.input(clipPath);
-
-      // Input 1: Background fixo (se existir) - LAYER 0
+      // Ordem dos inputs: Background = 0 (se existir), Vídeo principal = 0 ou 1, Retenção = 2 ou 1
       if (fixedBackgroundPath) {
-        // VALIDAR background antes de adicionar
-        if (!fs.existsSync(fixedBackgroundPath)) {
-          console.warn(`[COMPOSER] ⚠️ Background fixo não existe: ${fixedBackgroundPath}. Continuando sem background.`);
-          fixedBackgroundPath = null;
-        } else {
-          const bgStats = fs.statSync(fixedBackgroundPath);
-          if (bgStats.size === 0) {
-            console.warn(`[COMPOSER] ⚠️ Background fixo está vazio: ${fixedBackgroundPath}. Continuando sem background.`);
-            fixedBackgroundPath = null;
-          } else {
-            command.inputOptions(['-loop', '1']).input(fixedBackgroundPath);
-            console.log(`[COMPOSER] ✅ Background fixo validado e adicionado como input 1 (-loop 1): ${fixedBackgroundPath} (${(bgStats.size / 1024).toFixed(2)} KB)`);
-          }
-        }
+        const bgStats = fs.statSync(fixedBackgroundPath);
+        command.inputOptions(['-loop', '1']).input(fixedBackgroundPath);
+        console.log(`[COMPOSER] ✅ Background fixo como input 0 (-loop 1): ${fixedBackgroundPath} (${(bgStats.size / 1024).toFixed(2)} KB)`);
+      }
+      command.input(clipPath);
+      if (fixedBackgroundPath) {
+        console.log(`[COMPOSER] ✅ Vídeo principal como input 1: ${clipPath}`);
+      } else {
+        console.log(`[COMPOSER] ✅ Vídeo principal como input 0: ${clipPath}`);
       }
 
       // Input 2 (ou 1 se não houver background): vídeo de retenção (OPCIONAL)
@@ -719,29 +715,27 @@ export async function composeFinalVideo({
         return reject(new Error(`Erro ao criar filter_complex: ${filterError.message}`));
       }
 
-      // Saída ÚNICA: APENAS vertical 1080x1920. Nenhum arquivo horizontal é gerado.
+      // Saída ÚNICA: APENAS vertical 1080x1920. Vídeo + áudio do vídeo principal.
       const outputOptions = [
         '-map', '[final]',
+        '-map', `${audioInputIndex}:a?`,
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-shortest',
         '-s', '1080x1920',
         '-aspect', '9:16',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast', // OTIMIZAÇÃO 3: Mudado de 'medium' para 'veryfast' (20-30% mais rápido)
+        '-preset', 'veryfast',
         '-crf', '23',
         '-pix_fmt', 'yuv420p',
         '-movflags', '+faststart'
       ];
       
       console.log(`[COMPOSER] ✅ FORÇANDO resolução de saída: 1080x1920 (9:16 vertical) - HARDCODED OBRIGATÓRIO`);
-      console.log(`[COMPOSER] ✅ Opções de saída: -s 1080x1920 -aspect 9:16`);
-      console.log(`[COMPOSER] ✅ Múltiplas camadas de forçamento: complexFilter (scale+crop) + -s + -aspect`);
-      console.log(`[COMPOSER] ✅ complexFilter garante: scale=1080:1920:force_original_aspect_ratio=increase + crop=1080:1920:0:0`);
-      console.log(`[COMPOSER] ✅ Usando label final: [final]`);
+      console.log(`[COMPOSER] ✅ Áudio: -map ${audioInputIndex}:a? (vídeo principal), -c:a aac, -shortest`);
       console.log(`[COMPOSER] ✅ Background fixo: ${fixedBackgroundPath ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Vídeo de retenção: ${retentionVideoPath ? 'SIM' : 'NÃO'}`);
-
-      // Sempre mapear áudio do vídeo principal (0:a? = inclui se existir, evita erro se não houver)
-      outputOptions.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
 
       // Se houver vídeo de retenção, garantir que o vídeo final tenha a duração do vídeo principal
       // O vídeo de retenção será repetido automaticamente pelo FFmpeg se for mais curto

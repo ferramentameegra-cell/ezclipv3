@@ -1232,9 +1232,13 @@ export const generateVideoSeries = async (job, jobsMap) => {
                 .complexFilter(filterComplex)
                 .outputOptions([
                   '-map', '[final]',
+                  '-map', '0:a?',
+                  '-c:v', 'libx264',
+                  '-c:a', 'aac',
+                  '-b:a', '128k',
+                  '-shortest',
                   '-s', '1080x1920',
                   '-aspect', '9:16',
-                  '-c:v', 'libx264',
                   '-preset', 'medium',
                   '-crf', '23',
                   '-pix_fmt', 'yuv420p',
