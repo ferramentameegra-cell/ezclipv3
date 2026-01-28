@@ -19,8 +19,8 @@ import os from 'os';
  * Configurações do worker
  */
 const WORKER_CONFIG = {
-  // Caminho do arquivo de cookies (pode ser definido via env)
-  cookiesPath: process.env.YT_DLP_COOKIES_PATH || path.join(process.cwd(), 'cookies', 'cookies.txt'),
+  // Caminho do arquivo de cookies: YTDLP_COOKIES_PATH (Railway) ou YT_DLP_COOKIES_PATH ou padrão
+  cookiesPath: process.env.YTDLP_COOKIES_PATH || process.env.YT_DLP_COOKIES_PATH || path.join(process.cwd(), 'cookies', 'cookies.txt'),
   
   // Timeout por tentativa (30 segundos)
   timeout: 30000,
@@ -45,28 +45,39 @@ function getCookiesPath() {
   if (cookiesPathCache && fs.existsSync(cookiesPathCache)) {
     return cookiesPathCache;
   }
-  
-  // Primeiro, tentar arquivo de cookies configurado
-  if (fs.existsSync(WORKER_CONFIG.cookiesPath)) {
+  // 1) YTDLP_COOKIES_PATH (arquivo) - mesmo nome usado no downloadProgressController e no Railway
+  const pathFromEnv = process.env.YTDLP_COOKIES_PATH;
+  if (pathFromEnv && pathFromEnv.trim() !== '') {
+    try {
+      const resolved = path.resolve(pathFromEnv);
+      if (fs.existsSync(resolved) && fs.statSync(resolved).size > 0) {
+        cookiesPathCache = resolved;
+        console.log(`[DOWNLOAD-WORKER] ✅ Usando cookies de YTDLP_COOKIES_PATH: ${resolved}`);
+        return cookiesPathCache;
+      }
+    } catch (e) {
+      console.warn(`[DOWNLOAD-WORKER] ⚠️ YTDLP_COOKIES_PATH inválido: ${e.message}`);
+    }
+  }
+  // 2) Arquivo padrão do worker (YT_DLP_COOKIES_PATH ou cookies/cookies.txt)
+  if (WORKER_CONFIG.cookiesPath && fs.existsSync(WORKER_CONFIG.cookiesPath) && fs.statSync(WORKER_CONFIG.cookiesPath).size > 0) {
     cookiesPathCache = WORKER_CONFIG.cookiesPath;
     return cookiesPathCache;
   }
-  
-  // Se não, tentar criar a partir de variável de ambiente YTDLP_COOKIES
+  // 3) Criar arquivo temporário a partir de YTDLP_COOKIES (conteúdo)
   const cookiesContent = process.env.YTDLP_COOKIES;
   if (cookiesContent && cookiesContent.trim() !== '') {
     try {
       const tempDir = os.tmpdir();
       const cookiesPath = path.join(tempDir, `ytdlp_cookies_${Date.now()}.txt`);
       fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
-      console.log(`[DOWNLOAD-WORKER] Cookies criados a partir de YTDLP_COOKIES: ${cookiesPath}`);
+      console.log(`[DOWNLOAD-WORKER] ✅ Cookies criados a partir de YTDLP_COOKIES: ${cookiesPath}`);
       cookiesPathCache = cookiesPath;
       return cookiesPathCache;
     } catch (error) {
       console.error(`[DOWNLOAD-WORKER] Erro ao criar cookies de YTDLP_COOKIES: ${error.message}`);
     }
   }
-  
   return null;
 }
 
@@ -79,19 +90,40 @@ function getStrategyArgs(strategyBase, cookiesPath) {
   return baseArgs;
 }
 
-// APENAS Android Client (única estratégia permitida)
+// Estratégias: sempre usar cookies quando disponíveis (evitar 403 em datacenter/Railway)
 const DOWNLOAD_STRATEGIES = [
   {
     name: 'android',
-    description: 'Android Client (única estratégia)',
+    description: 'Android Client',
     args: [
       '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
       '--referer', 'https://www.youtube.com/',
       '--geo-bypass',
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=android'
-    ],
-    useCookies: false
+    ]
+  },
+  {
+    name: 'ios',
+    description: 'iOS Client',
+    args: [
+      '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=ios'
+    ]
+  },
+  {
+    name: 'web',
+    description: 'Web Client',
+    args: [
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=web'
+    ]
   }
 ];
 
@@ -206,8 +238,8 @@ async function tryGetInfoWithStrategy(url, strategy, ytDlpCommand) {
   return new Promise((resolve, reject) => {
     let executable, args;
     
-    // Obter cookies se a estratégia usar
-    const cookiesPath = strategy.useCookies ? getCookiesPath() : null;
+    // Sempre usar cookies quando disponíveis (evitar 403 em Railway/datacenter)
+    const cookiesPath = getCookiesPath();
     const strategyArgs = getStrategyArgs(strategy, cookiesPath);
     
     const baseArgs = [
@@ -293,8 +325,8 @@ async function tryDownloadWithStrategy(url, outputPath, strategy, ytDlpCommand, 
   return new Promise((resolve, reject) => {
     let executable, args;
     
-    // Obter cookies se a estratégia usar
-    const cookiesPath = strategy.useCookies ? getCookiesPath() : null;
+    // Sempre usar cookies quando disponíveis (evitar 403 em Railway/datacenter)
+    const cookiesPath = getCookiesPath();
     const strategyArgs = getStrategyArgs(strategy, cookiesPath);
     
     const baseArgs = [
@@ -392,7 +424,7 @@ export async function getVideoInfo(url) {
   if (cookiesPath) {
     console.log(`[DOWNLOAD-WORKER] ✅ Cookies disponíveis: ${cookiesPath}`);
   } else {
-    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YT_DLP_COOKIES_PATH`);
+    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YTDLP_COOKIES_PATH no Railway. Veja COMO_CONFIGURAR_COOKIES_YOUTUBE.md`);
   }
 
   let lastError = null;
@@ -464,7 +496,7 @@ export async function getVideoInfo(url) {
   console.error(`[DOWNLOAD-WORKER] ❌ Todas as estratégias falharam para: ${videoId}`);
   console.error(`[DOWNLOAD-WORKER] Tentativas:`, JSON.stringify(attempts, null, 2));
   
-  throw new Error('YouTube bloqueou o acesso (403). Bloqueio por IP de datacenter detectado. Considere usar cookies do navegador ou migrar para VPS com IP residencial.');
+  throw new Error('YouTube bloqueou o acesso (403). Configure YTDLP_COOKIES (conteúdo) ou YTDLP_COOKIES_PATH (caminho) no Railway. Veja COMO_CONFIGURAR_COOKIES_YOUTUBE.md');
 }
 
 /**
@@ -481,7 +513,7 @@ export async function downloadVideo(url, outputPath, onProgress) {
   if (cookiesPath) {
     console.log(`[DOWNLOAD-WORKER] ✅ Cookies disponíveis: ${cookiesPath}`);
   } else {
-    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YT_DLP_COOKIES_PATH`);
+    console.log(`[DOWNLOAD-WORKER] ⚠️ Cookies não encontrados. Configure YTDLP_COOKIES ou YTDLP_COOKIES_PATH no Railway. Veja COMO_CONFIGURAR_COOKIES_YOUTUBE.md`);
   }
 
   // Garantir diretório existe
@@ -578,7 +610,7 @@ export async function downloadVideo(url, outputPath, onProgress) {
   console.error(`[DOWNLOAD-WORKER] ❌ Todas as estratégias de download falharam para: ${videoId}`);
   console.error(`[DOWNLOAD-WORKER] Tentativas:`, JSON.stringify(attempts, null, 2));
   
-  throw new Error('YouTube bloqueou o acesso (403). Bloqueio por IP de datacenter detectado. Considere usar cookies do navegador ou migrar para VPS com IP residencial.');
+  throw new Error('YouTube bloqueou o acesso (403). Configure YTDLP_COOKIES (conteúdo) ou YTDLP_COOKIES_PATH (caminho) no Railway. Veja COMO_CONFIGURAR_COOKIES_YOUTUBE.md');
 }
 
 /**
