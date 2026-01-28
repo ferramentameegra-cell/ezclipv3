@@ -292,9 +292,28 @@ export async function splitVideoIntoClips(
     throw new Error(`clipDuration (${clipDuration}s) não pode ser maior que a duração total (${totalDuration}s)`);
   }
 
+  // CORREÇÃO CRÍTICA: Validar clipDuration antes de calcular numberOfClips
+  // Se clipDuration for muito pequeno (< 1s), pode gerar centenas de clipes!
+  if (clipDuration < 1) {
+    console.error(`[CLIP] ❌ ERRO CRÍTICO: clipDuration muito pequeno: ${clipDuration}s`);
+    console.error(`[CLIP] ❌ Isso geraria ${Math.floor(totalDuration / clipDuration)} clipes!`);
+    console.error(`[CLIP] ❌ clipDuration mínimo permitido: 1 segundo`);
+    throw new Error(`clipDuration muito pequeno (${clipDuration}s). Mínimo: 1 segundo. Isso geraria ${Math.floor(totalDuration / clipDuration)} clipes!`);
+  }
+  
   const numberOfClips = Math.floor(totalDuration / clipDuration);
   if (numberOfClips <= 0) {
     throw new Error(`Tempo insuficiente para gerar clips. Duração total: ${totalDuration}s, Duração por clip: ${clipDuration}s`);
+  }
+  
+  // VALIDAÇÃO: Limitar número máximo de clipes para evitar geração excessiva
+  const MAX_CLIPS = 100; // Limite de segurança
+  if (numberOfClips > MAX_CLIPS) {
+    console.error(`[CLIP] ❌ ERRO CRÍTICO: Número de clipes muito alto: ${numberOfClips}`);
+    console.error(`[CLIP] ❌ Duração total: ${totalDuration.toFixed(2)}s, Duração por clip: ${clipDuration.toFixed(2)}s`);
+    console.error(`[CLIP] ❌ Cálculo: ${totalDuration.toFixed(2)}s / ${clipDuration.toFixed(2)}s = ${numberOfClips} clipes`);
+    console.error(`[CLIP] ❌ Limite máximo: ${MAX_CLIPS} clipes`);
+    throw new Error(`Número de clipes muito alto (${numberOfClips}). Limite máximo: ${MAX_CLIPS}. Verifique clipDuration (${clipDuration}s) e totalDuration (${totalDuration.toFixed(2)}s).`);
   }
 
   console.log(`[CLIP] ========================================`);
@@ -304,6 +323,7 @@ export async function splitVideoIntoClips(
   console.log(`[CLIP] Output dir: ${outputDir}`);
   console.log(`[CLIP] Intervalo: ${startTime}s - ${endTime}s (duração total: ${totalDuration.toFixed(2)}s)`);
   console.log(`[CLIP] Duração por clip: ${clipDuration.toFixed(2)}s`);
+  console.log(`[CLIP] Cálculo: ${totalDuration.toFixed(2)}s / ${clipDuration.toFixed(2)}s = ${numberOfClips} clipes`);
   console.log(`[CLIP] Número de clipes a gerar: ${numberOfClips}`);
   
   // VALIDAR arquivo de entrada ANTES de começar

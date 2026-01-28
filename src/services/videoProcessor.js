@@ -551,30 +551,68 @@ export const generateVideoSeries = async (job, jobsMap) => {
 
     console.log(`[PROCESSING] ✅ Vídeo processado validado: ${(processedVideoStats.size / 1024 / 1024).toFixed(2)} MB`);
 
-    // Se clipsQuantity foi especificado, ajustar cutDuration para gerar exatamente essa quantidade
+    // CORREÇÃO CRÍTICA: Calcular finalCutDuration e finalNumberOfCuts corretamente
+    // Prioridade: clipsQuantity > numberOfCuts > cálculo automático
+    const totalDuration = actualEndTime - actualStartTime;
     let finalCutDuration = cutDuration;
     let finalNumberOfCuts = numberOfCuts;
     
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] CÁLCULO DE CLIPES - DIAGNÓSTICO`);
+    console.log(`[PROCESSING] ========================================`);
+    console.log(`[PROCESSING] Parâmetros recebidos:`);
+    console.log(`[PROCESSING]   - numberOfCuts: ${numberOfCuts}`);
+    console.log(`[PROCESSING]   - clipsQuantity: ${clipsQuantity}`);
+    console.log(`[PROCESSING]   - cutDuration: ${cutDuration}s`);
+    console.log(`[PROCESSING]   - totalDuration: ${totalDuration.toFixed(2)}s`);
+    
+    // CORREÇÃO: Se clipsQuantity foi especificado, usar ele
     if (clipsQuantity && clipsQuantity > 0) {
       // Calcular cutDuration necessário para gerar exatamente clipsQuantity clipes
-      const totalDuration = actualEndTime - actualStartTime;
       finalCutDuration = totalDuration / clipsQuantity;
       finalNumberOfCuts = clipsQuantity;
-      console.log(`[PROCESSING] Quantidade de clipes especificada: ${clipsQuantity}`);
-      console.log(`[PROCESSING] Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
+      console.log(`[PROCESSING] ✅ Usando clipsQuantity: ${clipsQuantity}`);
+      console.log(`[PROCESSING] ✅ Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
+      console.log(`[PROCESSING] ✅ Número de clipes esperado: ${finalNumberOfCuts}`);
+    } else if (numberOfCuts && numberOfCuts > 0) {
+      // Se numberOfCuts foi especificado, calcular cutDuration
+      finalCutDuration = totalDuration / numberOfCuts;
+      finalNumberOfCuts = numberOfCuts;
+      console.log(`[PROCESSING] ✅ Usando numberOfCuts: ${numberOfCuts}`);
+      console.log(`[PROCESSING] ✅ Duração ajustada por clip: ${finalCutDuration.toFixed(2)}s`);
+      console.log(`[PROCESSING] ✅ Número de clipes esperado: ${finalNumberOfCuts}`);
+    } else {
+      // Fallback: usar cutDuration padrão e calcular número de clipes
+      finalCutDuration = cutDuration;
+      finalNumberOfCuts = Math.floor(totalDuration / cutDuration);
+      console.log(`[PROCESSING] ⚠️ Usando cálculo automático baseado em cutDuration`);
+      console.log(`[PROCESSING] ⚠️ cutDuration: ${finalCutDuration}s`);
+      console.log(`[PROCESSING] ⚠️ Número de clipes calculado: ${finalNumberOfCuts} (${totalDuration.toFixed(2)}s / ${finalCutDuration}s)`);
+    }
+    
+    // VALIDAÇÃO CRÍTICA: Garantir que finalCutDuration não seja muito pequeno
+    // Se finalCutDuration < 1 segundo, algo está errado
+    if (finalCutDuration < 1) {
+      console.error(`[PROCESSING] ❌ ERRO: finalCutDuration muito pequeno: ${finalCutDuration}s`);
+      console.error(`[PROCESSING] ❌ Isso causaria geração de ${Math.floor(totalDuration / finalCutDuration)} clipes!`);
+      console.error(`[PROCESSING] ❌ Corrigindo para usar cutDuration padrão (60s)`);
+      finalCutDuration = cutDuration;
+      finalNumberOfCuts = Math.floor(totalDuration / cutDuration);
+      console.log(`[PROCESSING] ✅ Corrigido: finalCutDuration=${finalCutDuration}s, finalNumberOfCuts=${finalNumberOfCuts}`);
     }
     
     console.log(`[PROCESSING] ========================================`);
     console.log(`[PROCESSING] CHAMANDO splitVideoIntoClips`);
     console.log(`[PROCESSING] ========================================`);
-    console.log(`[PROCESSING] Parâmetros:`);
+    console.log(`[PROCESSING] Parâmetros finais:`);
     console.log(`[PROCESSING]   - processedVideoPath: ${processedVideoPath}`);
     console.log(`[PROCESSING]   - seriesPath: ${seriesPath}`);
-    console.log(`[PROCESSING]   - finalCutDuration: ${finalCutDuration}s`);
+    console.log(`[PROCESSING]   - finalCutDuration: ${finalCutDuration.toFixed(2)}s`);
     console.log(`[PROCESSING]   - actualStartTime: ${actualStartTime}s`);
     console.log(`[PROCESSING]   - actualEndTime: ${actualEndTime}s`);
-    console.log(`[PROCESSING]   - Duração total: ${actualEndTime - actualStartTime}s`);
-    console.log(`[PROCESSING]   - Número esperado de clipes: ${finalNumberOfCuts || 'automático'}`);
+    console.log(`[PROCESSING]   - Duração total: ${totalDuration.toFixed(2)}s`);
+    console.log(`[PROCESSING]   - Número esperado de clipes: ${finalNumberOfCuts}`);
+    console.log(`[PROCESSING]   - Cálculo: ${totalDuration.toFixed(2)}s / ${finalCutDuration.toFixed(2)}s = ${Math.floor(totalDuration / finalCutDuration)} clipes`);
     
     // VALIDAR arquivo de vídeo processado ANTES de chamar splitVideoIntoClips
     if (!fs.existsSync(processedVideoPath)) {
@@ -663,10 +701,48 @@ export const generateVideoSeries = async (job, jobsMap) => {
       throw splitError; // Re-lançar erro para ser capturado pelo catch principal
     }
     
-    // Limitar número de clipes se necessário
-    const finalClips = clipsQuantity && clipsQuantity > 0 
-      ? clips.slice(0, clipsQuantity)
-      : clips;
+    // CORREÇÃO CRÍTICA: Limitar número de clipes ao valor solicitado
+    // Prioridade: clipsQuantity > numberOfCuts > todos os clipes gerados
+    let finalClips = clips;
+    let targetClipsCount = null;
+    
+    if (clipsQuantity && clipsQuantity > 0) {
+      targetClipsCount = clipsQuantity;
+    } else if (numberOfCuts && numberOfCuts > 0) {
+      targetClipsCount = numberOfCuts;
+    } else if (finalNumberOfCuts && finalNumberOfCuts > 0) {
+      targetClipsCount = finalNumberOfCuts;
+    }
+    
+    if (targetClipsCount && targetClipsCount > 0) {
+      console.log(`[PROCESSING] ========================================`);
+      console.log(`[PROCESSING] LIMITANDO CLIPES GERADOS`);
+      console.log(`[PROCESSING] ========================================`);
+      console.log(`[PROCESSING] Clipes gerados: ${clips.length}`);
+      console.log(`[PROCESSING] Clipes solicitados: ${targetClipsCount}`);
+      
+      if (clips.length > targetClipsCount) {
+        console.log(`[PROCESSING] ⚠️ Mais clipes gerados (${clips.length}) do que solicitado (${targetClipsCount})`);
+        console.log(`[PROCESSING] ⚠️ Limitando para ${targetClipsCount} clipes`);
+        finalClips = clips.slice(0, targetClipsCount);
+        
+        // Remover clipes extras para economizar espaço
+        for (let i = targetClipsCount; i < clips.length; i++) {
+          try {
+            if (fs.existsSync(clips[i])) {
+              fs.unlinkSync(clips[i]);
+              console.log(`[PROCESSING] ✅ Clip extra removido: ${path.basename(clips[i])}`);
+            }
+          } catch (unlinkError) {
+            console.warn(`[PROCESSING] ⚠️ Erro ao remover clip extra: ${unlinkError.message}`);
+          }
+        }
+      } else {
+        console.log(`[PROCESSING] ✅ Número de clipes gerados (${clips.length}) está correto ou menor que solicitado (${targetClipsCount})`);
+      }
+    } else {
+      console.log(`[PROCESSING] ⚠️ Nenhum limite de clipes especificado, usando todos os ${clips.length} clipes gerados`);
+    }
     
     console.log(`[PROCESSING] ========================================`);
     console.log(`[PROCESSING] CLIPES GERADOS COM SUCESSO`);
