@@ -313,10 +313,10 @@ export async function composeFinalVideo({
         retentionWidth = Math.round(heightBasedWidth);
       }
       
-      // Calcular posição Y: base a 140px acima da margem inferior
-      // y = 1920 - retentionHeight - BOTTOM_FREE_SPACE
+      // Calcular posição Y: base a 140px acima da margem inferior (BASE)
+      // y = 1920 - altura_video_retencao - 140
       // HARDCODED: altura sempre 1920
-      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
+      retentionY = 1920 - retentionHeight - 140;
       
       // Validar que não ultrapassa margem superior
       // GARANTIR espaço mínimo para o vídeo principal (pelo menos 400px)
@@ -336,8 +336,8 @@ export async function composeFinalVideo({
         }
       }
       
-      // Recalcular posição Y com altura ajustada
-      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
+      // Recalcular posição Y com altura ajustada (BASE: y = 1920 - altura - 140)
+      retentionY = 1920 - retentionHeight - 140;
       
       // Validar que não ultrapassa margem superior
       if (retentionY < TOP_MARGIN) {
@@ -351,7 +351,7 @@ export async function composeFinalVideo({
           retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
         }
         
-        retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
+        retentionY = 1920 - retentionHeight - 140;
       }
       
       // Validação final
@@ -457,11 +457,11 @@ export async function composeFinalVideo({
       currentLabel = '[main_scaled]';
       console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: ${mainVideoWidth}x${mainVideoHeightFinal}`);
 
-      // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
-      const MAIN_VIDEO_Y = TOP_MARGIN; // 180px fixo
+      // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px - TOPO)
+      const MAIN_VIDEO_Y = 180; // Margem superior fixa de 180px
       filterComplex += `[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed];`;
       currentLabel = '[composed]';
-      console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
+      console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px (TOPO)`);
 
       // 4. Adicionar headline ANTES do vídeo de retenção (CENTRO VERTICAL)
       const hasHeadline = headlineText || (headline && headline.text);
@@ -472,7 +472,10 @@ export async function composeFinalVideo({
         const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
         const fontSize = headlineStyle.fontSize || 72;
         const color = headlineStyle.color || '#FFFFFF';
-        const yPos = `(h-text_h)/2`;
+        // CENTRO VERTICAL: y = (1920 - altura_texto_headline) / 2
+        // Estimar altura do texto como fontSize * número_de_linhas (aproximação)
+        const estimatedTextHeight = fontSize * (headlineTextValue.split('\\n').length || 1);
+        const headlineY = Math.round((1920 - estimatedTextHeight) / 2);
         const HEADLINE_SAFE_MARGIN = 80;
         const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2);
         const boxBorderWidth = 0;
@@ -491,9 +494,9 @@ export async function composeFinalVideo({
             : '/System/Library/Fonts/Helvetica.ttc';
         }
         
-        filterComplex += `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline];`;
+        filterComplex += `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${headlineY}[with_headline];`;
         currentLabel = '[with_headline]';
-        console.log(`[COMPOSER] ✅ Headline adicionada no centro: "${headlineTextValue}"`);
+        console.log(`[COMPOSER] ✅ Headline adicionada no centro (y=${headlineY}px): "${headlineTextValue}"`);
       } else {
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada`);
       }
