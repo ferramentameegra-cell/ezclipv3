@@ -408,24 +408,20 @@ export async function composeFinalVideo({
       let filterComplex = '';
       let currentLabel = '[0:v]'; // Input do vídeo principal (sempre começa aqui)
 
-      // 1. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
+      // 1. BACKGROUND EM TODOS OS CLIPES (LAYER 0 - OBRIGATÓRIO). Sempre 1080x1920 vertical.
       let fixedBackgroundPath = getFixedBackgroundPath();
       let backgroundInputIndex = null;
       let inputCount = 1; // clipPath é input 0
       
       if (fixedBackgroundPath && fs.existsSync(fixedBackgroundPath)) {
-        // Background fixo será um input adicional
         backgroundInputIndex = inputCount;
         inputCount++;
-        
-        // Redimensionar background para 1080x1920 mantendo proporção
         filterComplex += `[${backgroundInputIndex}:v]scale=1080:1920:force_original_aspect_ratio=increase[bg_scaled];`;
         filterComplex += `[bg_scaled]crop=1080:1920[bg_fixed];`;
-        console.log(`[COMPOSER] Background fixo aplicado como layer 0`);
+        console.log(`[COMPOSER] ✅ Background (imagem) em TODOS os clipes - layer 0`);
       } else {
-        // Fallback: criar background sólido se imagem não existir
         filterComplex += `color=c=${backgroundColor.replace('#', '')}:s=1080:1920:d=${videoDuration}[bg_fixed];`;
-        console.log(`[COMPOSER] Usando background sólido (fallback) - 1080x1920 HARDCODED`);
+        console.log(`[COMPOSER] ✅ Background (cor sólida) em TODOS os clipes - fallback 1080x1920`);
       }
 
       // 2. Redimensionar vídeo principal mantendo proporção 16:9 (horizontal)
@@ -532,11 +528,11 @@ export async function composeFinalVideo({
         }
       }
 
-      // 6. Adicionar contador "Parte X/Y" - CANTO SUPERIOR DIREITO (sempre que totalClips; fonte bold)
-      const showPartNumber = totalClips != null && totalClips !== undefined && totalClips > 0;
-      if (showPartNumber) {
-        const partNum = (clipNumber != null && clipNumber !== undefined) ? clipNumber : 1;
-        const partText = `Parte ${partNum}/${totalClips}`;
+      // 6. Adicionar contador "Parte X/Y" - CANTO SUPERIOR DIREITO (SEMPRE; bold; fallback 1/1)
+      const partNum = (clipNumber != null && clipNumber !== undefined) ? clipNumber : 1;
+      const partTotal = (totalClips != null && totalClips !== undefined && totalClips > 0) ? totalClips : 1;
+      {
+        const partText = `Parte ${partNum}/${partTotal}`;
         const partFontSize = 48;
         const partColor = '#FFFFFF';
         const partStrokeColor = '#000000';
@@ -552,7 +548,7 @@ export async function composeFinalVideo({
         const partTextEscaped = escapeText(partText);
         filterComplex += `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number];`;
         currentLabel = '[with_part_number]';
-        console.log(`[COMPOSER] ✅ Contador adicionado (canto sup. dir.): "${partText}"`);
+        console.log(`[COMPOSER] ✅ Contador "Parte x/y" em bold (canto sup. dir.): "${partText}"`);
       }
 
       // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
@@ -722,16 +718,11 @@ export async function composeFinalVideo({
         return reject(new Error(`Erro ao criar filter_complex: ${filterError.message}`));
       }
 
-      // Mapear saída e configurar codecs
-      // FORÇAR resolução 1080x1920 OBRIGATORIAMENTE (formato vertical 9:16)
-      // [final] sempre existe após a etapa 8 e já tem as dimensões corretas (1080x1920)
-      // O complexFilter já força as dimensões através do [final] com scale=1080:1920 + crop=1080:1920:0:0
-      // Adicionar -s e -aspect como backup OBRIGATÓRIO para garantir formato vertical
-      // NÃO usar -vf aqui pois conflita com complexFilter - o complexFilter já faz o trabalho
+      // Saída ÚNICA: APENAS vertical 1080x1920. Nenhum arquivo horizontal é gerado.
       const outputOptions = [
         '-map', '[final]',
-        '-s', '1080x1920', // FORÇAR 1080x1920 (hardcoded - formato vertical OBRIGATÓRIO)
-        '-aspect', '9:16', // FORÇAR aspect ratio 9:16 (vertical OBRIGATÓRIO)
+        '-s', '1080x1920',
+        '-aspect', '9:16',
         '-c:v', 'libx264',
         '-preset', 'veryfast', // OTIMIZAÇÃO 3: Mudado de 'medium' para 'veryfast' (20-30% mais rápido)
         '-crf', '23',
@@ -748,10 +739,8 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] ✅ Headline: ${(headlineText || (headline && headline.text)) ? 'SIM' : 'NÃO'}`);
       console.log(`[COMPOSER] ✅ Vídeo de retenção: ${retentionVideoPath ? 'SIM' : 'NÃO'}`);
 
-      // Adicionar áudio se existir
-      if (hasAudio) {
-        outputOptions.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
-      }
+      // Sempre mapear áudio do vídeo principal (0:a? = inclui se existir, evita erro se não houver)
+      outputOptions.push('-map', '0:a?', '-c:a', 'aac', '-b:a', '128k');
 
       // Se houver vídeo de retenção, garantir que o vídeo final tenha a duração do vídeo principal
       // O vídeo de retenção será repetido automaticamente pelo FFmpeg se for mais curto
