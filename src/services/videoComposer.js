@@ -693,8 +693,8 @@ export async function composeFinalVideo({
         return reject(new Error('Label [final] não encontrado no filter_complex'));
       }
       
-      // Verificar se [final] foi definido (não apenas usado)
-      if (!filterComplex.includes('=[final]')) {
+      // Verificar se [final] foi definido (nossa definição usa format=yuv420p[final])
+      if (!filterComplex.includes('yuv420p[final]')) {
         console.error('[COMPOSER] ❌ Label [final] não foi definido no filter_complex!');
         console.error('[COMPOSER] Filter complex:', filterComplex);
         console.error('[COMPOSER] Current label:', currentLabel);
