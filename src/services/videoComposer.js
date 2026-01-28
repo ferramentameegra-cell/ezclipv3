@@ -163,14 +163,23 @@ export async function composeFinalVideo({
   
   // Se há nicheId e retenção não foi desabilitada, usar o sistema de retenção por nicho
   if (nicheId && retentionVideoId !== 'none') {
+    // CORREÇÃO: Normalizar nicheId removendo prefixo "niche-" se existir
+    // Ex: "niche-default" -> "default", "niche-podcast" -> "podcast"
+    let normalizedNicheId = nicheId;
+    if (typeof nicheId === 'string' && nicheId.startsWith('niche-')) {
+      normalizedNicheId = nicheId.replace(/^niche-/, '');
+      console.log(`[RETENTION] ⚠️ Nicho normalizado: "${nicheId}" -> "${normalizedNicheId}"`);
+    }
+    
     console.log(`[RETENTION] ========================================`);
     console.log(`[RETENTION] Usando retentionManager (sistema unificado)`);
-    console.log(`[RETENTION] Nicho: ${nicheId}`);
+    console.log(`[RETENTION] Nicho original: ${nicheId}`);
+    console.log(`[RETENTION] Nicho normalizado: ${normalizedNicheId}`);
     console.log(`[RETENTION] ========================================`);
-    console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${nicheId}`);
+    console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${normalizedNicheId}`);
     try {
       // getRetentionClip faz todo o trabalho: download, processamento em clipes, seleção aleatória
-      retentionVideoPath = await getRetentionClip(nicheId);
+      retentionVideoPath = await getRetentionClip(normalizedNicheId);
       
       if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
         const stats = fs.statSync(retentionVideoPath);
@@ -620,12 +629,13 @@ export async function composeFinalVideo({
         return reject(new Error('currentLabel não está definido - não é possível criar [final]'));
       }
       
-      // SEMPRE criar [final] a partir do currentLabel atual usando copy
-      // O copy preserva o vídeo sem re-encoding e garante que [final] existe
-      filterComplex += `${currentLabel}copy[final]`;
+      // CORREÇÃO: Remover filtro copy inválido - não é necessário criar [final] explicitamente
+      // O currentLabel já contém o vídeo processado, então apenas renomeamos para [final]
+      // Usar format=yuv420p para garantir compatibilidade (filtro válido do FFmpeg)
+      filterComplex += `${currentLabel}format=yuv420p[final]`;
       currentLabel = '[final]';
       
-      console.log(`[COMPOSER] ✅ Label [final] criado e garantido como último filtro`);
+      console.log(`[COMPOSER] ✅ Label [final] criado usando format=yuv420p (filtro válido)`);
       console.log(`[COMPOSER] ✅ currentLabel final: ${currentLabel}`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
