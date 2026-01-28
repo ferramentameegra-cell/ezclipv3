@@ -35,30 +35,27 @@ const FFMPEG_COMPOSE_TIMEOUT = parseInt(process.env.FFMPEG_COMPOSE_TIMEOUT || '3
  * @returns {string|null} - Caminho da imagem de background ou null se não encontrada
  */
 function getFixedBackgroundPath() {
-  // Tentar diferentes locais e extensões
+  // Ordem de prioridade: 1) projeto (ezv2/assets/backgrounds), 2) /tmp (Railway), 3) env
+  const projectRoot = path.join(__dirname, '../..');
   const possiblePaths = [
-    // Em produção (Railway): /tmp/assets/backgrounds
+    path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.png'),
+    path.join(projectRoot, 'assets', 'backgrounds', 'ezclip-background.jpg'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.png'),
     path.join('/tmp', 'assets', 'backgrounds', 'ezclip-background.jpg'),
-    // Em desenvolvimento: assets/backgrounds na raiz
-    path.join(__dirname, '../../assets/backgrounds/ezclip-background.png'),
-    path.join(__dirname, '../../assets/backgrounds/ezclip-background.jpg'),
-    // Fallback: variável de ambiente
-    process.env.FIXED_BACKGROUND_PATH || null
-  ].filter(p => p !== null);
+    ...(process.env.FIXED_BACKGROUND_PATH ? [process.env.FIXED_BACKGROUND_PATH] : [])
+  ];
 
-  console.log(`[COMPOSER] Procurando background fixo nos seguintes caminhos:`);
+  console.log(`[COMPOSER] Procurando background: ezv2/assets/backgrounds/ezclip-background.png`);
   for (const bgPath of possiblePaths) {
-    console.log(`[COMPOSER]   - ${bgPath} ${fs.existsSync(bgPath) ? '✅ EXISTE' : '❌ não existe'}`);
+    if (!bgPath) continue;
+    console.log(`[COMPOSER]   - ${bgPath} ${fs.existsSync(bgPath) ? '✅' : '❌'}`);
     if (fs.existsSync(bgPath)) {
-      console.log(`[COMPOSER] ✅ Background fixo encontrado: ${bgPath}`);
+      console.log(`[COMPOSER] ✅ Background fixo: ${bgPath}`);
       return bgPath;
     }
   }
 
-  console.warn(`[COMPOSER] ⚠️ Background fixo não encontrado. Usando cor sólida como fallback.`);
-  console.warn(`[COMPOSER] Coloque a imagem em: assets/backgrounds/ezclip-background.png (1080x1920)`);
-  console.warn(`[COMPOSER] Ou em: /tmp/assets/backgrounds/ezclip-background.png (Railway)`);
+  console.warn(`[COMPOSER] ⚠️ Background não encontrado. Use assets/backgrounds/ezclip-background.png (1080x1920).`);
   return null;
 }
 
