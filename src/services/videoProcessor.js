@@ -1209,26 +1209,57 @@ export const generateVideoSeries = async (job, jobsMap) => {
           console.error(`[PROCESSING] ❌ Recuperação falhou: ${retryError.message}`);
           console.log(`[PROCESSING] ⚠️ Usando fallback simplificado para clip ${clipIndex}...`);
           
-          // FALLBACK SIMPLIFICADO: Apenas vídeo principal sobre fundo preto
-          // Objetivo: Produzir algo funcional, mesmo que básico
+          // FALLBACK: Layout 9:16 forçado (igual ao composer)
+          // Background + vídeo principal (topo) + headline (centro) + vídeo retenção (base)
           try {
             const fallbackClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
-            
+            const hasRetention = currentRetentionVideoPath && fs.existsSync(currentRetentionVideoPath) && fs.statSync(currentRetentionVideoPath).size > 0;
+            const hasHeadline = headlineText && typeof headlineText === 'string' && headlineText.trim().length > 0;
+            const headlineEscaped = hasHeadline ? headlineText.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
+
             await new Promise((resolve, reject) => {
-              const TOP_MARGIN_FALLBACK = 180;
-              const mainVideoHeight = Math.round(1080 * 9 / 16); // 607px para 16:9
-              const mainVideoHeightAdjusted = Math.min(mainVideoHeight, 1600);
-              
-              // Construir filter_complex como string (sequencial e robusto)
-              // FALLBACK: Apenas background preto + vídeo principal (sem headlines, retenção, etc.)
-              const filterComplex = `color=c=black:s=1080x1920:d=60[bg];[0:v]scale=1080:${mainVideoHeightAdjusted}:force_original_aspect_ratio=decrease[main_scaled];[bg][main_scaled]overlay=(W-w)/2:${TOP_MARGIN_FALLBACK}[final]`;
-              
-              // Validar que [final] existe
-              if (!filterComplex.includes('[final]') || !filterComplex.includes('=[final]')) {
+              // Layout fixo 9:16 (1080x1920) - mesmo do videoComposer
+              const CANVAS_W = 1080;
+              const CANVAS_H = 1920;
+              const VIDEO_W = 1080;
+              const VIDEO_H = 608;
+              const VIDEO_Y_TOP = 180;
+              const VIDEO_Y_BOTTOM = 1172;
+              const HEADLINE_Y = 960;
+
+              const parts = [];
+              // 1. Background
+              parts.push(`color=c=black:s=${CANVAS_W}x${CANVAS_H}:d=60[bg_fixed]`);
+              // 2. Vídeo principal (input 0) no topo
+              parts.push(`[0:v]scale=${VIDEO_W}:${VIDEO_H}[main_scaled]`);
+              parts.push(`[bg_fixed][main_scaled]overlay=(W-w)/2:${VIDEO_Y_TOP}[composed]`);
+
+              let currentLabel = '[composed]';
+              // 3. Headline no centro (se existir)
+              if (hasHeadline && headlineEscaped) {
+                parts.push(`[composed]drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf':text='${headlineEscaped}':fontsize=72:fontcolor=#FFFFFF:x=(w-text_w)/2:y=${HEADLINE_Y}[with_headline]`);
+                currentLabel = '[with_headline]';
+              }
+              // 4. Vídeo de retenção na base (se existir)
+              if (hasRetention) {
+                parts.push(`[1:v]scale=${VIDEO_W}:${VIDEO_H}[retention_scaled]`);
+                parts.push(`${currentLabel}[retention_scaled]overlay=(W-w)/2:${VIDEO_Y_BOTTOM}:shortest=1[with_retention]`);
+                currentLabel = '[with_retention]';
+              }
+              // 5. Garantir label [final]
+              parts.push(`${currentLabel}copy[final]`);
+
+              const filterComplex = parts.join(';');
+              // Validar que [final] existe (FFmpeg usa "label[final]", não "= [final]")
+              if (!filterComplex.includes('[final]')) {
                 return reject(new Error('Filter complex do fallback não contém [final]'));
               }
-              
-              ffmpeg(clipPath, { timeout: FFMPEG_FALLBACK_TIMEOUT })
+
+              const cmd = ffmpeg(clipPath, { timeout: FFMPEG_FALLBACK_TIMEOUT });
+              if (hasRetention) {
+                cmd.input(currentRetentionVideoPath).inputOptions(['-stream_loop', '-1']);
+              }
+              cmd
                 .complexFilter(filterComplex)
                 .outputOptions([
                   '-map', '[final]',
@@ -1241,8 +1272,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
                   '-movflags', '+faststart'
                 ])
                 .output(fallbackClipPath)
-                .on('start', (cmd) => {
-                  console.log(`[PROCESSING] Criando fallback simplificado 1080x1920: ${cmd}`);
+                .on('start', (runCmd) => {
+                  console.log(`[PROCESSING] Criando fallback 1080x1920 (layout completo): ${runCmd}`);
                 })
                 .on('end', () => {
                   if (!fs.existsSync(fallbackClipPath)) {
