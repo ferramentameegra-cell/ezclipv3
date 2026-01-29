@@ -1,4 +1,4 @@
-**
+/**
  * VIDEO COMPOSER - Composição Final de Vídeo
  * 
  * Unifica todas as camadas em um único arquivo final 9:16 (1080x1920)
