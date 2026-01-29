@@ -428,6 +428,11 @@ export async function composeFinalVideo({
       let filterComplex = '';
       let currentLabel = '[0:v]'; // Input do vídeo principal (sempre começa aqui)
 
+      // --- DIAGNÓSTICO: INÍCIO DA CONSTRUÇÃO DO FILTRO ---
+      console.log('\n--- DIAGNÓSTICO: INÍCIO DA CONSTRUÇÃO DO FILTRO ---');
+      console.log(`[DIAG-0] Estado Inicial: currentLabel = ${currentLabel}`);
+      console.log(`[DIAG-0] filterComplex (início): "${filterComplex}"`);
+
       // 1. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
       const fixedBackgroundPath = getFixedBackgroundPath();
       let backgroundInputIndex = null;
@@ -447,6 +452,8 @@ export async function composeFinalVideo({
         filterComplex += `color=c=${backgroundColor.replace('#', '')}:s=1080:1920:d=${videoDuration}[bg_fixed];`;
         console.log(`[COMPOSER] Usando background sólido (fallback) - 1080x1920 HARDCODED`);
       }
+      console.log(`[DIAG-BG] Após Background: currentLabel = ${currentLabel} (ainda [0:v] - bg não altera currentLabel)`);
+      console.log(`[DIAG-BG] Filtro Atual (últimos 200 chars): ...${filterComplex.slice(-200)}`);
 
       // 2. Redimensionar vídeo principal mantendo proporção 16:9 (horizontal)
       const mainVideoWidth = 1080; // Largura fixa: 1080px
@@ -456,12 +463,15 @@ export async function composeFinalVideo({
       filterComplex += `${currentLabel}scale=${mainVideoWidth}:${mainVideoHeightFinal}:force_original_aspect_ratio=decrease[main_scaled];`;
       currentLabel = '[main_scaled]';
       console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: ${mainVideoWidth}x${mainVideoHeightFinal}`);
+      console.log(`[DIAG-MAIN] Após scale do vídeo principal: currentLabel = ${currentLabel}`);
 
       // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
       const MAIN_VIDEO_Y = TOP_MARGIN; // 180px fixo
       filterComplex += `[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed];`;
       currentLabel = '[composed]';
       console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
+      console.log(`[DIAG-MAIN] Após Overlay Principal: currentLabel = ${currentLabel}`);
+      console.log(`[DIAG-MAIN] Filtro Atual (últimos 150 chars): ...${filterComplex.slice(-150)}`);
 
       // 4. Adicionar headline ANTES do vídeo de retenção (CENTRO VERTICAL)
       const hasHeadline = headlineText || (headline && headline.text);
@@ -494,8 +504,11 @@ export async function composeFinalVideo({
         filterComplex += `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline];`;
         currentLabel = '[with_headline]';
         console.log(`[COMPOSER] ✅ Headline adicionada no centro: "${headlineTextValue}"`);
+        console.log(`[DIAG-HEADLINE] Após Headline: currentLabel = ${currentLabel}`);
+        console.log(`[DIAG-HEADLINE] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
       } else {
         console.log(`[COMPOSER] ⚠️ Headline não será adicionada`);
+        console.log(`[DIAG-HEADLINE] Headline omitida: currentLabel permanece = ${currentLabel}`);
       }
 
       // 5. Adicionar vídeo de retenção (OPCIONAL - LÓGICA BINÁRIA)
@@ -544,7 +557,11 @@ export async function composeFinalVideo({
           filterComplex += `${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}:shortest=0[with_retention];`;
           currentLabel = '[with_retention]';
           console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px`);
+          console.log(`[DIAG-RETENTION] Após Vídeo de Retenção: currentLabel = ${currentLabel}`);
+          console.log(`[DIAG-RETENTION] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
         }
+      } else {
+        console.log(`[DIAG-RETENTION] Retenção omitida ou inválida: currentLabel permanece = ${currentLabel}`);
       }
 
       // 6. Adicionar numeração "Parte X/Y" - CANTO SUPERIOR DIREITO
@@ -574,6 +591,10 @@ export async function composeFinalVideo({
         filterComplex += `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number];`;
         currentLabel = '[with_part_number]';
         console.log(`[COMPOSER] ✅ Numeração adicionada: "${partText}"`);
+        console.log(`[DIAG-COUNTER] Após Contador Parte X/Y: currentLabel = ${currentLabel}`);
+        console.log(`[DIAG-COUNTER] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
+      } else {
+        console.log(`[DIAG-COUNTER] Contador omitido (clipNumber/totalClips não definidos): currentLabel = ${currentLabel}`);
       }
 
       // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
@@ -608,6 +629,10 @@ export async function composeFinalVideo({
         });
         
         console.log(`[COMPOSER] ✅ Todas as legendas adicionadas ao filter_complex`);
+        console.log(`[DIAG-CAPTIONS] Após Legendas: currentLabel = ${currentLabel}`);
+        console.log(`[DIAG-CAPTIONS] Filtro Atual (últimos 150 chars): ...${filterComplex.slice(-150)}`);
+      } else {
+        console.log(`[DIAG-CAPTIONS] Legendas omitidas (vazias): currentLabel = ${currentLabel}`);
       }
       
       // 8. GARANTIR LABEL [final] - CRÍTICO: Sempre criar [final] no final
@@ -624,6 +649,8 @@ export async function composeFinalVideo({
       
       console.log(`[COMPOSER] ✅ Label [final] criado e garantido como último filtro`);
       console.log(`[COMPOSER] ✅ currentLabel final: ${currentLabel}`);
+      console.log(`[DIAG-FINAL-STEP] Após criar [final] com copy: currentLabel = ${currentLabel}`);
+      console.log(`[DIAG-FINAL-STEP] Últimos 50 chars do filterComplex: ...${filterComplex.slice(-50)}`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -735,6 +762,15 @@ export async function composeFinalVideo({
       if (filterComplex.length > 500) {
         console.log('[COMPOSER] Filter complex (restante):', filterComplex.substring(500, 1000));
       }
+
+      // --- DIAGNÓSTICO: ESTADO FINAL ANTES DA EXECUÇÃO ---
+      const finalFilterString = typeof filterComplex === 'string' ? filterComplex : (Array.isArray(filterComplex) ? filterComplex.join(';') : String(filterComplex));
+      console.log('--- DIAGNÓSTICO: ESTADO FINAL ANTES DA EXECUÇÃO ---');
+      console.log(`[DIAG-FINAL] Última Label Gerada (currentLabel): ${currentLabel}`);
+      console.log(`[DIAG-FINAL] String Final do Filtro (completa): ${finalFilterString}`);
+      console.log(`[DIAG-FINAL] [final] está definido no filtro? ${finalFilterString.includes('=[final]') ? 'SIM' : 'NÃO'}`);
+      console.log(`[DIAG-FINAL] Últimos 80 chars da string: ...${finalFilterString.slice(-80)}`);
+      console.log('--------------------------------------------------\n');
       
       try {
         command.complexFilter(filterComplex);
