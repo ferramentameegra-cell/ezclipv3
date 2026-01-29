@@ -245,7 +245,7 @@ async function downloadVideo(youtubeUrl, outputPath) {
  * @param {string} niche - ID do nicho (ex: 'podcast', 'tech')
  * @returns {Promise<string|null>} - Caminho absoluto de um clipe aleatório ou null se erro
  */
-export async function getRetentionClip(niche) {
+export async function getRetentionClip(niche, totalClips = null) {
   try {
     // Validar nicho
     if (!niche || typeof niche !== 'string') {
@@ -329,7 +329,32 @@ export async function getRetentionClip(niche) {
     let allClips = existingClips;
     if (!clipsExist && fullVideoExists) {
       try {
-        allClips = await processVideoIntoClips(fullVideoPath, clipsDir);
+        // Se totalClips foi fornecido, sincronizar com o vídeo principal
+        if (totalClips && totalClips > 0) {
+          console.log(`[RETENTION-MANAGER] 🔄 Sincronizando: gerando ${totalClips} clipes (mesmo que vídeo principal)`);
+          
+          // Obter duração do vídeo de retenção
+          const retentionDuration = await getVideoDuration(fullVideoPath);
+          const clipDurationForRetention = retentionDuration / totalClips;
+          
+          console.log(`[RETENTION-MANAGER] Duração total: ${retentionDuration.toFixed(2)}s`);
+          console.log(`[RETENTION-MANAGER] Duração por clipe: ${clipDurationForRetention.toFixed(2)}s`);
+          
+          // Cortar o vídeo de retenção em exatamente `totalClips` partes
+          allClips = await splitVideoIntoClips(
+            fullVideoPath,
+            clipsDir,
+            clipDurationForRetention,
+            0,
+            retentionDuration
+          );
+          
+          console.log(`[RETENTION-MANAGER] ✅ Gerados ${allClips.length} clipes sincronizados`);
+        } else {
+          // Fallback: usar o comportamento original (60s por clipe)
+          console.log(`[RETENTION-MANAGER] ⚠️ totalClips não fornecido, usando fallback (60s por clipe)`);
+          allClips = await processVideoIntoClips(fullVideoPath, clipsDir);
+        }
       } catch (processError) {
         console.error(`[RETENTION-MANAGER] ❌ Erro ao processar vídeo em clipes: ${processError.message}`);
         return null;

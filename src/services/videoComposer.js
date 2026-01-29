@@ -170,7 +170,8 @@ export async function composeFinalVideo({
     console.log(`[COMPOSER] 📥 Obtendo clipe de retenção do nicho: ${nicheId}`);
     try {
       // getRetentionClip faz todo o trabalho: download, processamento em clipes, seleção aleatória
-      retentionVideoPath = await getRetentionClip(nicheId);
+      // Passar totalClips para sincronizar clipes de retenção com o vídeo principal
+      retentionVideoPath = await getRetentionClip(nicheId, totalClips);
       
       if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
         const stats = fs.statSync(retentionVideoPath);
@@ -212,18 +213,6 @@ export async function composeFinalVideo({
   console.log(`[COMPOSER] ⚠️ FORMATO FORÇADO: 9:16 (1080x1920) - formato recebido: ${format} foi IGNORADO`);
   console.log(`[COMPOSER] ✅ Dimensões HARDCODED: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT} (vertical)`);
   
-  // POSIÇÕES FIXAS E VALIDADAS (1080x1920):
-  // - Margem superior: 180px (vídeo principal começa aqui)
-  // - Margem inferior livre: 140px (área inferior deve permanecer sempre livre)
-  // - Vídeo principal: y=180px (topo fixo)
-  // - Vídeo de retenção: base a 140px acima da margem inferior
-  //   O conteúdo será dimensionado para o maior tamanho possível mantendo proporção
-  const TOP_MARGIN = 180; // Margem superior fixa
-  const BOTTOM_FREE_SPACE = 140; // Área inferior livre (base do conteúdo de retenção deve ficar aqui)
-  
-  // O cálculo da altura e posição do vídeo de retenção será feito dinamicamente
-  // após obter as dimensões originais do vídeo (dentro do ffprobe)
-
   console.log(`[COMPOSER] Formato: ${format} (IGNORADO - sempre 9:16)`);
   console.log(`[COMPOSER] Layout: 1080x1920 (HARDCODED - sempre vertical)`);
   console.log(`[COMPOSER] Safe zones: top=${safeZones.top}px, bottom=${safeZones.bottom}px`);
@@ -233,180 +222,6 @@ export async function composeFinalVideo({
     console.log(`[COMPOSER] Iniciando composição final 9:16 (1080x1920)...`);
     console.log(`[COMPOSER] Layout: 1080x1920 (HARDCODED - sempre vertical)`);
     console.log(`[COMPOSER] Background: ${backgroundColor}`);
-
-    // Obter dimensões do vídeo de retenção ANTES de construir os filtros
-    let retentionOriginalWidth = 1080;
-    let retentionOriginalHeight = 1920;
-    
-    if (retentionVideoPath) {
-      // Verificar se é URL (não mais suportado - apenas arquivos locais)
-      const isRetentionUrl = retentionVideoPath.startsWith('http://') || retentionVideoPath.startsWith('https://');
-      
-      if (isRetentionUrl) {
-        console.warn(`[COMPOSER] ⚠️ URLs de vídeos de retenção não são mais suportadas. Use apenas arquivos locais na pasta retention-library/.`);
-        console.warn(`[COMPOSER] ⚠️ URL recebida: ${retentionVideoPath}`);
-        console.warn(`[COMPOSER] ⚠️ Continuando sem vídeo de retenção.`);
-        retentionVideoPath = null; // Continuar sem vídeo de retenção
-      }
-      
-      // Se for arquivo local, verificar se existe
-      if (retentionVideoPath && !isRetentionUrl) {
-        try {
-          const retentionMetadata = await new Promise((retentionResolve, retentionReject) => {
-            ffmpeg.ffprobe(retentionVideoPath, (retentionErr, retentionMetadata) => {
-              if (retentionErr) {
-                console.warn(`[COMPOSER] ⚠️ Erro ao obter metadados do vídeo de retenção: ${retentionErr.message}, usando dimensões padrão`);
-                return retentionResolve(null);
-              }
-              retentionResolve(retentionMetadata);
-            });
-          });
-          
-          if (retentionMetadata?.streams) {
-            const retentionStream = retentionMetadata.streams.find(s => s.codec_type === 'video');
-            if (retentionStream) {
-              retentionOriginalWidth = retentionStream.width || 1080;
-              retentionOriginalHeight = retentionStream.height || 1920;
-              console.log(`[COMPOSER] ✅ Dimensões originais do vídeo de retenção: ${retentionOriginalWidth}x${retentionOriginalHeight}`);
-            }
-          }
-        } catch (retentionError) {
-          console.warn(`[COMPOSER] ⚠️ Erro ao obter dimensões do vídeo de retenção: ${retentionError.message}, usando dimensões padrão`);
-        }
-      }
-    }
-
-    // Calcular dimensões do vídeo de retenção (se houver) para dimensionamento dinâmico
-    // O conteúdo de retenção deve ser dimensionado para o maior tamanho possível
-    // dentro das margens, mantendo proporção original, sem cortes
-    let retentionHeight = 0;
-    let retentionY = 0;
-    let retentionWidth = 0;
-    
-    if (retentionVideoPath) {
-      // Calcular proporção original
-      const retentionAspectRatio = retentionOriginalWidth / retentionOriginalHeight;
-      
-      // Área disponível considerando que a base deve ficar a 140px da margem inferior
-      // Primeiro, assumir que temos todo o espaço disponível até a margem superior
-      // depois ajustaremos se necessário para não ultrapassar o vídeo principal
-      // Altura máxima teórica = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE
-      // HARDCODED: sempre 1920 de altura
-      const maxAvailableHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE; // 1920 - 180 - 140 = 1600px
-      const maxAvailableWidth = 1080; // HARDCODED: sempre 1080px
-      
-      // Calcular dimensões escaladas mantendo proporção (force_original_aspect_ratio=decrease)
-      // Dimensionar para o maior tamanho possível dentro dos limites
-      // Se a largura for o limitador: largura = 1080px, altura = 1080 / aspectRatio
-      // Se a altura for o limitador: altura = 1600px, largura = 1600 * aspectRatio
-      const widthBasedHeight = maxAvailableWidth / retentionAspectRatio;
-      const heightBasedWidth = maxAvailableHeight * retentionAspectRatio;
-      
-      // Escolher a dimensão que mantém a proporção e cabe no espaço disponível
-      if (widthBasedHeight <= maxAvailableHeight) {
-        // Largura é o limitador - usar largura máxima e calcular altura proporcional
-        retentionWidth = maxAvailableWidth;
-        retentionHeight = Math.round(widthBasedHeight);
-      } else {
-        // Altura é o limitador - usar altura máxima e calcular largura proporcional
-        retentionHeight = maxAvailableHeight;
-        retentionWidth = Math.round(heightBasedWidth);
-      }
-      
-      // Calcular posição Y: base a 140px acima da margem inferior
-      // y = 1920 - retentionHeight - BOTTOM_FREE_SPACE
-      // HARDCODED: altura sempre 1920
-      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
-      
-      // Validar que não ultrapassa margem superior
-      // GARANTIR espaço mínimo para o vídeo principal (pelo menos 400px)
-      const MIN_MAIN_VIDEO_HEIGHT = 400; // Altura mínima para o vídeo principal
-      const maxRetentionHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE - MIN_MAIN_VIDEO_HEIGHT; // 1920 - 180 - 140 - 400 = 1200px máximo
-      
-      // Se o vídeo de retenção for muito grande, reduzir para caber
-      if (retentionHeight > maxRetentionHeight) {
-        console.log(`[COMPOSER] ⚠️ Vídeo de retenção muito grande (${retentionHeight}px), reduzindo para ${maxRetentionHeight}px para garantir espaço para vídeo principal`);
-        retentionHeight = maxRetentionHeight;
-        retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
-        
-        // Se a largura calculada ultrapassar, ajustar novamente
-        if (retentionWidth > 1080) {
-          retentionWidth = 1080;
-          retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
-        }
-      }
-      
-      // Recalcular posição Y com altura ajustada
-      retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
-      
-      // Validar que não ultrapassa margem superior
-      if (retentionY < TOP_MARGIN) {
-        // Se ainda ultrapassar, reduzir mais
-        const maxAllowedHeight = 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE - MIN_MAIN_VIDEO_HEIGHT;
-        retentionHeight = Math.min(retentionHeight, maxAllowedHeight);
-        retentionWidth = Math.round(retentionHeight * retentionAspectRatio);
-        
-        if (retentionWidth > 1080) {
-          retentionWidth = 1080;
-          retentionHeight = Math.round(retentionWidth / retentionAspectRatio);
-        }
-        
-        retentionY = 1920 - retentionHeight - BOTTOM_FREE_SPACE;
-      }
-      
-      // Validação final
-      if (retentionY < TOP_MARGIN) {
-        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção ainda ultrapassa margem superior, desabilitando vídeo de retenção`);
-        retentionVideoPath = null; // Desabilitar vídeo de retenção se não couber
-        retentionHeight = 0;
-        retentionWidth = 0;
-        retentionY = 0;
-      }
-      
-      if (retentionHeight <= 0 || retentionWidth <= 0) {
-        console.warn(`[COMPOSER] ⚠️ Dimensões inválidas do vídeo de retenção, desabilitando`);
-        retentionVideoPath = null;
-        retentionHeight = 0;
-        retentionWidth = 0;
-        retentionY = 0;
-      }
-      
-      console.log(`[COMPOSER] ✅ Vídeo de retenção: dimensões originais ${retentionOriginalWidth}x${retentionOriginalHeight} (aspect ratio: ${retentionAspectRatio.toFixed(2)})`);
-      console.log(`[COMPOSER] ✅ Vídeo de retenção: dimensões calculadas ${retentionWidth}x${retentionHeight} (mantendo proporção original)`);
-      console.log(`[COMPOSER] ✅ Vídeo de retenção: posição y=${retentionY}px`);
-      console.log(`[COMPOSER] ✅ Base do vídeo de retenção: ${retentionY + retentionHeight}px (exatamente ${BOTTOM_FREE_SPACE}px acima da margem inferior)`);
-    }
-    
-    // Calcular altura do vídeo principal baseada na posição do vídeo de retenção
-    // Se houver vídeo de retenção, o vídeo principal termina onde o vídeo de retenção começa
-    // Se não houver, o vídeo principal ocupa até a área livre inferior
-    // GARANTIR altura mínima para o vídeo principal (400px)
-    // HARDCODED: altura sempre 1920
-    const MIN_MAIN_VIDEO_HEIGHT = 400; // Altura mínima garantida
-    let MAIN_VIDEO_HEIGHT = retentionVideoPath && retentionY > TOP_MARGIN
-      ? Math.max(MIN_MAIN_VIDEO_HEIGHT, retentionY - TOP_MARGIN) // Garantir mínimo
-      : 1920 - TOP_MARGIN - BOTTOM_FREE_SPACE;
-    
-    // Se ainda assim a altura for inválida, usar altura mínima
-    if (MAIN_VIDEO_HEIGHT <= 0) {
-      console.warn(`[COMPOSER] ⚠️ Altura do vídeo principal inválida (${MAIN_VIDEO_HEIGHT}px), usando altura mínima (${MIN_MAIN_VIDEO_HEIGHT}px)`);
-      MAIN_VIDEO_HEIGHT = MIN_MAIN_VIDEO_HEIGHT;
-      // Se usar altura mínima, desabilitar vídeo de retenção
-      if (retentionVideoPath) {
-        console.warn(`[COMPOSER] ⚠️ Desabilitando vídeo de retenção para garantir espaço para vídeo principal`);
-        retentionVideoPath = null;
-        retentionHeight = 0;
-        retentionWidth = 0;
-        retentionY = 0;
-      }
-    }
-    
-    console.log(`[COMPOSER] Layout vertical 9:16: 1080x1920 (HARDCODED - sempre vertical)`);
-    console.log(`[COMPOSER] ✅ Margem superior: ${TOP_MARGIN}px, Área livre inferior: ${BOTTOM_FREE_SPACE}px`);
-    console.log(`[COMPOSER] ✅ Vídeo principal: 1080x${MAIN_VIDEO_HEIGHT} (y=${TOP_MARGIN}px)`);
-    if (retentionVideoPath) {
-      console.log(`[COMPOSER] ✅ Vídeo retenção: ${retentionWidth}x${retentionHeight} (y=${retentionY}px, base a ${BOTTOM_FREE_SPACE}px da margem inferior)`);
-    }
 
     // Obter duração do vídeo principal
     ffmpeg.ffprobe(clipPath, (err, metadata) => {
@@ -421,236 +236,94 @@ export async function composeFinalVideo({
       console.log(`[COMPOSER] Duração: ${videoDuration}s`);
       console.log(`[COMPOSER] Resolução original: ${videoStream?.width}x${videoStream?.height}`);
 
-      // ============================================================
-      // REFATORAÇÃO: Construir filter_complex de forma sequencial
-      // ============================================================
-      // Construir filter_complex como string diretamente (não usar array)
-      let filterComplex = '';
-      let currentLabel = '[0:v]'; // Input do vídeo principal (sempre começa aqui)
+      // ============================================
+      // LAYOUT FORÇADO 9:16 (1080x1920) - HARDCODED
+      // ============================================
 
-      // --- DIAGNÓSTICO: INÍCIO DA CONSTRUÇÃO DO FILTRO ---
-      console.log('\n--- DIAGNÓSTICO: INÍCIO DA CONSTRUÇÃO DO FILTRO ---');
-      console.log(`[DIAG-0] Estado Inicial: currentLabel = ${currentLabel}`);
-      console.log(`[DIAG-0] filterComplex (início): "${filterComplex}"`);
+      // Dimensões FIXAS (não negociáveis)
+      const CANVAS_WIDTH = 1080;
+      const CANVAS_HEIGHT = 1920;
+      const VIDEO_WIDTH = 1080;
+      const VIDEO_HEIGHT = 608;
+      const VIDEO_Y_TOP = 180;      // Vídeo principal no topo
+      const VIDEO_Y_BOTTOM = 1172;  // Vídeo de retenção na base
+      const HEADLINE_Y = 960;       // Headline centralizada
 
-      // 1. OBTER BACKGROUND FIXO PRIMEIRO (LAYER 0 - OBRIGATÓRIO)
       const fixedBackgroundPath = getFixedBackgroundPath();
-      let backgroundInputIndex = null;
-      let inputCount = 1; // clipPath é input 0
-      
-      if (fixedBackgroundPath && fs.existsSync(fixedBackgroundPath)) {
-        // Background fixo será um input adicional
-        backgroundInputIndex = inputCount;
-        inputCount++;
-        
-        // Redimensionar background para 1080x1920 mantendo proporção
-        filterComplex += `[${backgroundInputIndex}:v]scale=1080:1920:force_original_aspect_ratio=increase[bg_scaled];`;
-        filterComplex += `[bg_scaled]crop=1080:1920[bg_fixed];`;
-        console.log(`[COMPOSER] Background fixo aplicado como layer 0`);
-      } else {
-        // Fallback: criar background sólido se imagem não existir
-        filterComplex += `color=c=${backgroundColor.replace('#', '')}:s=1080:1920:d=${videoDuration}[bg_fixed];`;
-        console.log(`[COMPOSER] Usando background sólido (fallback) - 1080x1920 HARDCODED`);
-      }
-      console.log(`[DIAG-BG] Após Background: currentLabel = ${currentLabel} (ainda [0:v] - bg não altera currentLabel)`);
-      console.log(`[DIAG-BG] Filtro Atual (últimos 200 chars): ...${filterComplex.slice(-200)}`);
-
-      // 2. Redimensionar vídeo principal mantendo proporção 16:9 (horizontal)
-      const mainVideoWidth = 1080; // Largura fixa: 1080px
-      const mainVideoHeight16_9 = Math.round(mainVideoWidth * 9 / 16); // Altura para 16:9 = 607px
-      const mainVideoHeightFinal = Math.min(mainVideoHeight16_9, MAIN_VIDEO_HEIGHT); // Não ultrapassar espaço disponível
-      
-      filterComplex += `${currentLabel}scale=${mainVideoWidth}:${mainVideoHeightFinal}:force_original_aspect_ratio=decrease[main_scaled];`;
-      currentLabel = '[main_scaled]';
-      console.log(`[COMPOSER] ✅ Vídeo principal redimensionado mantendo proporção 16:9: ${mainVideoWidth}x${mainVideoHeightFinal}`);
-      console.log(`[DIAG-MAIN] Após scale do vídeo principal: currentLabel = ${currentLabel}`);
-
-      // 3. Sobrepor vídeo principal no background (POSIÇÃO FIXA: y=180px)
-      const MAIN_VIDEO_Y = TOP_MARGIN; // 180px fixo
-      filterComplex += `[bg_fixed]${currentLabel}overlay=(W-w)/2:${MAIN_VIDEO_Y}[composed];`;
-      currentLabel = '[composed]';
-      console.log(`[COMPOSER] ✅ Vídeo principal posicionado em y=${MAIN_VIDEO_Y}px`);
-      console.log(`[DIAG-MAIN] Após Overlay Principal: currentLabel = ${currentLabel}`);
-      console.log(`[DIAG-MAIN] Filtro Atual (últimos 150 chars): ...${filterComplex.slice(-150)}`);
-
-      // 4. Adicionar headline ANTES do vídeo de retenção (CENTRO VERTICAL)
-      const hasHeadline = headlineText || (headline && headline.text);
-      console.log(`[COMPOSER] Verificando headline: headlineText="${headlineText}", headline.text="${headline?.text}", hasHeadline=${hasHeadline}`);
-      
-      if (hasHeadline) {
-        const headlineTextValue = headlineText || headline.text;
-        const font = headlineStyle.font || headlineStyle.fontFamily || 'Arial';
-        const fontSize = headlineStyle.fontSize || 72;
-        const color = headlineStyle.color || '#FFFFFF';
-        const yPos = `(h-text_h)/2`;
-        const HEADLINE_SAFE_MARGIN = 80;
-        const maxTextWidth = 1080 - (HEADLINE_SAFE_MARGIN * 2);
-        const boxBorderWidth = 0;
-        const boxColor = '0x00000000';
-        
-        const fontPath = getFontPath(font);
-        const wrappedText = wrapText(headlineTextValue, maxTextWidth, fontSize);
-        const escapedText = escapeText(wrappedText);
-        
-        let finalFontPath = fontPath;
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-        if (fs.existsSync && !fs.existsSync(fontPath)) {
-          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada: ${fontPath}, usando fallback`);
-          finalFontPath = isProduction 
-            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-            : '/System/Library/Fonts/Helvetica.ttc';
-        }
-        
-        filterComplex += `${currentLabel}drawtext=fontfile='${finalFontPath}':text='${escapedText}':fontsize=${fontSize}:fontcolor=${color}:box=1:boxcolor=${boxColor}:boxborderw=${boxBorderWidth}:x=(w-text_w)/2:y=${yPos}[with_headline];`;
-        currentLabel = '[with_headline]';
-        console.log(`[COMPOSER] ✅ Headline adicionada no centro: "${headlineTextValue}"`);
-        console.log(`[DIAG-HEADLINE] Após Headline: currentLabel = ${currentLabel}`);
-        console.log(`[DIAG-HEADLINE] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
-      } else {
-        console.log(`[COMPOSER] ⚠️ Headline não será adicionada`);
-        console.log(`[DIAG-HEADLINE] Headline omitida: currentLabel permanece = ${currentLabel}`);
-      }
-
-      // 5. Adicionar vídeo de retenção (OPCIONAL - LÓGICA BINÁRIA)
-      // CRÍTICO: Validar uma única vez se o vídeo existe e está válido
+      const hasFixedBg = fixedBackgroundPath && fs.existsSync(fixedBackgroundPath);
       let retentionVideoExists = false;
       let retentionInputIndex = null;
-      
-      if (retentionVideoPath) {
-        // VALIDAÇÃO ÚNICA: Verificar se arquivo existe e não está vazio
-        if (fs.existsSync(retentionVideoPath)) {
-          try {
-            const retentionStats = fs.statSync(retentionVideoPath);
-            if (retentionStats.size > 0) {
-              retentionVideoExists = true;
-              // Se background existe, retention é input 2, senão é input 1
-              retentionInputIndex = fixedBackgroundPath ? 2 : 1;
-              console.log(`[COMPOSER] ✅ Vídeo de retenção validado: ${retentionVideoPath} (${(retentionStats.size / 1024 / 1024).toFixed(2)} MB)`);
-            } else {
-              console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção está vazio: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
-            }
-          } catch (error) {
-            console.error(`[COMPOSER] ❌ Erro ao validar vídeo de retenção: ${error.message}. Continuando sem vídeo de retenção.`);
+      if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
+        try {
+          const retentionStats = fs.statSync(retentionVideoPath);
+          if (retentionStats.size > 0) {
+            retentionVideoExists = true;
+            retentionInputIndex = hasFixedBg ? 2 : 1;
           }
-        } else {
-          console.warn(`[COMPOSER] ⚠️ Arquivo de vídeo de retenção não existe: ${retentionVideoPath}. Continuando sem vídeo de retenção.`);
-        }
-      } else if (retentionVideoId && retentionVideoId !== 'none') {
-        console.warn(`[COMPOSER] ⚠️ Vídeo de retenção especificado (${retentionVideoId}) mas não foi encontrado. Continuando sem vídeo de retenção.`);
+        } catch (_) {}
       }
-      
-      // APENAS processar vídeo de retenção se ele EXISTE e está VÁLIDO
+      let inputCount = 1 + (hasFixedBg ? 1 : 0) + (retentionVideoExists ? 1 : 0);
+
+      let filterComplex = [];
+
+      // 1. Background (input 1) - Escala e corta para 1080x1920
+      if (hasFixedBg) {
+        filterComplex.push(`[1:v]scale=${CANVAS_WIDTH}:${CANVAS_HEIGHT}:force_original_aspect_ratio=increase,crop=${CANVAS_WIDTH}:${CANVAS_HEIGHT}[bg_fixed]`);
+      } else {
+        filterComplex.push(`color=c=${backgroundColor.replace('#', '')}:s=${CANVAS_WIDTH}:${CANVAS_HEIGHT}:d=${videoDuration}[bg_fixed]`);
+      }
+
+      // 2. Vídeo Principal (input 0) - Escala para 1080x608
+      filterComplex.push(`[0:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}[main_scaled]`);
+
+      // 3. Overlay do Vídeo Principal sobre o Background
+      filterComplex.push(`[bg_fixed][main_scaled]overlay=(W-w)/2:${VIDEO_Y_TOP}[composed]`);
+
+      // 4. Adicionar Headline (se existir)
+      let currentLabel;
+      if (headlineText && headlineText.trim()) {
+        filterComplex.push(
+          `[composed]drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf':` +
+          `text='${(headlineText || '').replace(/'/g, "\\'")}':fontsize=72:fontcolor=#FFFFFF:box=1:boxcolor=0x00000000:` +
+          `x=(w-text_w)/2:y=${HEADLINE_Y}[with_headline]`
+        );
+        currentLabel = '[with_headline]';
+      } else {
+        currentLabel = '[composed]';
+      }
+
+      // 5. Vídeo de Retenção (input 2 ou 1) - Escala para 1080x608
       if (retentionVideoExists && retentionInputIndex !== null) {
-        // Redimensionar vídeo de retenção para dimensões calculadas SEM CORTES
-        filterComplex += `[${retentionInputIndex}:v]scale=${retentionWidth}:${retentionHeight}:force_original_aspect_ratio=decrease[retention_scaled];`;
-        
-        // Aplicar pad para garantir dimensões exatas e centralizar
-        filterComplex += `[retention_scaled]pad=${retentionWidth}:${retentionHeight}:(ow-iw)/2:(oh-ih)/2:color=0x000000[retention_padded];`;
-        
-        // Validar posição antes de adicionar overlay
-        if (retentionY + retentionHeight > 1920) {
-          console.warn(`[COMPOSER] ⚠️ Vídeo de retenção ultrapassa limite, desabilitando: y=${retentionY}, altura=${retentionHeight}`);
-        } else if (retentionY < 0) {
-          console.warn(`[COMPOSER] ⚠️ Vídeo de retenção com posição inválida, desabilitando: y=${retentionY}px`);
-        } else {
-          // Overlay do vídeo de retenção
-          filterComplex += `${currentLabel}[retention_padded]overlay=(W-w)/2:${retentionY}:shortest=0[with_retention];`;
-          currentLabel = '[with_retention]';
-          console.log(`[COMPOSER] ✅ Vídeo de retenção processado e posicionado em y=${retentionY}px`);
-          console.log(`[DIAG-RETENTION] Após Vídeo de Retenção: currentLabel = ${currentLabel}`);
-          console.log(`[DIAG-RETENTION] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
-        }
-      } else {
-        console.log(`[DIAG-RETENTION] Retenção omitida ou inválida: currentLabel permanece = ${currentLabel}`);
+        filterComplex.push(`[${retentionInputIndex}:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}[retention_scaled]`);
+        // 6. Overlay do Vídeo de Retenção
+        filterComplex.push(
+          `${currentLabel}[retention_scaled]overlay=(W-w)/2:${VIDEO_Y_BOTTOM}:shortest=1[with_retention]`
+        );
+        currentLabel = '[with_retention]';
       }
 
-      // 6. Adicionar numeração "Parte X/Y" - CANTO SUPERIOR DIREITO
-      if (clipNumber !== null && clipNumber !== undefined && totalClips !== null && totalClips !== undefined) {
-        const partText = `Parte ${clipNumber}/${totalClips}`;
-        const partFontSize = 48;
-        const partColor = '#FFFFFF';
-        const partStrokeColor = '#000000';
-        const partStrokeWidth = 3;
-        const PART_MARGIN = 80;
-        const partX = `(w-text_w-${PART_MARGIN})`;
-        const partY = PART_MARGIN;
-        
-        const partFont = headlineStyle.font || headlineStyle.fontFamily || 'Inter';
-        const partFontPath = getFontPath(partFont);
-        
-        let finalPartFontPath = partFontPath;
-        const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
-        if (fs.existsSync && !fs.existsSync(partFontPath)) {
-          console.warn(`[COMPOSER] ⚠️ Fonte não encontrada para numeração: ${partFontPath}, usando fallback`);
-          finalPartFontPath = isProduction 
-            ? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-            : '/System/Library/Fonts/Helvetica.ttc';
-        }
-        
-        const partTextEscaped = escapeText(partText);
-        filterComplex += `${currentLabel}drawtext=fontfile='${finalPartFontPath}':text='${partTextEscaped}':fontsize=${partFontSize}:fontcolor=${partColor}:borderw=${partStrokeWidth}:bordercolor=${partStrokeColor}:x=${partX}:y=${partY}[with_part_number];`;
-        currentLabel = '[with_part_number]';
-        console.log(`[COMPOSER] ✅ Numeração adicionada: "${partText}"`);
-        console.log(`[DIAG-COUNTER] Após Contador Parte X/Y: currentLabel = ${currentLabel}`);
-        console.log(`[DIAG-COUNTER] Filtro Atual (últimos 120 chars): ...${filterComplex.slice(-120)}`);
+      // 7. Adicionar Contador "Parte X/Y" (se existir)
+      if (clipNumber && totalClips) {
+        filterComplex.push(
+          `${currentLabel}drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf':` +
+          `text='Parte ${clipNumber}/${totalClips}':fontsize=48:fontcolor=#FFFFFF:` +
+          `borderw=3:bordercolor=#000000:x=(w-text_w-80):y=80[with_counter]`
+        );
+        currentLabel = '[with_counter]';
+      } else if (currentLabel === '[composed]' || currentLabel === '[with_headline]') {
+        // Sem retenção: currentLabel já está correto
       } else {
-        console.log(`[DIAG-COUNTER] Contador omitido (clipNumber/totalClips não definidos): currentLabel = ${currentLabel}`);
+        currentLabel = '[with_retention]';
       }
 
-      // 7. Adicionar legendas (burn-in) - PARTE INFERIOR
-      if (captions && captions.length > 0) {
-        console.log(`[COMPOSER] ✅ Adicionando ${captions.length} legendas ao vídeo`);
-        
-        captions.forEach((caption, index) => {
-          const text = (caption.lines && caption.lines.length > 0) 
-            ? caption.lines.join('\\n') 
-            : (caption.text || '');
-          
-          if (!text || text.trim() === '' || !caption.start || !caption.end || caption.end <= caption.start) {
-            console.warn(`[COMPOSER] ⚠️ Legenda ${index} inválida, pulando...`);
-            return;
-          }
-          
-          const font = captionStyle.font || 'Arial';
-          const fontSize = captionStyle.fontSize || 48;
-          const color = captionStyle.color || '#FFFFFF';
-          const strokeColor = captionStyle.strokeColor || '#000000';
-          const strokeWidth = captionStyle.strokeWidth || 2;
-          const yPos = 1920 - safeZones.bottom;
+      // 8. Final - Garantir que [final] existe
+      filterComplex.push(`${currentLabel}copy[final]`);
 
-          const inputLabel = index === 0 ? currentLabel : `[caption_${index - 1}]`;
-          const outputLabel = `[caption_${index}]`;
-          
-          filterComplex += `${inputLabel}drawtext=fontfile='${getFontPath(font)}':text='${escapeText(text)}':fontsize=${fontSize}:fontcolor=${color}:borderw=${strokeWidth}:bordercolor=${strokeColor}:x=(w-text_w)/2:y=${yPos}:enable='between(t,${caption.start},${caption.end})'${outputLabel};`;
-          
-          currentLabel = outputLabel;
-          
-          console.log(`[COMPOSER] ✅ Legenda ${index + 1}/${captions.length}: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" [${caption.start}s - ${caption.end}s]`);
-        });
-        
-        console.log(`[COMPOSER] ✅ Todas as legendas adicionadas ao filter_complex`);
-        console.log(`[DIAG-CAPTIONS] Após Legendas: currentLabel = ${currentLabel}`);
-        console.log(`[DIAG-CAPTIONS] Filtro Atual (últimos 150 chars): ...${filterComplex.slice(-150)}`);
-      } else {
-        console.log(`[DIAG-CAPTIONS] Legendas omitidas (vazias): currentLabel = ${currentLabel}`);
-      }
-      
-      // 8. GARANTIR LABEL [final] - CRÍTICO: Sempre criar [final] no final
-      // Esta é a parte mais importante: garantir que [final] sempre exista
-      if (!currentLabel || currentLabel.trim() === '') {
-        console.error('[COMPOSER] ❌ ERRO: currentLabel não está definido antes de criar [final]');
-        return reject(new Error('currentLabel não está definido - não é possível criar [final]'));
-      }
-      
-      // SEMPRE criar [final] a partir do currentLabel atual usando copy
-      // O copy preserva o vídeo sem re-encoding e garante que [final] existe
-      filterComplex += `${currentLabel}copy[final]`;
-      currentLabel = '[final]';
-      
-      console.log(`[COMPOSER] ✅ Label [final] criado e garantido como último filtro`);
-      console.log(`[COMPOSER] ✅ currentLabel final: ${currentLabel}`);
-      console.log(`[DIAG-FINAL-STEP] Após criar [final] com copy: currentLabel = ${currentLabel}`);
-      console.log(`[DIAG-FINAL-STEP] Últimos 50 chars do filterComplex: ...${filterComplex.slice(-50)}`);
+      // Construir a string final
+      const filterComplexString = filterComplex.join(';');
+
+      console.log(`[DIAG-FINAL-LAYOUT] Filter Complex String: ${filterComplexString}`);
+      console.log(`[DIAG-FINAL-LAYOUT] Contém [final]? ${filterComplexString.includes('[final]') ? 'SIM' : 'NÃO'}`);
       
       // 8. Garantir que a saída final seja exatamente 1080x1920 (HARDCODED)
       // O background já tem as dimensões corretas, então o overlay deve manter isso
@@ -722,23 +395,21 @@ export async function composeFinalVideo({
       }
 
       // Validar filter_complex antes de aplicar
-      if (!filterComplex || filterComplex.trim() === '') {
+      if (!filterComplexString || filterComplexString.trim() === '') {
         return reject(new Error('Filter complex está vazio'));
       }
       
       // Verificar se [final] existe no filter (CRÍTICO)
-      if (!filterComplex.includes('[final]')) {
+      if (!filterComplexString.includes('[final]')) {
         console.error('[COMPOSER] ❌ Label [final] não encontrado no filter_complex');
-        console.error('[COMPOSER] Filter complex:', filterComplex);
-        console.error('[COMPOSER] Current label:', currentLabel);
+        console.error('[COMPOSER] Filter complex:', filterComplexString);
         return reject(new Error('Label [final] não encontrado no filter_complex'));
       }
       
       // Verificar se [final] foi definido (não apenas usado)
-      if (!filterComplex.includes('=[final]')) {
+      if (!filterComplexString.includes('=[final]')) {
         console.error('[COMPOSER] ❌ Label [final] não foi definido no filter_complex!');
-        console.error('[COMPOSER] Filter complex:', filterComplex);
-        console.error('[COMPOSER] Current label:', currentLabel);
+        console.error('[COMPOSER] Filter complex:', filterComplexString);
         return reject(new Error('Label [final] não foi definido no filter_complex'));
       }
       
@@ -746,7 +417,7 @@ export async function composeFinalVideo({
       const inputPattern = /\[(\d+):[av]\]/g;
       const referencedInputs = new Set();
       let match;
-      while ((match = inputPattern.exec(filterComplex)) !== null) {
+      while ((match = inputPattern.exec(filterComplexString)) !== null) {
         referencedInputs.add(parseInt(match[1]));
       }
       
@@ -758,25 +429,23 @@ export async function composeFinalVideo({
       }
       
       // Log do filter complex (limitado para não poluir logs)
-      console.log('[COMPOSER] Filter complex (primeiros 500 chars):', filterComplex.substring(0, 500));
-      if (filterComplex.length > 500) {
-        console.log('[COMPOSER] Filter complex (restante):', filterComplex.substring(500, 1000));
+      console.log('[COMPOSER] Filter complex (primeiros 500 chars):', filterComplexString.substring(0, 500));
+      if (filterComplexString.length > 500) {
+        console.log('[COMPOSER] Filter complex (restante):', filterComplexString.substring(500, 1000));
       }
 
       // --- DIAGNÓSTICO: ESTADO FINAL ANTES DA EXECUÇÃO ---
-      const finalFilterString = typeof filterComplex === 'string' ? filterComplex : (Array.isArray(filterComplex) ? filterComplex.join(';') : String(filterComplex));
       console.log('--- DIAGNÓSTICO: ESTADO FINAL ANTES DA EXECUÇÃO ---');
-      console.log(`[DIAG-FINAL] Última Label Gerada (currentLabel): ${currentLabel}`);
-      console.log(`[DIAG-FINAL] String Final do Filtro (completa): ${finalFilterString}`);
-      console.log(`[DIAG-FINAL] [final] está definido no filtro? ${finalFilterString.includes('=[final]') ? 'SIM' : 'NÃO'}`);
-      console.log(`[DIAG-FINAL] Últimos 80 chars da string: ...${finalFilterString.slice(-80)}`);
+      console.log(`[DIAG-FINAL] String Final do Filtro (completa): ${filterComplexString}`);
+      console.log(`[DIAG-FINAL] [final] está definido no filtro? ${filterComplexString.includes('=[final]') ? 'SIM' : 'NÃO'}`);
+      console.log(`[DIAG-FINAL] Últimos 80 chars da string: ...${filterComplexString.slice(-80)}`);
       console.log('--------------------------------------------------\n');
       
       try {
-        command.complexFilter(filterComplex);
+        command.complexFilter(filterComplexString);
       } catch (filterError) {
         console.error('[COMPOSER] ❌ Erro ao aplicar filter_complex:', filterError);
-        console.error('[COMPOSER] Filter complex completo:', filterComplex);
+        console.error('[COMPOSER] Filter complex completo:', filterComplexString);
         return reject(new Error(`Erro ao criar filter_complex: ${filterError.message}`));
       }
 
