@@ -25,6 +25,7 @@ import generateRoutes from "./routes/generate.js";
 import nichesRoutes from "./routes/niches.js";
 import retentionRoutes from "./routes/retention.js";
 import captionsRoutes from "./routes/captions.js";
+import thumbnailsRoutes from "./routes/thumbnails.js";
 import termsRoutes from "./routes/terms.js";
 import creditsRoutes from "./routes/credits.js";
 import stripeRoutes from "./routes/stripe.js";
@@ -135,6 +136,7 @@ app.use("/api/niches", nichesRoutes); // Público (lista de nichos)
 app.use("/api/retention", retentionRoutes); // Público (lista de retenção)
 app.use("/api/captions", captionsRoutes); // Público (geração de legendas)
 app.use("/api/terms", termsRoutes); // Público (termos)
+app.use("/api/thumbnails", thumbnailsRoutes); // Público (gerador de thumbnails 9x16)
 
 // =====================
 // FRONTEND ESTÁTICO

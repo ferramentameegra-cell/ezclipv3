@@ -247,7 +247,7 @@
                                 <div class="step-number">4</div>
                                 <div class="step-line"></div>
                             </div>
-                            <div class="step-label">Configurações</div>
+                            <div class="step-label">Thumbnails</div>
                         </div>
                         <div class="progress-step" data-step="niche">
                             <div class="step-indicator">
@@ -381,94 +381,214 @@
                         </div>
                     </div>
 
-                    <!-- Configurations Panel (Sempre Visível) -->
+                    <!-- Gerador de Thumbnails 9x16 (substitui Configurações) -->
                     <div class="tool-card" id="configurations-card" data-step-card="configurations" style="display: none;">
-                        <h3 class="card-title">⚙️ Configurações</h3>
-                        <p class="card-subtitle">Configure o formato, plataformas e estilo do seu conteúdo</p>
+                        <h3 class="card-title">🎨 Gerador de Thumbnails</h3>
+                        <p class="card-subtitle">Crie thumbnails 9x16 (1080x1920) otimizadas para TikTok e Reels</p>
                         
-                        <div class="configurations-panel" style="display: grid; gap: 1.5rem;">
-                            <!-- Formato do Vídeo -->
-                            <div class="config-section">
-                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Formato do Vídeo</label>
-                                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
-                                        <input type="radio" name="video-format" value="9:16" checked onchange="updateConfiguration('format', '9:16')">
-                                        <span>9:16 (Vertical)</span>
-                                    </label>
-                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
-                                        <input type="radio" name="video-format" value="1:1" onchange="updateConfiguration('format', '1:1')">
-                                        <span>1:1 (Quadrado)</span>
-                                    </label>
-                                    <label class="radio-option" style="flex: 1; min-width: 120px;">
-                                        <input type="radio" name="video-format" value="16:9" onchange="updateConfiguration('format', '16:9')">
-                                        <span>16:9 (Horizontal)</span>
-                                    </label>
-                                </div>
+                        <div class="thumbnail-generator">
+                            <div class="thumb-step">
+                                <h4 class="thumb-step-title">Passo 1: Extrair frames do vídeo</h4>
+                                <p class="thumb-step-desc">O sistema extrai até 8 frames do seu vídeo para você escolher o melhor.</p>
+                                <button type="button" class="btn-primary" id="btn-extract-frames" onclick="thumbnailExtractFrames()">
+                                    <span id="btn-extract-text">Extrair frames</span>
+                                    <span id="btn-extract-loader" class="hidden"><span class="spinner-inline"></span> Analisando...</span>
+                                </button>
                             </div>
-                            
-                            <!-- Plataformas -->
-                            <div class="config-section">
-                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Plataformas</label>
-                                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                                    <label class="checkbox-option">
-                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'tiktok', this.checked)">
-                                        <span>📱 TikTok</span>
-                                    </label>
-                                    <label class="checkbox-option">
-                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'reels', this.checked)">
-                                        <span>📸 Instagram Reels</span>
-                                    </label>
-                                    <label class="checkbox-option">
-                                        <input type="checkbox" checked onchange="updateConfiguration('platforms', 'shorts', this.checked)">
-                                        <span>▶️ YouTube Shorts</span>
-                                    </label>
-                                </div>
+                            <div class="thumb-step" id="thumb-frames-step" style="display: none;">
+                                <h4 class="thumb-step-title">Passo 2: Escolha o frame base</h4>
+                                <div id="thumbnail-frames-grid" class="thumbnail-frames-grid"></div>
                             </div>
-                            
-                            <!-- Idioma e Estilo de Legendas -->
-                            <div class="config-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                                <div>
-                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Idioma das Legendas</label>
-                                    <select class="select-field" onchange="updateConfiguration('captionLanguage', this.value)" style="width: 100%;">
-                                        <option value="pt">Português</option>
-                                        <option value="en">Inglês</option>
-                                        <option value="es">Espanhol</option>
-                                    </select>
+                            <div class="thumb-step" id="thumb-editor-step" style="display: none;">
+                                <h4 class="thumb-step-title">Passo 3: Personalize</h4>
+                                <div class="thumb-editor-layout">
+                                    <div class="thumb-preview-area">
+                                        <p class="thumb-preview-label">Preview</p>
+                                        <div class="thumb-preview-box aspect-9-16" id="thumbnail-preview-box">
+                                            <img id="thumbnail-preview-img" src="" alt="Preview" style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
+                                            <span id="thumbnail-preview-placeholder" class="thumb-placeholder">Selecione um frame e preencha o título</span>
+                                        </div>
+                                    </div>
+                                    <div class="thumb-controls">
+                                        <div class="thumb-field">
+                                            <label>Título (máx. 500 caracteres)</label>
+                                            <textarea id="thumbnail-title" class="input-field" placeholder="Ex: Transforme Seu Corpo" maxlength="500" rows="3" oninput="thumbnailPreviewDebounce()"></textarea>
+                                            <span class="thumb-char-count" id="thumb-char-count">0/500</span>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Template</label>
+                                            <select id="thumbnail-template" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="generico">Genérico</option>
+                                                <option value="saude">Saúde</option>
+                                                <option value="fitness">Fitness</option>
+                                                <option value="negocios">Negócios</option>
+                                                <option value="educacao">Educação</option>
+                                                <option value="tecnologia">Tecnologia</option>
+                                                <option value="culinaria">Culinária</option>
+                                                <option value="entretenimento">Entretenimento</option>
+                                            </select>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Contraste <span id="thumb-contrast-value">50</span>%</label>
+                                            <input type="range" id="thumbnail-contrast" min="0" max="100" value="50" oninput="document.getElementById('thumb-contrast-value').textContent=this.value; thumbnailPreviewDebounce()">
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Tarja superior</label>
+                                            <select id="thumbnail-tarja-superior-size" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="">Nenhuma</option>
+                                                <option value="1">Pequena (~5%)</option>
+                                                <option value="2">Média (~15%)</option>
+                                                <option value="3">Grande (~25%)</option>
+                                                <option value="4">Metade da tela (50%)</option>
+                                            </select>
+                                            <div class="thumb-color-row thumb-tarja-color-row" id="tarja-superior-color-row" style="margin-top: 0.5rem;">
+                                                <input type="color" id="thumbnail-tarja-superior-color" value="#1976D2" title="Cor tarja superior" onchange="thumbnailPreviewDebounce()">
+                                                <input type="text" id="thumbnail-tarja-superior-color-hex" class="input-field thumb-hex" value="#1976D2" maxlength="7" placeholder="#1976D2" onchange="document.getElementById('thumbnail-tarja-superior-color').value=this.value; thumbnailPreviewDebounce()">
+                                                <div class="thumb-color-presets" id="thumb-tarja-superior-presets">
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Tarja inferior</label>
+                                            <select id="thumbnail-tarja-inferior-size" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="">Nenhuma</option>
+                                                <option value="1">Pequena (~5%)</option>
+                                                <option value="2">Média (~15%)</option>
+                                                <option value="3">Grande (~25%)</option>
+                                                <option value="4">Metade da tela (50%)</option>
+                                            </select>
+                                            <div class="thumb-color-row thumb-tarja-color-row" id="tarja-inferior-color-row" style="margin-top: 0.5rem;">
+                                                <input type="color" id="thumbnail-tarja-inferior-color" value="#D32F2F" title="Cor tarja inferior" onchange="thumbnailPreviewDebounce()">
+                                                <input type="text" id="thumbnail-tarja-inferior-color-hex" class="input-field thumb-hex" value="#D32F2F" maxlength="7" placeholder="#D32F2F" onchange="document.getElementById('thumbnail-tarja-inferior-color').value=this.value; thumbnailPreviewDebounce()">
+                                                <div class="thumb-color-presets" id="thumb-tarja-inferior-presets">
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Tamanho da fonte</label>
+                                            <select id="thumbnail-font-size" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="xs">Extra pequeno (36px)</option>
+                                                <option value="small">Pequeno (48px)</option>
+                                                <option value="medium" selected>Médio (72px)</option>
+                                                <option value="large">Grande (96px)</option>
+                                                <option value="xl">Extra grande (120px)</option>
+                                            </select>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Posição do título na imagem</label>
+                                            <select id="thumbnail-title-position" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="top">Topo</option>
+                                                <option value="center" selected>Centro</option>
+                                                <option value="bottom">Base</option>
+                                            </select>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Cor do texto</label>
+                                            <div class="thumb-color-row">
+                                                <input type="color" id="thumbnail-text-color" value="#FFFFFF" title="Cor do texto" onchange="thumbnailPreviewDebounce()">
+                                                <input type="text" id="thumbnail-text-color-hex" class="input-field thumb-hex" value="#FFFFFF" maxlength="7" placeholder="#FFFFFF" onchange="document.getElementById('thumbnail-text-color').value=this.value; thumbnailPreviewDebounce()">
+                                                <div class="thumb-color-presets" id="thumb-text-presets">
+                                                    <button type="button" class="thumb-color-btn" data-color="#FFFFFF" title="Branco" style="background:#FFFFFF; border:1px solid #ccc;"></button>
+                                                    <button type="button" class="thumb-color-btn" data-color="#000000" title="Preto" style="background:#000000;"></button>
+                                                    <button type="button" class="thumb-color-btn" data-color="#FFEB3B" title="Amarelo" style="background:#FFEB3B;"></button>
+                                                    <button type="button" class="thumb-color-btn" data-color="#00E676" title="Verde" style="background:#00E676;"></button>
+                                                    <button type="button" class="thumb-color-btn" data-color="#FF5722" title="Laranja" style="background:#FF5722;"></button>
+                                                    <button type="button" class="thumb-color-btn" data-color="#E91E63" title="Rosa" style="background:#E91E63;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="thumb-field">
+                                            <label>Cor da borda do texto</label>
+                                            <div class="thumb-color-row">
+                                                <input type="color" id="thumbnail-stroke-color" value="#000000" title="Cor da borda" onchange="thumbnailPreviewDebounce()">
+                                                <input type="text" id="thumbnail-stroke-color-hex" class="input-field thumb-hex" value="#000000" maxlength="7" placeholder="#000000" onchange="document.getElementById('thumbnail-stroke-color').value=this.value; thumbnailPreviewDebounce()">
+                                                <div class="thumb-color-presets" id="thumb-stroke-presets">
+                                                    <button type="button" class="thumb-color-btn stroke" data-color="#000000" title="Preto" style="background:#000000;"></button>
+                                                    <button type="button" class="thumb-color-btn stroke" data-color="#FFFFFF" title="Branco" style="background:#FFFFFF; border:1px solid #ccc;"></button>
+                                                    <button type="button" class="thumb-color-btn stroke" data-color="#212121" title="Cinza escuro" style="background:#212121;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="thumb-actions">
+                                            <button type="button" class="btn-primary" id="btn-generate-thumb" onclick="thumbnailGenerate()">
+                                                <span id="btn-gen-text">Gerar thumbnail</span>
+                                                <span id="btn-gen-loader" class="hidden"><span class="spinner-inline"></span></span>
+                                            </button>
+                                            <a id="btn-download-thumb" href="#" download="thumbnail.jpg" class="btn-secondary" style="display: none;">Baixar 1080x1920</a>
+                                        </div>
+                                        <div class="thumb-variations-section" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                                            <p class="thumb-preview-label">A/B test – Gerar variações</p>
+                                            <p class="thumb-hint" style="font-size: 0.8rem; color: var(--text-tertiary); margin-bottom: 0.75rem;">Gera 2–3 variações para testar qual thumbnail performa melhor.</p>
+                                            <button type="button" class="btn-secondary" id="btn-generate-variations" onclick="thumbnailGenerateVariations()">
+                                                <span id="btn-var-text">Gerar variações</span>
+                                                <span id="btn-var-loader" class="hidden"><span class="spinner-inline"></span></span>
+                                            </button>
+                                            <div id="thumbnail-variations-grid" class="thumbnail-variations-grid" style="display: none; margin-top: 1rem; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Estilo de Legendas</label>
-                                    <select class="select-field" onchange="updateConfiguration('captionStyle', this.value)" style="width: 100%;">
-                                        <option value="modern">Moderno</option>
-                                        <option value="classic">Clássico</option>
-                                        <option value="bold">Negrito</option>
-                                        <option value="minimal">Minimalista</option>
-                                    </select>
-                                </div>
-                            </div>
-                            
-                            <!-- Quantidade de Clipes -->
-                            <div class="config-section">
-                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Quantidade de Clipes</label>
-                                <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                    <input type="number" id="clips-quantity" min="1" max="50" value="" placeholder="Auto" class="input-field" style="width: 100px;" onchange="updateConfiguration('clipsQuantity', this.value ? parseInt(this.value) : null)">
-                                    <span style="color: var(--text-secondary); font-size: 0.875rem;">Deixe em branco para gerar automaticamente</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Margens de Segurança -->
-                            <div class="config-section">
-                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Margens de Segurança</label>
-                                <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                    <input type="range" id="safe-margins" min="0" max="100" value="10" class="input-field" style="flex: 1;" oninput="updateConfiguration('safeMargins', parseInt(this.value)); document.getElementById('safe-margins-value').textContent = this.value + '%'">
-                                    <span id="safe-margins-value" style="min-width: 50px; font-weight: 600;">10%</span>
-                                </div>
-                                <p style="margin-top: 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">Ajuste as margens para evitar cortes em textos importantes</p>
                             </div>
                         </div>
                         
+                        <details class="config-advanced-details" style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                            <summary style="cursor: pointer; font-weight: 600;">⚙️ Configurações avançadas (formato, plataformas, legendas)</summary>
+                            <div class="configurations-panel" style="display: grid; gap: 1rem; margin-top: 1rem;">
+                                <div class="config-section">
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Formato do Vídeo</label>
+                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                        <label class="radio-option"><input type="radio" name="video-format" value="9:16" checked onchange="updateConfiguration('format', '9:16')"><span>9:16 (Vertical)</span></label>
+                                        <label class="radio-option"><input type="radio" name="video-format" value="1:1" onchange="updateConfiguration('format', '1:1')"><span>1:1</span></label>
+                                        <label class="radio-option"><input type="radio" name="video-format" value="16:9" onchange="updateConfiguration('format', '16:9')"><span>16:9</span></label>
+                                    </div>
+                                </div>
+                                <div class="config-section">
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Plataformas</label>
+                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                        <label class="checkbox-option"><input type="checkbox" checked onchange="updateConfiguration('platforms', 'tiktok', this.checked)"><span>📱 TikTok</span></label>
+                                        <label class="checkbox-option"><input type="checkbox" checked onchange="updateConfiguration('platforms', 'reels', this.checked)"><span>📸 Reels</span></label>
+                                        <label class="checkbox-option"><input type="checkbox" checked onchange="updateConfiguration('platforms', 'shorts', this.checked)"><span>▶️ Shorts</span></label>
+                                    </div>
+                                </div>
+                                <div class="config-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div>
+                                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Idioma das Legendas</label>
+                                        <select class="select-field" onchange="updateConfiguration('captionLanguage', this.value)" style="width: 100%;">
+                                            <option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Estilo de Legendas</label>
+                                        <select class="select-field" onchange="updateConfiguration('captionStyle', this.value)" style="width: 100%;">
+                                            <option value="modern">Moderno</option><option value="classic">Clássico</option><option value="bold">Negrito</option><option value="minimal">Minimalista</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="config-section">
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Quantidade de Clipes</label>
+                                    <input type="number" id="clips-quantity" min="1" max="50" value="" placeholder="Auto" class="input-field" style="width: 100px;" onchange="updateConfiguration('clipsQuantity', this.value ? parseInt(this.value) : null)">
+                                </div>
+                                <div class="config-section">
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Margens de Segurança <span id="safe-margins-value">10</span>%</label>
+                                    <input type="range" id="safe-margins" min="0" max="100" value="10" class="input-field" style="flex: 1;" oninput="updateConfiguration('safeMargins', parseInt(this.value)); document.getElementById('safe-margins-value').textContent = this.value">
+                                </div>
+                            </div>
+                        </details>
+                        
                         <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
                             <button class="btn-primary" onclick="confirmConfigurations()" style="width: 100%;">
-                                Confirmar Configurações e Avançar
+                                Confirmar e Avançar
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-left: 8px;">
                                     <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>

@@ -3752,6 +3752,299 @@ function confirmConfigurations() {
     }, 500);
 }
 
+// ========== Gerador de Thumbnails 9x16 ==========
+const thumbnailState = { frameToken: null, count: 0, selectedFrameIndex: null, previewBlobUrl: null };
+let thumbnailPreviewTimeout = null;
+
+async function thumbnailExtractFrames() {
+    const videoId = appState.videoId;
+    if (!videoId) {
+        alert('Processe o vídeo primeiro (YouTube ou Upload) antes de extrair frames.');
+        return;
+    }
+    const btnText = document.getElementById('btn-extract-text');
+    const btnLoader = document.getElementById('btn-extract-loader');
+    if (btnText) btnText.classList.add('hidden');
+    if (btnLoader) btnLoader.classList.remove('hidden');
+    try {
+        const res = await fetch(`${API_BASE}/api/thumbnails/extract-frames`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId, maxFrames: 8 })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Falha ao extrair frames');
+        thumbnailState.frameToken = data.frameToken;
+        thumbnailState.count = data.count || 0;
+        thumbnailState.selectedFrameIndex = null;
+        const grid = document.getElementById('thumbnail-frames-grid');
+        const stepFrames = document.getElementById('thumb-frames-step');
+        const stepEditor = document.getElementById('thumb-editor-step');
+        if (grid) {
+            grid.innerHTML = '';
+            const duration = appState.videoDuration || 60;
+            for (let i = 0; i < (data.count || 0); i++) {
+                const div = document.createElement('div');
+                div.className = 'thumbnail-frame-item';
+                div.dataset.index = i;
+                div.innerHTML = `<img src="${API_BASE}/api/thumbnails/frame/${data.frameToken}/${i}" alt="Frame ${i + 1}">`;
+                div.onclick = () => thumbnailSelectFrame(i);
+                grid.appendChild(div);
+            }
+        }
+        if (stepFrames) stepFrames.style.display = 'block';
+        if (stepEditor) stepEditor.style.display = 'none';
+    } catch (e) {
+        alert(e.message || 'Erro ao extrair frames.');
+    } finally {
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnLoader) btnLoader.classList.add('hidden');
+    }
+}
+
+function thumbnailSelectFrame(index) {
+    thumbnailState.selectedFrameIndex = index;
+    document.querySelectorAll('.thumbnail-frame-item').forEach((el, i) => {
+        el.classList.toggle('selected', i === index);
+    });
+    const stepEditor = document.getElementById('thumb-editor-step');
+    if (stepEditor) stepEditor.style.display = 'block';
+    thumbnailPreviewDebounce();
+}
+
+function thumbnailPreviewDebounce() {
+    if (thumbnailPreviewTimeout) clearTimeout(thumbnailPreviewTimeout);
+    thumbnailPreviewTimeout = setTimeout(() => {
+        thumbnailGenerate(true);
+    }, 600);
+}
+
+function getThumbnailFrameTimeSec() {
+    const dur = appState.videoDuration || 60;
+    const count = thumbnailState.count || 8;
+    const idx = thumbnailState.selectedFrameIndex ?? 0;
+    return (dur * (idx + 1)) / (count + 1);
+}
+
+async function thumbnailGenerate(silent = false) {
+    if (thumbnailState.selectedFrameIndex === null && !silent) {
+        alert('Selecione um frame primeiro.');
+        return;
+    }
+    const videoId = appState.videoId;
+    if (!videoId) return;
+    if (!silent) {
+        const btnText = document.getElementById('btn-gen-text');
+        const btnLoader = document.getElementById('btn-gen-loader');
+        if (btnText) btnText.classList.add('hidden');
+        if (btnLoader) btnLoader.classList.remove('hidden');
+    }
+    try {
+        const title = (document.getElementById('thumbnail-title') && document.getElementById('thumbnail-title').value) || '';
+        const template = (document.getElementById('thumbnail-template') && document.getElementById('thumbnail-template').value) || 'generico';
+        const contrast = (document.getElementById('thumbnail-contrast') && parseInt(document.getElementById('thumbnail-contrast').value, 10)) || 50;
+        const tarjaSuperiorSizeEl = document.getElementById('thumbnail-tarja-superior-size');
+        const tarjaInferiorSizeEl = document.getElementById('thumbnail-tarja-inferior-size');
+        const tarjaSuperiorSize = (tarjaSuperiorSizeEl && tarjaSuperiorSizeEl.value) ? parseInt(tarjaSuperiorSizeEl.value, 10) : null;
+        const tarjaInferiorSize = (tarjaInferiorSizeEl && tarjaInferiorSizeEl.value) ? parseInt(tarjaInferiorSizeEl.value, 10) : null;
+        const tarjaSuperiorColor = (document.getElementById('thumbnail-tarja-superior-color') && document.getElementById('thumbnail-tarja-superior-color').value) || null;
+        const tarjaInferiorColor = (document.getElementById('thumbnail-tarja-inferior-color') && document.getElementById('thumbnail-tarja-inferior-color').value) || null;
+        const fontSize = (document.getElementById('thumbnail-font-size') && document.getElementById('thumbnail-font-size').value) || 'medium';
+        const titlePosition = (document.getElementById('thumbnail-title-position') && document.getElementById('thumbnail-title-position').value) || 'center';
+        const textColor = (document.getElementById('thumbnail-text-color') && document.getElementById('thumbnail-text-color').value) || '#FFFFFF';
+        const strokeColor = (document.getElementById('thumbnail-stroke-color') && document.getElementById('thumbnail-stroke-color').value) || '#000000';
+        const res = await fetch(`${API_BASE}/api/thumbnails/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                videoId,
+                frameTimeSec: getThumbnailFrameTimeSec(),
+                title,
+                template,
+                contrast: contrast / 100,
+                tarjaSuperiorSize,
+                tarjaInferiorSize,
+                tarjaSuperiorColor: tarjaSuperiorSize ? tarjaSuperiorColor : null,
+                tarjaInferiorColor: tarjaInferiorSize ? tarjaInferiorColor : null,
+                fontSize,
+                titlePosition,
+                textColor,
+                strokeColor
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Erro ao gerar thumbnail');
+        }
+        const blob = await res.blob();
+        if (thumbnailState.previewBlobUrl) URL.revokeObjectURL(thumbnailState.previewBlobUrl);
+        thumbnailState.previewBlobUrl = URL.createObjectURL(blob);
+        const previewImg = document.getElementById('thumbnail-preview-img');
+        const placeholder = document.getElementById('thumbnail-preview-placeholder');
+        if (previewImg) {
+            previewImg.src = thumbnailState.previewBlobUrl;
+            previewImg.style.display = 'block';
+        }
+        if (placeholder) placeholder.style.display = 'none';
+        const downloadLink = document.getElementById('btn-download-thumb');
+        if (downloadLink) {
+            downloadLink.href = thumbnailState.previewBlobUrl;
+            downloadLink.download = 'ezclips-thumbnail-1080x1920.jpg';
+            downloadLink.style.display = 'inline-flex';
+        }
+    } catch (e) {
+        if (!silent) alert(e.message || 'Erro ao gerar thumbnail.');
+    } finally {
+        if (!silent) {
+            const btnText = document.getElementById('btn-gen-text');
+            const btnLoader = document.getElementById('btn-gen-loader');
+            if (btnText) btnText.classList.remove('hidden');
+            if (btnLoader) btnLoader.classList.add('hidden');
+        }
+    }
+}
+
+async function thumbnailGenerateVariations() {
+    if (thumbnailState.selectedFrameIndex === null) {
+        alert('Selecione um frame primeiro.');
+        return;
+    }
+    const videoId = appState.videoId;
+    if (!videoId) {
+        alert('Vídeo não encontrado.');
+        return;
+    }
+    const btnText = document.getElementById('btn-var-text');
+    const btnLoader = document.getElementById('btn-var-loader');
+    if (btnText) btnText.classList.add('hidden');
+    if (btnLoader) btnLoader.classList.remove('hidden');
+    const grid = document.getElementById('thumbnail-variations-grid');
+    if (grid) grid.innerHTML = '';
+    try {
+        const title = (document.getElementById('thumbnail-title') && document.getElementById('thumbnail-title').value) || '';
+        const template = (document.getElementById('thumbnail-template') && document.getElementById('thumbnail-template').value) || 'generico';
+        const tarjaSuperiorSizeEl = document.getElementById('thumbnail-tarja-superior-size');
+        const tarjaInferiorSizeEl = document.getElementById('thumbnail-tarja-inferior-size');
+        const tarjaSuperiorSize = (tarjaSuperiorSizeEl && tarjaSuperiorSizeEl.value) ? parseInt(tarjaSuperiorSizeEl.value, 10) : null;
+        const tarjaInferiorSize = (tarjaInferiorSizeEl && tarjaInferiorSizeEl.value) ? parseInt(tarjaInferiorSizeEl.value, 10) : null;
+        const tarjaSuperiorColor = (document.getElementById('thumbnail-tarja-superior-color') && document.getElementById('thumbnail-tarja-superior-color').value) || null;
+        const tarjaInferiorColor = (document.getElementById('thumbnail-tarja-inferior-color') && document.getElementById('thumbnail-tarja-inferior-color').value) || null;
+        const fontSize = (document.getElementById('thumbnail-font-size') && document.getElementById('thumbnail-font-size').value) || 'medium';
+        const titlePosition = (document.getElementById('thumbnail-title-position') && document.getElementById('thumbnail-title-position').value) || 'center';
+        const res = await fetch(`${API_BASE}/api/thumbnails/variations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                videoId,
+                frameTimeSec: getThumbnailFrameTimeSec(),
+                title: title.slice(0, 500),
+                template,
+                tarjaSuperiorSize,
+                tarjaInferiorSize,
+                tarjaSuperiorColor: tarjaSuperiorSize ? tarjaSuperiorColor : null,
+                tarjaInferiorColor: tarjaInferiorSize ? tarjaInferiorColor : null,
+                fontSize,
+                titlePosition
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Erro ao gerar variações');
+        const variations = data.variations || [];
+        if (!grid || variations.length === 0) return;
+        grid.style.display = 'grid';
+        grid.innerHTML = '';
+        variations.forEach((base64, i) => {
+            const blob = b64ToBlob(base64, 'image/jpeg');
+            const url = URL.createObjectURL(blob);
+            const div = document.createElement('div');
+            div.className = 'thumbnail-variation-item';
+            div.innerHTML = `
+                <img src="${url}" alt="Variação ${i + 1}" style="width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 8px;">
+                <a href="${url}" download="ezclips-thumbnail-variacao-${i + 1}.jpg" class="btn-secondary" style="margin-top: 0.5rem; font-size: 0.8rem; display: block; text-align: center;">Baixar ${i + 1}</a>
+            `;
+            grid.appendChild(div);
+        });
+    } catch (e) {
+        alert(e.message || 'Erro ao gerar variações.');
+    } finally {
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnLoader) btnLoader.classList.add('hidden');
+    }
+}
+
+function b64ToBlob(b64, mime) {
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime || 'image/jpeg' });
+}
+
+function updateThumbnailCharCount() {
+    const el = document.getElementById('thumbnail-title');
+    const countEl = document.getElementById('thumb-char-count');
+    if (el && countEl) countEl.textContent = (el.value || '').length + '/500';
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const titleEl = document.getElementById('thumbnail-title');
+    if (titleEl) titleEl.addEventListener('input', updateThumbnailCharCount);
+    document.querySelectorAll('#thumb-text-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('thumbnail-text-color');
+            const hexInput = document.getElementById('thumbnail-text-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            thumbnailPreviewDebounce();
+        });
+    });
+    document.querySelectorAll('#thumb-stroke-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('thumbnail-stroke-color');
+            const hexInput = document.getElementById('thumbnail-stroke-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            thumbnailPreviewDebounce();
+        });
+    });
+    document.querySelectorAll('#thumb-tarja-superior-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('thumbnail-tarja-superior-color');
+            const hexInput = document.getElementById('thumbnail-tarja-superior-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            thumbnailPreviewDebounce();
+        });
+    });
+    document.querySelectorAll('#thumb-tarja-inferior-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('thumbnail-tarja-inferior-color');
+            const hexInput = document.getElementById('thumbnail-tarja-inferior-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            thumbnailPreviewDebounce();
+        });
+    });
+    const textColorEl = document.getElementById('thumbnail-text-color');
+    const textHexEl = document.getElementById('thumbnail-text-color-hex');
+    if (textColorEl && textHexEl) {
+        textColorEl.addEventListener('input', () => { textHexEl.value = textColorEl.value; });
+    }
+    const strokeColorEl = document.getElementById('thumbnail-stroke-color');
+    const strokeHexEl = document.getElementById('thumbnail-stroke-color-hex');
+    if (strokeColorEl && strokeHexEl) {
+        strokeColorEl.addEventListener('input', () => { strokeHexEl.value = strokeColorEl.value; });
+    }
+    const tarjaSupColor = document.getElementById('thumbnail-tarja-superior-color');
+    const tarjaSupHex = document.getElementById('thumbnail-tarja-superior-color-hex');
+    if (tarjaSupColor && tarjaSupHex) tarjaSupColor.addEventListener('input', () => { tarjaSupHex.value = tarjaSupColor.value; });
+    const tarjaInfColor = document.getElementById('thumbnail-tarja-inferior-color');
+    const tarjaInfHex = document.getElementById('thumbnail-tarja-inferior-color-hex');
+    if (tarjaInfColor && tarjaInfHex) tarjaInfColor.addEventListener('input', () => { tarjaInfHex.value = tarjaInfColor.value; });
+});
+
 /**
  * Mostra botão para continuar após gerar legendas
  */
