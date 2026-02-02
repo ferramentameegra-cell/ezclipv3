@@ -5154,5 +5154,5 @@ async function downloadSeries() {
 }
 
 function openTikTokStudio() {
-    window.open('https://www.tiktok.com/tiktokstudio/upload?from=creator_center', '_blank');
+    window.open('https://www.tiktok.com/tiktokstudio/upload', '_blank');
 }
