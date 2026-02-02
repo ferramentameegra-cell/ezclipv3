@@ -59,6 +59,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
       headlineText = null,
       headlineSize = 72,
       headlineColor = '#FFFFFF',
+      headlineStrokeColor = '#000000',
+      headlineFontSize = 'medium',
+      headlineTitlePosition = 'center',
+      headlineTarjaSuperiorSize = null,
+      headlineTarjaInferiorSize = null,
+      headlineTarjaCentralSize = null,
+      headlineTarjaSuperiorColor = null,
+      headlineTarjaInferiorColor = null,
+      headlineTarjaCentralColor = null,
       font = 'Inter',
       backgroundColor = '#000000',
       // CONFIGURAÇÕES DE VÍDEO
@@ -902,11 +911,14 @@ export const generateVideoSeries = async (job, jobsMap) => {
       strokeWidth: captionStyleConfig.strokeWidth
     };
 
-    // Estilo da headline
+    // Estilo da headline (tamanho por preset ou numérico)
+    const HEADLINE_FONT_SIZE_MAP = { xs: 36, small: 48, medium: 72, large: 96, xl: 120 };
+    const resolvedHeadlineSize = (headlineFontSize && HEADLINE_FONT_SIZE_MAP[headlineFontSize]) ? HEADLINE_FONT_SIZE_MAP[headlineFontSize] : (headlineSize || 72);
     const headlineStyleObj = {
       font: font || 'Inter',
-      fontSize: headlineSize || 72,
+      fontSize: resolvedHeadlineSize,
       color: headlineColor || '#FFFFFF',
+      strokeColor: headlineStrokeColor || '#000000',
       fontStyle: headlineStyle || 'bold'
     };
 
@@ -1045,6 +1057,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
           headline: clipHeadline,
           headlineStyle: headlineStyleObj,
           headlineText: headlineText,
+          headlineStrokeColor: headlineStrokeColor || '#000000',
+          headlineFontSize: headlineFontSize || 'medium',
+          headlineTitlePosition: headlineTitlePosition || 'center',
+          headlineTarjaSuperiorSize: headlineTarjaSuperiorSize ?? null,
+          headlineTarjaInferiorSize: headlineTarjaInferiorSize ?? null,
+          headlineTarjaCentralSize: headlineTarjaCentralSize ?? null,
+          headlineTarjaSuperiorColor: headlineTarjaSuperiorColor || null,
+          headlineTarjaInferiorColor: headlineTarjaInferiorColor || null,
+          headlineTarjaCentralColor: headlineTarjaCentralColor || null,
           retentionVideoId,
           retentionVideoPath: currentRetentionVideoPath, // Passar caminho explícito
           nicheId,
@@ -1173,6 +1194,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
             headline: retryClipHeadline,
             headlineStyle: headlineStyleObj,
             headlineText: headlineText,
+            headlineStrokeColor: headlineStrokeColor || '#000000',
+            headlineFontSize: headlineFontSize || 'medium',
+            headlineTitlePosition: headlineTitlePosition || 'center',
+            headlineTarjaSuperiorSize: headlineTarjaSuperiorSize ?? null,
+            headlineTarjaInferiorSize: headlineTarjaInferiorSize ?? null,
+            headlineTarjaCentralSize: headlineTarjaCentralSize ?? null,
+            headlineTarjaSuperiorColor: headlineTarjaSuperiorColor || null,
+            headlineTarjaInferiorColor: headlineTarjaInferiorColor || null,
+            headlineTarjaCentralColor: headlineTarjaCentralColor || null,
             captions: retryClipCaptions,
             captionStyle: captionStyleObj,
             backgroundColor: backgroundColor,

@@ -71,7 +71,7 @@ router.get('/frame/:frameToken/:index', (req, res) => {
  */
 router.post('/generate', async (req, res) => {
   try {
-    const { videoId, frameTimeSec = 1, title, template, contrast, tarjaSuperiorSize, tarjaInferiorSize, tarjaSuperiorColor, tarjaInferiorColor, textColor, strokeColor, fontSize, titlePosition } = req.body || {};
+    const { videoId, frameTimeSec = 1, title, template, contrast, tarjaSuperiorSize, tarjaInferiorSize, tarjaCentralSize, tarjaSuperiorColor, tarjaInferiorColor, tarjaCentralColor, textColor, strokeColor, fontSize, titlePosition } = req.body || {};
     const videoPath = resolveVideoPath(videoId);
     if (!videoPath) {
       return res.status(404).json({ error: 'Vídeo não encontrado' });
@@ -84,8 +84,10 @@ router.post('/generate', async (req, res) => {
       contrast: Math.min(1, Math.max(0, Number(contrast) || 0)),
       tarjaSuperiorSize: tarjaSuperiorSize != null ? Number(tarjaSuperiorSize) : null,
       tarjaInferiorSize: tarjaInferiorSize != null ? Number(tarjaInferiorSize) : null,
+      tarjaCentralSize: tarjaCentralSize != null ? Number(tarjaCentralSize) : null,
       tarjaSuperiorColor: tarjaSuperiorColor ? String(tarjaSuperiorColor).trim() : null,
       tarjaInferiorColor: tarjaInferiorColor ? String(tarjaInferiorColor).trim() : null,
+      tarjaCentralColor: tarjaCentralColor ? String(tarjaCentralColor).trim() : null,
       textColor: textColor ? String(textColor).trim() : undefined,
       strokeColor: strokeColor ? String(strokeColor).trim() : undefined,
       fontSize: fontSize != null ? fontSize : undefined,
@@ -105,7 +107,7 @@ router.post('/generate', async (req, res) => {
  */
 router.post('/variations', async (req, res) => {
   try {
-    const { videoId, frameTimeSec = 1, title, template, tarjaSuperiorSize, tarjaInferiorSize, tarjaSuperiorColor, tarjaInferiorColor, fontSize, titlePosition } = req.body || {};
+    const { videoId, frameTimeSec = 1, title, template, tarjaSuperiorSize, tarjaInferiorSize, tarjaCentralSize, tarjaSuperiorColor, tarjaInferiorColor, tarjaCentralColor, fontSize, titlePosition } = req.body || {};
     const videoPath = resolveVideoPath(videoId);
     if (!videoPath) {
       return res.status(404).json({ error: 'Vídeo não encontrado' });
@@ -117,8 +119,10 @@ router.post('/variations', async (req, res) => {
       template: template || 'generico',
       tarjaSuperiorSize: tarjaSuperiorSize != null ? Number(tarjaSuperiorSize) : null,
       tarjaInferiorSize: tarjaInferiorSize != null ? Number(tarjaInferiorSize) : null,
+      tarjaCentralSize: tarjaCentralSize != null ? Number(tarjaCentralSize) : null,
       tarjaSuperiorColor: tarjaSuperiorColor ? String(tarjaSuperiorColor).trim() : null,
       tarjaInferiorColor: tarjaInferiorColor ? String(tarjaInferiorColor).trim() : null,
+      tarjaCentralColor: tarjaCentralColor ? String(tarjaCentralColor).trim() : null,
       fontSize: fontSize != null ? fontSize : undefined,
       titlePosition: titlePosition ? String(titlePosition).trim() : undefined
     });

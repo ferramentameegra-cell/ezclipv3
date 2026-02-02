@@ -136,6 +136,15 @@ export async function composeFinalVideo({
   headline = null,
   headlineStyle = {},
   headlineText = null,
+  headlineStrokeColor = '#000000',
+  headlineFontSize = 'medium',
+  headlineTitlePosition = 'center',
+  headlineTarjaSuperiorSize = null,
+  headlineTarjaInferiorSize = null,
+  headlineTarjaCentralSize = null,
+  headlineTarjaSuperiorColor = null,
+  headlineTarjaInferiorColor = null,
+  headlineTarjaCentralColor = null,
   retentionVideoId = 'random',
   nicheId = null,
   backgroundColor = '#000000',
@@ -283,14 +292,62 @@ export async function composeFinalVideo({
       filterComplex.push(`${currentLabel}[main_scaled]overlay=(W-w)/2:${VIDEO_Y_TOP}[composed]`);
       currentLabel = '[composed]';
 
-      // 4. Adicionar Headline (se existir)
+      // Tarjas e headline (mesmo padrão do gerador de thumbnails)
+      const TARJA_PERCENT = { 1: 0.05, 2: 0.15, 3: 0.25, 4: 0.5 };
+      const FONT_SIZE_MAP = { xs: 36, small: 48, medium: 72, large: 96, xl: 120 };
+      const tarjaTopH = (headlineTarjaSuperiorSize >= 1 && headlineTarjaSuperiorSize <= 4) ? Math.round(CANVAS_HEIGHT * (TARJA_PERCENT[headlineTarjaSuperiorSize] || 0.05)) : 0;
+      const tarjaBottomH = (headlineTarjaInferiorSize >= 1 && headlineTarjaInferiorSize <= 4) ? Math.round(CANVAS_HEIGHT * (TARJA_PERCENT[headlineTarjaInferiorSize] || 0.05)) : 0;
+      const tarjaCenterH = (headlineTarjaCentralSize >= 1 && headlineTarjaCentralSize <= 4) ? Math.round(CANVAS_HEIGHT * (TARJA_PERCENT[headlineTarjaCentralSize] || 0.05)) : 0;
+      const hexToFfmpeg = (hex) => {
+        if (!hex || typeof hex !== 'string') return '0x000000';
+        const h = hex.replace(/^#/, '');
+        if (/^[0-9A-Fa-f]{6}$/.test(h)) return '0x' + h;
+        return '0x000000';
+      };
+      if (tarjaTopH > 0 && headlineTarjaSuperiorColor) {
+        filterComplex.push(`${currentLabel}drawbox=x=0:y=0:w=${CANVAS_WIDTH}:h=${tarjaTopH}:color=${hexToFfmpeg(headlineTarjaSuperiorColor)}@0.92:t=fill[with_tarja_top]`);
+        currentLabel = '[with_tarja_top]';
+      }
+      if (tarjaCenterH > 0 && headlineTarjaCentralColor) {
+        const centerY = Math.round((CANVAS_HEIGHT - tarjaCenterH) / 2);
+        filterComplex.push(`${currentLabel}drawbox=x=0:y=${centerY}:w=${CANVAS_WIDTH}:h=${tarjaCenterH}:color=${hexToFfmpeg(headlineTarjaCentralColor)}@0.92:t=fill[with_tarja_center]`);
+        currentLabel = '[with_tarja_center]';
+      }
+      if (tarjaBottomH > 0 && headlineTarjaInferiorColor) {
+        filterComplex.push(`${currentLabel}drawbox=x=0:y=${CANVAS_HEIGHT - tarjaBottomH}:w=${CANVAS_WIDTH}:h=${tarjaBottomH}:color=${hexToFfmpeg(headlineTarjaInferiorColor)}@0.92:t=fill[with_tarja_bottom]`);
+        currentLabel = '[with_tarja_bottom]';
+      }
+      const safeFontSize = FONT_SIZE_MAP[headlineFontSize] || headlineStyle.fontSize || 72;
+      const textColor = headlineStyle.color || '#FFFFFF';
+      const strokeCol = headlineStrokeColor || headlineStyle.strokeColor || '#000000';
+      const posKey = (headlineTitlePosition || 'center').toLowerCase();
       if (headlineText && headlineText.trim()) {
-        filterComplex.push(
-          `${currentLabel}drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf':` +
-          `text='${headlineText.replace(/'/g, "\\'")}':fontsize=72:fontcolor=#FFFFFF:box=1:boxcolor=0x00000000:` +
-          `x=(w-text_w)/2:y=${HEADLINE_Y}[with_headline]`
-        );
-        currentLabel = '[with_headline]';
+        const lines = String(headlineText).trim().split(/\r?\n/).filter(Boolean);
+        const lineHeight = Math.round(safeFontSize * 1.25);
+        let textBlockH = lines.length * lineHeight + 20;
+        let textTopY;
+        if (posKey === 'top') {
+          textTopY = tarjaTopH > 0 ? Math.round(tarjaTopH / 2 - textBlockH / 2) : 120;
+          textTopY = Math.max(20, textTopY);
+        } else if (posKey === 'bottom') {
+          textTopY = tarjaBottomH > 0 ? CANVAS_HEIGHT - tarjaBottomH - Math.round(tarjaBottomH / 2 + textBlockH / 2) : CANVAS_HEIGHT - textBlockH - 80;
+          textTopY = Math.min(CANVAS_HEIGHT - textBlockH - 20, Math.max(20, textTopY));
+        } else {
+          textTopY = Math.round((CANVAS_HEIGHT - textBlockH) / 2);
+        }
+        const escapeT = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        let headLabel = currentLabel;
+        for (let i = 0; i < lines.length; i++) {
+          const y = textTopY + i * lineHeight + Math.round(safeFontSize * 0.35);
+          const outLabel = i === lines.length - 1 ? '[with_headline]' : `[headline_${i}]`;
+          const fc = textColor.startsWith('#') ? textColor.slice(1) : textColor;
+          const sc = strokeCol.startsWith('#') ? strokeCol.slice(1) : strokeCol;
+          filterComplex.push(
+            `${headLabel}drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf':text='${escapeT(lines[i])}':fontsize=${safeFontSize}:fontcolor=0x${fc}:borderw=3:bordercolor=0x${sc}:x=(w-text_w)/2:y=${y}${outLabel}`
+          );
+          headLabel = outLabel;
+        }
+        if (lines.length > 0) currentLabel = '[with_headline]';
       }
 
       // 5. Vídeo de Retenção (input 2 ou mais) - Escala para 1080x608

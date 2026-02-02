@@ -241,8 +241,10 @@ export async function generateThumbnail(options) {
     contrast = 0.5,
     tarjaSuperiorSize = null,
     tarjaInferiorSize = null,
+    tarjaCentralSize = null,
     tarjaSuperiorColor = null,
     tarjaInferiorColor = null,
+    tarjaCentralColor = null,
     textColor = '#FFFFFF',
     strokeColor = '#000000',
     fontSize = 72,
@@ -281,6 +283,17 @@ export async function generateThumbnail(options) {
         <rect width="100%" height="100%" fill="${fillColor}" opacity="0.92"/>
       </svg>`;
       composites.push({ input: Buffer.from(tarjaSvg), top: 0, left: 0 });
+    }
+
+    // Tarja central (faixa colorida sem texto, verticalmente ao centro)
+    const tarjaCenterH = resolveTarjaHeight(tarjaCentralSize);
+    if (tarjaCenterH > 0) {
+      const fillColor = norm(tarjaCentralColor) || tpl.primary;
+      const centerY = Math.round((THUMB_HEIGHT - tarjaCenterH) / 2);
+      const tarjaSvg = `<svg width="${THUMB_WIDTH}" height="${tarjaCenterH}" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="${fillColor}" opacity="0.92"/>
+      </svg>`;
+      composites.push({ input: Buffer.from(tarjaSvg), top: centerY, left: 0 });
     }
 
     // Tarja inferior (faixa colorida sem texto)

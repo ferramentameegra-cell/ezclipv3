@@ -2999,6 +2999,11 @@ html {
 @media (max-width: 768px) {
     .thumb-editor-layout { grid-template-columns: 1fr; }
 }
+.headline-editor-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+@media (max-width: 768px) {
+    .headline-editor-layout { grid-template-columns: 1fr; }
+}
+.headline-preview-tarja { transition: height 0.15s ease, background 0.15s ease; }
 .thumb-preview-area { }
 .thumb-preview-label { font-weight: 600; margin-bottom: 0.5rem; font-size: 0.875rem; }
 .aspect-9-16 { aspect-ratio: 9/16; max-height: 360px; background: var(--bg-tertiary); border-radius: 8px; overflow: hidden; }

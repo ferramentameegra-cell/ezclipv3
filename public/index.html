@@ -477,6 +477,28 @@
                                             </div>
                                         </div>
                                         <div class="thumb-field">
+                                            <label>Tarja central</label>
+                                            <select id="thumbnail-tarja-central-size" class="select-field" onchange="thumbnailPreviewDebounce()">
+                                                <option value="">Nenhuma</option>
+                                                <option value="1">Pequena (~5%)</option>
+                                                <option value="2">Média (~15%)</option>
+                                                <option value="3">Grande (~25%)</option>
+                                                <option value="4">Metade da tela (50%)</option>
+                                            </select>
+                                            <div class="thumb-color-row" style="margin-top: 0.5rem;">
+                                                <input type="color" id="thumbnail-tarja-central-color" value="#7B1FA2" title="Cor tarja central" onchange="thumbnailPreviewDebounce()">
+                                                <input type="text" id="thumbnail-tarja-central-color-hex" class="input-field thumb-hex" value="#7B1FA2" maxlength="7" onchange="document.getElementById('thumbnail-tarja-central-color').value=this.value; thumbnailPreviewDebounce()">
+                                                <div class="thumb-color-presets" id="thumb-tarja-central-presets">
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                                    <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="thumb-field">
                                             <label>Tamanho da fonte</label>
                                             <select id="thumbnail-font-size" class="select-field" onchange="thumbnailPreviewDebounce()">
                                                 <option value="xs">Extra pequeno (36px)</option>
@@ -786,98 +808,144 @@
                         <div id="retention-grid" class="retention-grid"></div>
                     </div>
 
-                    <!-- Headline -->
+                    <!-- Headline (mesmas opções do Gerador de Thumbnails: tarjas, tamanho, cores, quebra de linha) -->
                     <div class="tool-card" id="headline-card" data-step-card="headline" style="display: none;">
                         <h3 class="card-title">Criar Headline</h3>
-                        <p class="card-subtitle">Defina o texto e estilo da headline que aparecerá no centro dos clipes</p>
-                        <div class="preview-layout">
-                            <div class="preview-area">
-                                <div class="preview-frame" id="preview-frame">
-                                    <!-- Guias visuais de margem (80px) - apenas para preview -->
-                                    <div class="preview-margin-guide preview-margin-left"></div>
-                                    <div class="preview-margin-guide preview-margin-right"></div>
-                                    <div class="preview-top">Vídeo Principal</div>
-                                    <div class="preview-middle">
-                                        <div class="preview-headline-container">
-                                            <div class="preview-headline" id="preview-headline">Headline</div>
-                                        </div>
-                                    </div>
-                                    <div class="preview-bottom">Retenção</div>
+                        <p class="card-subtitle">Texto e estilo da headline nos clipes — tarjas, tamanho, cores e quebra de linha (Enter)</p>
+                        <div class="headline-editor-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start;">
+                            <div class="headline-preview-area">
+                                <p class="thumb-preview-label">Preview = resultado final do clipe (9:16)</p>
+                                <div class="preview-frame aspect-9-16 headline-preview-frame" id="preview-frame" style="max-height: 360px; background: var(--bg-tertiary); border-radius: 8px; overflow: hidden; position: relative;">
+                                    <div class="preview-top" style="position: absolute; top: 0; left: 0; right: 0; height: 41%; background: rgba(0,0,0,0.6); font-size: 10px; display: flex; align-items: center; justify-content: center;">Vídeo principal</div>
+                                    <div class="preview-middle" style="position: absolute; top: 41%; left: 0; right: 0; height: 20%; pointer-events: none;"></div>
+                                    <div class="preview-bottom" style="position: absolute; top: 61%; left: 0; right: 0; height: 39%; background: rgba(0,0,0,0.6); font-size: 10px; display: flex; align-items: center; justify-content: center;">Retenção</div>
+                                    <div id="headline-preview-tarja-top" class="headline-preview-tarja" style="display: none; position: absolute; left: 0; right: 0; top: 0; height: 0; z-index: 1;"></div>
+                                    <div id="headline-preview-tarja-center" class="headline-preview-tarja" style="display: none; position: absolute; left: 0; right: 0; height: 0; z-index: 1;"></div>
+                                    <div id="headline-preview-tarja-bottom" class="headline-preview-tarja" style="display: none; position: absolute; left: 0; right: 0; bottom: 0; height: 0; z-index: 1;"></div>
+                                    <div id="preview-headline" class="preview-headline headline-preview-positioned" style="position: absolute; left: 0; right: 0; text-align: center; color: #fff; font-weight: 900; word-break: break-word; white-space: pre-wrap; padding: 2px 6px; max-width: 100%; z-index: 2;">Headline</div>
                                     <div class="preview-badge">PARTE 1/<span id="preview-total">0</span></div>
                                 </div>
                             </div>
-                            <div class="preview-controls">
-                                <div class="control-field">
-                                    <label>Texto da Headline</label>
-                                    <textarea 
-                                        id="headline-text-input" 
-                                        class="input-field" 
-                                        placeholder="Digite o texto da headline..."
-                                        oninput="updateHeadlineText()"
-                                        rows="3"
-                                        style="resize: vertical; min-height: 80px;"
-                                    ></textarea>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                        O texto será quebrado automaticamente para caber na largura do vídeo
-                                    </p>
+                            <div class="headline-controls" style="display: flex; flex-direction: column; gap: 1rem;">
+                                <div class="thumb-field">
+                                    <label>Texto da Headline (máx. 500 caracteres, Enter = nova linha)</label>
+                                    <textarea id="headline-text-input" class="input-field" placeholder="Ex: Transforme Seu Corpo" maxlength="500" rows="3" oninput="updateHeadlineText(); updateHeadlinePreview();"></textarea>
+                                    <span class="thumb-char-count" id="headline-char-count">0/500</span>
                                 </div>
-                                <div class="control-field">
-                                    <label>Tamanho da Fonte</label>
-                                    <select id="headline-size-select" class="select-field" onchange="updateHeadlineSize(); updatePreviewStyle();">
-                                        <option value="XS">XS (36px)</option>
-                                        <option value="S">S (48px)</option>
-                                        <option value="M">M (60px)</option>
-                                        <option value="L" selected>L (72px)</option>
-                                        <option value="XL">XL (96px)</option>
-                                        <option value="XXL">XXL (120px)</option>
+                                <div class="thumb-field">
+                                    <label>Tarja superior</label>
+                                    <select id="headline-tarja-superior-size" class="select-field" onchange="updateHeadlinePreview()">
+                                        <option value="">Nenhuma</option>
+                                        <option value="1">Pequena (~5%)</option>
+                                        <option value="2">Média (~15%)</option>
+                                        <option value="3">Grande (~25%)</option>
+                                        <option value="4">Metade da tela (50%)</option>
                                     </select>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                        Tamanho da fonte que será aplicado no vídeo final
-                                    </p>
-                                </div>
-                                <div class="control-field">
-                                    <label>Cor da Fonte</label>
-                                    <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                        <input 
-                                            type="color" 
-                                            id="headline-color-input" 
-                                            value="#FFFFFF" 
-                                            style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;"
-                                            onchange="updateHeadlineColor(); updatePreviewStyle();"
-                                        >
-                                        <input 
-                                            type="text" 
-                                            id="headline-color-text" 
-                                            value="#FFFFFF" 
-                                            class="input-field" 
-                                            style="flex: 1; font-family: monospace;"
-                                            placeholder="#FFFFFF"
-                                            onchange="updateHeadlineColorFromText(); updatePreviewStyle();"
-                                        >
+                                    <div class="thumb-color-row" style="margin-top: 0.5rem;">
+                                        <input type="color" id="headline-tarja-superior-color" value="#1976D2" title="Cor tarja superior" onchange="updateHeadlinePreview()">
+                                        <input type="text" id="headline-tarja-superior-color-hex" class="input-field thumb-hex" value="#1976D2" maxlength="7" onchange="document.getElementById('headline-tarja-superior-color').value=this.value; updateHeadlinePreview()">
+                                        <div class="thumb-color-presets" id="headline-tarja-superior-presets">
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="control-field">
-                                    <label>Fonte</label>
-                                    <select id="headline-font-select" class="select-field" onchange="updatePreviewStyle()">
-                                        <option value="Inter">Inter</option>
-                                        <option value="Roboto">Roboto</option>
-                                        <option value="Montserrat">Montserrat</option>
-                                        <option value="Arial">Arial</option>
+                                <div class="thumb-field">
+                                    <label>Tarja inferior</label>
+                                    <select id="headline-tarja-inferior-size" class="select-field" onchange="updateHeadlinePreview()">
+                                        <option value="">Nenhuma</option>
+                                        <option value="1">Pequena (~5%)</option>
+                                        <option value="2">Média (~15%)</option>
+                                        <option value="3">Grande (~25%)</option>
+                                        <option value="4">Metade da tela (50%)</option>
+                                    </select>
+                                    <div class="thumb-color-row" style="margin-top: 0.5rem;">
+                                        <input type="color" id="headline-tarja-inferior-color" value="#D32F2F" title="Cor tarja inferior" onchange="updateHeadlinePreview()">
+                                        <input type="text" id="headline-tarja-inferior-color-hex" class="input-field thumb-hex" value="#D32F2F" maxlength="7" onchange="document.getElementById('headline-tarja-inferior-color').value=this.value; updateHeadlinePreview()">
+                                        <div class="thumb-color-presets" id="headline-tarja-inferior-presets">
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="thumb-field">
+                                    <label>Tarja central</label>
+                                    <select id="headline-tarja-central-size" class="select-field" onchange="updateHeadlinePreview()">
+                                        <option value="">Nenhuma</option>
+                                        <option value="1">Pequena (~5%)</option>
+                                        <option value="2">Média (~15%)</option>
+                                        <option value="3">Grande (~25%)</option>
+                                        <option value="4">Metade da tela (50%)</option>
+                                    </select>
+                                    <div class="thumb-color-row" style="margin-top: 0.5rem;">
+                                        <input type="color" id="headline-tarja-central-color" value="#7B1FA2" title="Cor tarja central" onchange="updateHeadlinePreview()">
+                                        <input type="text" id="headline-tarja-central-color-hex" class="input-field thumb-hex" value="#7B1FA2" maxlength="7" onchange="document.getElementById('headline-tarja-central-color').value=this.value; updateHeadlinePreview()">
+                                        <div class="thumb-color-presets" id="headline-tarja-central-presets">
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#1976D2" title="Azul" style="background:#1976D2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#D32F2F" title="Vermelho" style="background:#D32F2F;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#388E3C" title="Verde" style="background:#388E3C;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#F57C00" title="Laranja" style="background:#F57C00;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#7B1FA2" title="Roxo" style="background:#7B1FA2;"></button>
+                                            <button type="button" class="thumb-color-btn tarja" data-color="#212121" title="Preto" style="background:#212121;"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="thumb-field">
+                                    <label>Tamanho da fonte</label>
+                                    <select id="headline-font-size" class="select-field" onchange="updateHeadlinePreview()">
+                                        <option value="xs">Extra pequeno (36px)</option>
+                                        <option value="small">Pequeno (48px)</option>
+                                        <option value="medium" selected>Médio (72px)</option>
+                                        <option value="large">Grande (96px)</option>
+                                        <option value="xl">Extra grande (120px)</option>
                                     </select>
                                 </div>
-                                <div class="control-field">
-                                    <label>Estilo</label>
-                                    <select id="headline-style-select" class="select-field" onchange="updatePreviewStyle()">
-                                        <option value="bold">Bold</option>
-                                        <option value="impact">Impact</option>
-                                        <option value="modern">Modern</option>
+                                <div class="thumb-field">
+                                    <label>Posição do título na imagem</label>
+                                    <select id="headline-title-position" class="select-field" onchange="updateHeadlinePreview()">
+                                        <option value="top">Topo</option>
+                                        <option value="center" selected>Centro</option>
+                                        <option value="bottom">Base</option>
                                     </select>
                                 </div>
-                                <button class="btn-primary" onclick="continueToGenerate()" style="width: 100%; margin-top: 1rem;">
+                                <div class="thumb-field">
+                                    <label>Cor do texto</label>
+                                    <div class="thumb-color-row">
+                                        <input type="color" id="headline-color-input" value="#FFFFFF" title="Cor do texto" onchange="updateHeadlinePreview()">
+                                        <input type="text" id="headline-color-text" class="input-field thumb-hex" value="#FFFFFF" maxlength="7" onchange="document.getElementById('headline-color-input').value=this.value; updateHeadlinePreview()">
+                                        <div class="thumb-color-presets" id="headline-text-presets">
+                                            <button type="button" class="thumb-color-btn" data-color="#FFFFFF" title="Branco" style="background:#FFFFFF; border:1px solid #ccc;"></button>
+                                            <button type="button" class="thumb-color-btn" data-color="#000000" title="Preto" style="background:#000000;"></button>
+                                            <button type="button" class="thumb-color-btn" data-color="#FFEB3B" title="Amarelo" style="background:#FFEB3B;"></button>
+                                            <button type="button" class="thumb-color-btn" data-color="#00E676" title="Verde" style="background:#00E676;"></button>
+                                            <button type="button" class="thumb-color-btn" data-color="#FF5722" title="Laranja" style="background:#FF5722;"></button>
+                                            <button type="button" class="thumb-color-btn" data-color="#E91E63" title="Rosa" style="background:#E91E63;"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="thumb-field">
+                                    <label>Cor da borda do texto</label>
+                                    <div class="thumb-color-row">
+                                        <input type="color" id="headline-stroke-color" value="#000000" title="Cor da borda" onchange="updateHeadlinePreview()">
+                                        <input type="text" id="headline-stroke-color-hex" class="input-field thumb-hex" value="#000000" maxlength="7" onchange="document.getElementById('headline-stroke-color').value=this.value; updateHeadlinePreview()">
+                                        <div class="thumb-color-presets" id="headline-stroke-presets">
+                                            <button type="button" class="thumb-color-btn stroke" data-color="#000000" title="Preto" style="background:#000000;"></button>
+                                            <button type="button" class="thumb-color-btn stroke" data-color="#FFFFFF" title="Branco" style="background:#FFFFFF; border:1px solid #ccc;"></button>
+                                            <button type="button" class="thumb-color-btn stroke" data-color="#212121" title="Cinza" style="background:#212121;"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn-primary" onclick="continueToGenerate()" style="width: 100%; margin-top: 0.5rem;">
                                     Continuar para Gerar Clipes
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                        <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                 </button>
                             </div>
                         </div>

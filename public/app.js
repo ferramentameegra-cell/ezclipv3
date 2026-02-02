@@ -14,6 +14,15 @@ const appState = {
     headlineStyle: 'bold',
     headlineSize: 72,
     headlineColor: '#FFFFFF',
+    headlineStrokeColor: '#000000',
+    headlineFontSize: 'medium',
+    headlineTitlePosition: 'center',
+    headlineTarjaSuperiorSize: null,
+    headlineTarjaInferiorSize: null,
+    headlineTarjaCentralSize: null,
+    headlineTarjaSuperiorColor: '#1976D2',
+    headlineTarjaInferiorColor: '#D32F2F',
+    headlineTarjaCentralColor: '#7B1FA2',
     font: 'Inter',
     backgroundColor: '#000000',
     jobId: null,
@@ -3555,113 +3564,130 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
+const HEADLINE_FONT_SIZE_MAP = { xs: 36, small: 48, medium: 72, large: 96, xl: 120 };
+const HEADLINE_TARJA_PERCENT = { 1: 0.05, 2: 0.15, 3: 0.25, 4: 0.5 };
+const PREVIEW_HEIGHT_PX = 360;
+const CLIP_HEIGHT_PX = 1920;
+
 function updateHeadlineText() {
-    const headline = document.getElementById('preview-headline');
     const textInput = document.getElementById('headline-text-input');
-    
-    if (!headline || !textInput) return;
-    
-    const text = textInput.value.trim() || 'Headline';
-    appState.headlineText = text;
-    
-    // Aplicar estilos completos (inclui quebra de linha que corresponde ao vídeo final)
-    applyHeadlinePreviewStyles();
-    
-    // Atualizar resumo
+    const countEl = document.getElementById('headline-char-count');
+    if (textInput) {
+        const text = textInput.value;
+        appState.headlineText = (text && text.trim()) ? text : 'Headline';
+        if (countEl) countEl.textContent = (text || '').length + '/500';
+    }
+    updateHeadlinePreview();
     updateGenerateSummary();
 }
 
-function updateHeadlineSize() {
-    const sizeSelect = document.getElementById('headline-size-select');
-    
-    if (!sizeSelect) return;
-    
-    // Obter tamanho nominal (XS, S, M, L, XL, XXL)
-    const sizeName = sizeSelect.value;
-    const config = window.HeadlineConfig || {};
-    const sizes = config.SIZES || { XS: 36, S: 48, M: 60, L: 72, XL: 96, XXL: 120 };
-    
-    // Obter tamanho em pixels
-    const size = config.getFontSize ? config.getFontSize(sizeName) : (sizes[sizeName] || 72);
-    
-    // Armazenar tanto o nome quanto o tamanho em pixels
-    appState.headlineSizeName = sizeName;
-    appState.headlineSize = size;
-    
-    applyHeadlinePreviewStyles();
-}
+function updateHeadlinePreview() {
+    const headline = document.getElementById('preview-headline');
+    const tarjaTop = document.getElementById('headline-preview-tarja-top');
+    const tarjaCenter = document.getElementById('headline-preview-tarja-center');
+    const tarjaBottom = document.getElementById('headline-preview-tarja-bottom');
+    if (!headline) return;
 
-function updateHeadlineColor() {
+    const textInput = document.getElementById('headline-text-input');
+    const fontSizeSelect = document.getElementById('headline-font-size');
+    const positionSelect = document.getElementById('headline-title-position');
     const colorInput = document.getElementById('headline-color-input');
-    const colorText = document.getElementById('headline-color-text');
-    
-    if (!colorInput || !colorText) return;
-    
-    const color = colorInput.value;
+    const strokeInput = document.getElementById('headline-stroke-color');
+    const tarjaTopSizeEl = document.getElementById('headline-tarja-superior-size');
+    const tarjaCenterSizeEl = document.getElementById('headline-tarja-central-size');
+    const tarjaBottomSizeEl = document.getElementById('headline-tarja-inferior-size');
+    const tarjaTopColorEl = document.getElementById('headline-tarja-superior-color');
+    const tarjaCenterColorEl = document.getElementById('headline-tarja-central-color');
+    const tarjaBottomColorEl = document.getElementById('headline-tarja-inferior-color');
+
+    const text = (textInput && textInput.value) ? textInput.value : '';
+    appState.headlineText = (text && text.trim()) ? text : 'Headline';
+    const fontSizePreset = (fontSizeSelect && fontSizeSelect.value) || 'medium';
+    const position = (positionSelect && positionSelect.value) || 'center';
+    const color = (colorInput && colorInput.value) || '#FFFFFF';
+    const strokeColor = (strokeInput && strokeInput.value) || '#000000';
+    const tarjaTopSize = (tarjaTopSizeEl && tarjaTopSizeEl.value) ? parseInt(tarjaTopSizeEl.value, 10) : 0;
+    const tarjaCenterSize = (tarjaCenterSizeEl && tarjaCenterSizeEl.value) ? parseInt(tarjaCenterSizeEl.value, 10) : 0;
+    const tarjaBottomSize = (tarjaBottomSizeEl && tarjaBottomSizeEl.value) ? parseInt(tarjaBottomSizeEl.value, 10) : 0;
+    const tarjaTopColor = (tarjaTopColorEl && tarjaTopColorEl.value) || '#1976D2';
+    const tarjaCenterColor = (tarjaCenterColorEl && tarjaCenterColorEl.value) || '#7B1FA2';
+    const tarjaBottomColor = (tarjaBottomColorEl && tarjaBottomColorEl.value) || '#D32F2F';
+
+    appState.headlineFontSize = fontSizePreset;
+    appState.headlineTitlePosition = position;
     appState.headlineColor = color;
-    colorText.value = color;
-    
-    applyHeadlinePreviewStyles();
-}
+    appState.headlineStrokeColor = strokeColor;
+    appState.headlineTarjaSuperiorSize = tarjaTopSize || null;
+    appState.headlineTarjaCentralSize = tarjaCenterSize || null;
+    appState.headlineTarjaInferiorSize = tarjaBottomSize || null;
+    appState.headlineTarjaSuperiorColor = tarjaTopColor;
+    appState.headlineTarjaCentralColor = tarjaCenterColor;
+    appState.headlineTarjaInferiorColor = tarjaBottomColor;
+    const fontSize = HEADLINE_FONT_SIZE_MAP[fontSizePreset] || 72;
+    appState.headlineSize = fontSize;
 
-function updateHeadlineColorFromText() {
-    const colorText = document.getElementById('headline-color-text');
-    const colorInput = document.getElementById('headline-color-input');
-    
-    if (!colorText || !colorInput) return;
-    
-    const color = colorText.value.trim();
-    // Validar formato hex
-    if (/^#[0-9A-F]{6}$/i.test(color)) {
-        appState.headlineColor = color;
-        colorInput.value = color;
-        applyHeadlinePreviewStyles();
-    } else {
-        // Se inválido, restaurar valor anterior
-        colorText.value = appState.headlineColor || '#FFFFFF';
+    // Escala da fonte no preview = mesmo que no clipe final (proporção 360/1920)
+    const fontSizeScaled = Math.max(10, Math.round(fontSize * PREVIEW_HEIGHT_PX / CLIP_HEIGHT_PX));
+
+    if (tarjaTop) {
+        if (tarjaTopSize > 0) {
+            const pct = (HEADLINE_TARJA_PERCENT[tarjaTopSize] || 0.05) * 100;
+            tarjaTop.style.display = 'block';
+            tarjaTop.style.height = pct + '%';
+            tarjaTop.style.background = tarjaTopColor;
+        } else {
+            tarjaTop.style.display = 'none';
+        }
     }
+    if (tarjaCenter) {
+        if (tarjaCenterSize > 0) {
+            const pct = (HEADLINE_TARJA_PERCENT[tarjaCenterSize] || 0.05) * 100;
+            tarjaCenter.style.display = 'block';
+            tarjaCenter.style.height = pct + '%';
+            tarjaCenter.style.top = (50 - pct / 2) + '%';
+            tarjaCenter.style.background = tarjaCenterColor;
+        } else {
+            tarjaCenter.style.display = 'none';
+        }
+    }
+    if (tarjaBottom) {
+        if (tarjaBottomSize > 0) {
+            const pct = (HEADLINE_TARJA_PERCENT[tarjaBottomSize] || 0.05) * 100;
+            tarjaBottom.style.display = 'block';
+            tarjaBottom.style.height = pct + '%';
+            tarjaBottom.style.background = tarjaBottomColor;
+        } else {
+            tarjaBottom.style.display = 'none';
+        }
+    }
+
+    headline.textContent = (text && text.trim()) ? text : 'Headline';
+    headline.style.fontSize = fontSizeScaled + 'px';
+    headline.style.color = color;
+    headline.style.whiteSpace = 'pre-wrap';
+    headline.style.textShadow = `0 0 2px ${strokeColor}, 0 1px 1px #000`;
+    headline.style.fontWeight = '900';
+
+    // Posição da headline no preview = resultado final do clipe (Topo = sobre tarja superior, Centro = meio, Base = sobre tarja inferior)
+    const pctTop = tarjaTopSize > 0 ? (HEADLINE_TARJA_PERCENT[tarjaTopSize] || 0.05) * 100 : 41;
+    const pctCenter = tarjaCenterSize > 0 ? (HEADLINE_TARJA_PERCENT[tarjaCenterSize] || 0.05) * 100 : 20;
+    const pctBottom = tarjaBottomSize > 0 ? (HEADLINE_TARJA_PERCENT[tarjaBottomSize] || 0.05) * 100 : 39;
+    let topPercent = 51;
+    if (position === 'top') {
+        topPercent = pctTop / 2;
+    } else if (position === 'bottom') {
+        topPercent = 100 - pctBottom / 2;
+    } else {
+        topPercent = 50;
+    }
+    headline.style.top = topPercent + '%';
+    headline.style.transform = 'translateY(-50%)';
+    headline.style.left = '0';
+    headline.style.right = '0';
 }
 
 function applyHeadlinePreviewStyles() {
-    const headline = document.getElementById('preview-headline');
-    if (!headline) return;
-    
-    const config = window.HeadlineConfig || {};
-    const fontWeights = config.FONT_WEIGHTS || { bold: 700, impact: 900, modern: 600 };
-    const lineHeightRatio = config.LINE_HEIGHT_RATIO || 1.2;
-    const maxTextWidth = config.MAX_TEXT_WIDTH || 920; // 1080 - 160 (80px cada lado)
-    const canvasWidth = config.CANVAS_WIDTH || 1080;
-    
-    // Obter configurações atuais
-    const fontSize = appState.headlineSize || 72;
-    const fontFamily = appState.font || 'Inter';
-    const fontStyle = appState.headlineStyle || 'bold';
-    const color = appState.headlineColor || '#FFFFFF';
-    const headlineText = appState.headlineText || 'Headline';
-    
-    // Aplicar estilos EXATOS que serão usados no vídeo final
-    headline.style.fontSize = fontSize + 'px';
-    headline.style.fontFamily = fontFamily + ', Arial, sans-serif';
-    headline.style.fontWeight = config.getFontWeight ? config.getFontWeight(fontStyle) : (fontWeights[fontStyle] || 700);
-    headline.style.color = color;
-    headline.style.textAlign = 'center';
-    headline.style.lineHeight = lineHeightRatio;
-    headline.style.wordWrap = 'break-word';
-    headline.style.whiteSpace = 'pre-wrap';
-    
-    // Calcular largura máxima respeitando margens de 80px
-    // O preview-frame tem 270px de largura (proporção 270/1080 = 0.25)
-    // Margens de 80px em escala = 80 * 0.25 = 20px
-    const previewScale = 270 / canvasWidth;
-    const previewMarginPx = 80 * previewScale;
-    const previewMaxWidth = (270 - 40 - (previewMarginPx * 2)) + 'px'; // 40px = padding do frame
-    
-    headline.style.maxWidth = previewMaxWidth;
-    headline.style.margin = '0 auto';
-    
-    // Aplicar quebra de linha manual (simulando o que o FFmpeg fará)
-    // Isso garante que o preview mostre exatamente como ficará no vídeo final
-    applyHeadlineTextWrapping(headline, headlineText, maxTextWidth, fontSize);
+    updateHeadlinePreview();
 }
 
 /**
@@ -3845,10 +3871,13 @@ async function thumbnailGenerate(silent = false) {
         const contrast = (document.getElementById('thumbnail-contrast') && parseInt(document.getElementById('thumbnail-contrast').value, 10)) || 50;
         const tarjaSuperiorSizeEl = document.getElementById('thumbnail-tarja-superior-size');
         const tarjaInferiorSizeEl = document.getElementById('thumbnail-tarja-inferior-size');
+        const tarjaCentralSizeEl = document.getElementById('thumbnail-tarja-central-size');
         const tarjaSuperiorSize = (tarjaSuperiorSizeEl && tarjaSuperiorSizeEl.value) ? parseInt(tarjaSuperiorSizeEl.value, 10) : null;
         const tarjaInferiorSize = (tarjaInferiorSizeEl && tarjaInferiorSizeEl.value) ? parseInt(tarjaInferiorSizeEl.value, 10) : null;
+        const tarjaCentralSize = (tarjaCentralSizeEl && tarjaCentralSizeEl.value) ? parseInt(tarjaCentralSizeEl.value, 10) : null;
         const tarjaSuperiorColor = (document.getElementById('thumbnail-tarja-superior-color') && document.getElementById('thumbnail-tarja-superior-color').value) || null;
         const tarjaInferiorColor = (document.getElementById('thumbnail-tarja-inferior-color') && document.getElementById('thumbnail-tarja-inferior-color').value) || null;
+        const tarjaCentralColor = (document.getElementById('thumbnail-tarja-central-color') && document.getElementById('thumbnail-tarja-central-color').value) || null;
         const fontSize = (document.getElementById('thumbnail-font-size') && document.getElementById('thumbnail-font-size').value) || 'medium';
         const titlePosition = (document.getElementById('thumbnail-title-position') && document.getElementById('thumbnail-title-position').value) || 'center';
         const textColor = (document.getElementById('thumbnail-text-color') && document.getElementById('thumbnail-text-color').value) || '#FFFFFF';
@@ -3864,8 +3893,10 @@ async function thumbnailGenerate(silent = false) {
                 contrast: contrast / 100,
                 tarjaSuperiorSize,
                 tarjaInferiorSize,
+                tarjaCentralSize,
                 tarjaSuperiorColor: tarjaSuperiorSize ? tarjaSuperiorColor : null,
                 tarjaInferiorColor: tarjaInferiorSize ? tarjaInferiorColor : null,
+                tarjaCentralColor: tarjaCentralSize ? tarjaCentralColor : null,
                 fontSize,
                 titlePosition,
                 textColor,
@@ -3925,10 +3956,13 @@ async function thumbnailGenerateVariations() {
         const template = (document.getElementById('thumbnail-template') && document.getElementById('thumbnail-template').value) || 'generico';
         const tarjaSuperiorSizeEl = document.getElementById('thumbnail-tarja-superior-size');
         const tarjaInferiorSizeEl = document.getElementById('thumbnail-tarja-inferior-size');
+        const tarjaCentralSizeEl = document.getElementById('thumbnail-tarja-central-size');
         const tarjaSuperiorSize = (tarjaSuperiorSizeEl && tarjaSuperiorSizeEl.value) ? parseInt(tarjaSuperiorSizeEl.value, 10) : null;
         const tarjaInferiorSize = (tarjaInferiorSizeEl && tarjaInferiorSizeEl.value) ? parseInt(tarjaInferiorSizeEl.value, 10) : null;
+        const tarjaCentralSize = (tarjaCentralSizeEl && tarjaCentralSizeEl.value) ? parseInt(tarjaCentralSizeEl.value, 10) : null;
         const tarjaSuperiorColor = (document.getElementById('thumbnail-tarja-superior-color') && document.getElementById('thumbnail-tarja-superior-color').value) || null;
         const tarjaInferiorColor = (document.getElementById('thumbnail-tarja-inferior-color') && document.getElementById('thumbnail-tarja-inferior-color').value) || null;
+        const tarjaCentralColor = (document.getElementById('thumbnail-tarja-central-color') && document.getElementById('thumbnail-tarja-central-color').value) || null;
         const fontSize = (document.getElementById('thumbnail-font-size') && document.getElementById('thumbnail-font-size').value) || 'medium';
         const titlePosition = (document.getElementById('thumbnail-title-position') && document.getElementById('thumbnail-title-position').value) || 'center';
         const res = await fetch(`${API_BASE}/api/thumbnails/variations`, {
@@ -3941,8 +3975,10 @@ async function thumbnailGenerateVariations() {
                 template,
                 tarjaSuperiorSize,
                 tarjaInferiorSize,
+                tarjaCentralSize,
                 tarjaSuperiorColor: tarjaSuperiorSize ? tarjaSuperiorColor : null,
                 tarjaInferiorColor: tarjaInferiorSize ? tarjaInferiorColor : null,
+                tarjaCentralColor: tarjaCentralSize ? tarjaCentralColor : null,
                 fontSize,
                 titlePosition
             })
@@ -4043,6 +4079,64 @@ document.addEventListener('DOMContentLoaded', () => {
     const tarjaInfColor = document.getElementById('thumbnail-tarja-inferior-color');
     const tarjaInfHex = document.getElementById('thumbnail-tarja-inferior-color-hex');
     if (tarjaInfColor && tarjaInfHex) tarjaInfColor.addEventListener('input', () => { tarjaInfHex.value = tarjaInfColor.value; });
+    // Headline presets
+    document.querySelectorAll('#headline-tarja-superior-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('headline-tarja-superior-color');
+            const hexInput = document.getElementById('headline-tarja-superior-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            updateHeadlinePreview();
+        });
+    });
+    document.querySelectorAll('#headline-tarja-inferior-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('headline-tarja-inferior-color');
+            const hexInput = document.getElementById('headline-tarja-inferior-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            updateHeadlinePreview();
+        });
+    });
+    document.querySelectorAll('#headline-tarja-central-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('headline-tarja-central-color');
+            const hexInput = document.getElementById('headline-tarja-central-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            updateHeadlinePreview();
+        });
+    });
+    document.querySelectorAll('#headline-text-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('headline-color-input');
+            const hexInput = document.getElementById('headline-color-text');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            updateHeadlinePreview();
+        });
+    });
+    document.querySelectorAll('#headline-stroke-presets .thumb-color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const c = btn.getAttribute('data-color');
+            const colorInput = document.getElementById('headline-stroke-color');
+            const hexInput = document.getElementById('headline-stroke-color-hex');
+            if (colorInput) colorInput.value = c;
+            if (hexInput) hexInput.value = c;
+            updateHeadlinePreview();
+        });
+    });
+    const headlineTextEl = document.getElementById('headline-text-input');
+    const headlineCountEl = document.getElementById('headline-char-count');
+    if (headlineTextEl && headlineCountEl) {
+        headlineTextEl.addEventListener('input', () => {
+            headlineCountEl.textContent = (headlineTextEl.value || '').length + '/500';
+        });
+    }
 });
 
 /**
@@ -4091,40 +4185,36 @@ function continueToHeadline() {
     if (!appState.headlineStyle) {
         appState.headlineStyle = 'bold';
     }
-    // Inicializar com tamanho L (72px) como padrão
-    if (!appState.headlineSize) {
-        appState.headlineSize = 72;
-        appState.headlineSizeName = 'L';
-    }
-    if (!appState.headlineColor) {
-        appState.headlineColor = '#FFFFFF';
-    }
-    
-    // Inicializar valores nos inputs se existirem
-    const sizeSelect = document.getElementById('headline-size-select');
+    if (!appState.headlineSize) appState.headlineSize = 72;
+    if (!appState.headlineColor) appState.headlineColor = '#FFFFFF';
+    if (!appState.headlineStrokeColor) appState.headlineStrokeColor = '#000000';
+    if (!appState.headlineFontSize) appState.headlineFontSize = 'medium';
+    if (!appState.headlineTitlePosition) appState.headlineTitlePosition = 'center';
+
+    const headlineTextEl = document.getElementById('headline-text-input');
+    const headlineCountEl = document.getElementById('headline-char-count');
+    const fontSizeEl = document.getElementById('headline-font-size');
+    const positionEl = document.getElementById('headline-title-position');
     const colorInput = document.getElementById('headline-color-input');
     const colorText = document.getElementById('headline-color-text');
-    
-    if (sizeSelect) {
-        // Usar tamanho nominal se disponível, senão converter pixel para nominal
-        const config = window.HeadlineConfig || {};
-        const sizeName = appState.headlineSizeName || 
-                        (config.getSizeName ? config.getSizeName(appState.headlineSize || 72) : 'L');
-        sizeSelect.value = sizeName;
-        // Garantir que o tamanho em pixels está sincronizado
-        if (config.getFontSize) {
-            appState.headlineSize = config.getFontSize(sizeName);
-        }
-    }
-    if (colorInput) {
-        colorInput.value = appState.headlineColor || '#FFFFFF';
-    }
-    if (colorText) {
-        colorText.value = appState.headlineColor || '#FFFFFF';
-    }
-    
-    // Aplicar estilos iniciais no preview
-    applyHeadlinePreviewStyles();
+    const strokeInput = document.getElementById('headline-stroke-color');
+    const strokeText = document.getElementById('headline-stroke-color-hex');
+    if (headlineTextEl) headlineTextEl.value = appState.headlineText === 'Headline' ? '' : appState.headlineText;
+    if (headlineCountEl) headlineCountEl.textContent = (appState.headlineText || '').length + '/500';
+    if (fontSizeEl) fontSizeEl.value = appState.headlineFontSize || 'medium';
+    if (positionEl) positionEl.value = appState.headlineTitlePosition || 'center';
+    if (colorInput) colorInput.value = appState.headlineColor || '#FFFFFF';
+    if (colorText) colorText.value = appState.headlineColor || '#FFFFFF';
+    if (strokeInput) strokeInput.value = appState.headlineStrokeColor || '#000000';
+    if (strokeText) strokeText.value = appState.headlineStrokeColor || '#000000';
+    const tarjaCenterSizeEl = document.getElementById('headline-tarja-central-size');
+    const tarjaCenterColorEl = document.getElementById('headline-tarja-central-color');
+    const tarjaCenterHexEl = document.getElementById('headline-tarja-central-color-hex');
+    if (tarjaCenterSizeEl) tarjaCenterSizeEl.value = appState.headlineTarjaCentralSize || '';
+    if (tarjaCenterColorEl) tarjaCenterColorEl.value = appState.headlineTarjaCentralColor || '#7B1FA2';
+    if (tarjaCenterHexEl) tarjaCenterHexEl.value = appState.headlineTarjaCentralColor || '#7B1FA2';
+
+    updateHeadlinePreview();
     if (!appState.font) {
         appState.font = 'Inter';
     }
@@ -4193,6 +4283,15 @@ function proceedToGenerate() {
                 headlineText: appState.headlineText,
                 headlineSize: appState.headlineSize,
                 headlineColor: appState.headlineColor,
+                headlineStrokeColor: appState.headlineStrokeColor,
+                headlineFontSize: appState.headlineFontSize,
+                headlineTitlePosition: appState.headlineTitlePosition,
+                headlineTarjaSuperiorSize: appState.headlineTarjaSuperiorSize,
+                headlineTarjaInferiorSize: appState.headlineTarjaInferiorSize,
+                headlineTarjaCentralSize: appState.headlineTarjaCentralSize,
+                headlineTarjaSuperiorColor: appState.headlineTarjaSuperiorColor,
+                headlineTarjaInferiorColor: appState.headlineTarjaInferiorColor,
+                headlineTarjaCentralColor: appState.headlineTarjaCentralColor,
                 font: appState.font,
                 backgroundColor: appState.backgroundColor,
                 retentionVideoId: appState.retentionVideoId,
@@ -4337,21 +4436,8 @@ function applyHeadlineTextWrapping(headlineElement, text, maxWidth, fontSize) {
 
 function updatePreviewStyle() {
     const headline = document.getElementById('preview-headline');
-    const fontSelect = document.getElementById('headline-font-select');
-    const styleSelect = document.getElementById('headline-style-select');
-    
-    if (!headline || !fontSelect || !styleSelect) return;
-    
-    const font = fontSelect.value;
-    const style = styleSelect.value;
-    
-    appState.font = font;
-    appState.headlineStyle = style;
-    
-    // Aplicar todos os estilos no preview (inclui fonte e estilo)
-    applyHeadlinePreviewStyles();
-    
-    // Atualizar resumo
+    if (!headline) return;
+    updateHeadlinePreview();
     updateGenerateSummary();
 }
 
@@ -4595,6 +4681,15 @@ async function generateSeries() {
             headlineText: appState.headlineText || 'Headline',
             headlineSize: appState.headlineSize || 72,
             headlineColor: appState.headlineColor || '#FFFFFF',
+            headlineStrokeColor: appState.headlineStrokeColor || '#000000',
+            headlineFontSize: appState.headlineFontSize || 'medium',
+            headlineTitlePosition: appState.headlineTitlePosition || 'center',
+            headlineTarjaSuperiorSize: appState.headlineTarjaSuperiorSize ?? null,
+            headlineTarjaInferiorSize: appState.headlineTarjaInferiorSize ?? null,
+            headlineTarjaCentralSize: appState.headlineTarjaCentralSize ?? null,
+            headlineTarjaSuperiorColor: appState.headlineTarjaSuperiorColor || null,
+            headlineTarjaInferiorColor: appState.headlineTarjaInferiorColor || null,
+            headlineTarjaCentralColor: appState.headlineTarjaCentralColor || null,
             font: appState.font || 'Inter',
             trimStart: appState.trimStart || 0,
             trimEnd: appState.trimEnd || appState.videoDuration || null,
@@ -5059,5 +5154,5 @@ async function downloadSeries() {
 }
 
 function openTikTokStudio() {
-    window.open('https://www.tiktok.com/studio', '_blank');
+    window.open('https://www.tiktok.com/tiktokstudio/upload?from=creator_center', '_blank');
 }
