@@ -1246,7 +1246,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
             const fallbackClipPath = STORAGE_CONFIG.getFinalClipPath(seriesId, clipIndex);
             const hasRetention = currentRetentionVideoPath && fs.existsSync(currentRetentionVideoPath) && fs.statSync(currentRetentionVideoPath).size > 0;
             const hasHeadline = headlineText && typeof headlineText === 'string' && headlineText.trim().length > 0;
-            const headlineEscaped = hasHeadline ? headlineText.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'") : '';
+            // Escapar para drawtext: \ ' e : (dois pontos quebram o parser do filter)
+            const headlineEscaped = hasHeadline ? headlineText.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:') : '';
 
             await new Promise((resolve, reject) => {
               // Layout fixo 9:16 (1080x1920) - mesmo do videoComposer
@@ -1261,24 +1262,24 @@ export const generateVideoSeries = async (job, jobsMap) => {
               const parts = [];
               // 1. Background
               parts.push(`color=c=black:s=${CANVAS_W}x${CANVAS_H}:d=60[bg_fixed]`);
-              // 2. Vídeo principal (input 0) no topo
-              parts.push(`[0:v]scale=${VIDEO_W}:${VIDEO_H}[main_scaled]`);
+              // 2. Vídeo principal (input 0) no topo - 16:9 fit
+              parts.push(`[0:v]scale=${VIDEO_W}:${VIDEO_H}:force_original_aspect_ratio=decrease,pad=${VIDEO_W}:${VIDEO_H}:(${VIDEO_W}-iw)/2:(${VIDEO_H}-ih)/2[main_scaled]`);
               parts.push(`[bg_fixed][main_scaled]overlay=(W-w)/2:${VIDEO_Y_TOP}[composed]`);
 
               let currentLabel = '[composed]';
-              // 3. Headline no centro (se existir)
+              // 3. Headline no centro (se existir) - fontcolor em 0x para evitar Invalid argument
               if (hasHeadline && headlineEscaped) {
-                parts.push(`[composed]drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf':text='${headlineEscaped}':fontsize=72:fontcolor=#FFFFFF:x=(w-text_w)/2:y=${HEADLINE_Y}[with_headline]`);
+                parts.push(`[composed]drawtext=fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf':text='${headlineEscaped}':fontsize=72:fontcolor=0xFFFFFF:x=(w-text_w)/2:y=${HEADLINE_Y}[with_headline]`);
                 currentLabel = '[with_headline]';
               }
-              // 4. Vídeo de retenção na base (se existir)
+              // 4. Vídeo de retenção na base (se existir) - 16:9 fit
               if (hasRetention) {
-                parts.push(`[1:v]scale=${VIDEO_W}:${VIDEO_H}[retention_scaled]`);
+                parts.push(`[1:v]scale=${VIDEO_W}:${VIDEO_H}:force_original_aspect_ratio=decrease,pad=${VIDEO_W}:${VIDEO_H}:(${VIDEO_W}-iw)/2:(${VIDEO_H}-ih)/2[retention_scaled]`);
                 parts.push(`${currentLabel}[retention_scaled]overlay=(W-w)/2:${VIDEO_Y_BOTTOM}:shortest=1[with_retention]`);
                 currentLabel = '[with_retention]';
               }
-              // 5. Garantir label [final]
-              parts.push(`${currentLabel}copy[final]`);
+              // 5. Forçar 1080x1920
+              parts.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(1080-iw)/2:(1920-ih)/2[final]`);
 
               const filterComplex = parts.join(';');
               // Validar que [final] existe (FFmpeg usa "label[final]", não "= [final]")
@@ -1333,10 +1334,8 @@ export const generateVideoSeries = async (job, jobsMap) => {
             return fallbackClipPath;
           } catch (fallbackError) {
             console.error(`[PROCESSING] ❌ ERRO CRÍTICO: Falha no fallback: ${fallbackError.message}`);
-            console.error(`[PROCESSING] ❌ ATENÇÃO: Clip ${clipIndex} pode não estar no formato 1080x1920!`);
-            console.warn(`[PROCESSING] Usando clip original para clip ${clipIndex} (formato pode estar incorreto)`);
-            // Retornar clip original como último recurso (mesmo que formato possa estar incorreto)
-            return clipPath;
+            console.error(`[PROCESSING] ❌ Formato obrigatório 1080x1920 - não entregar clip em formato incorreto`);
+            throw new Error(`Clip ${clipIndex}: composição e fallback falharam. Saída deve ser 1080x1920. ${fallbackError.message}`);
           }
         }
       }
