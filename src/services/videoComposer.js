@@ -110,6 +110,44 @@ function getSafeZones(format, platforms, safeMarginsPercent) {
 }
 
 /**
+ * Quebra as linhas da headline para caber na largura (margens laterais).
+ * @param {string[]} rawLines - Linhas já divididas por \n
+ * @param {number} maxCharsPerLine - Máximo de caracteres por linha
+ * @returns {string[]} Linhas prontas para drawtext
+ */
+function wrapHeadlineToFitWidth(rawLines, maxCharsPerLine) {
+  const out = [];
+  for (const line of rawLines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.length <= maxCharsPerLine) {
+      out.push(trimmed);
+      continue;
+    }
+    const words = trimmed.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      const withWord = current ? current + ' ' + word : word;
+      if (withWord.length <= maxCharsPerLine) {
+        current = withWord;
+      } else {
+        if (current) out.push(current);
+        if (word.length > maxCharsPerLine) {
+          for (let i = 0; i < word.length; i += maxCharsPerLine) {
+            out.push(word.slice(i, i + maxCharsPerLine));
+          }
+          current = '';
+        } else {
+          current = word;
+        }
+      }
+    }
+    if (current) out.push(current);
+  }
+  return out;
+}
+
+/**
  * Composição final do vídeo com todas as camadas
  * 
  * @param {Object} options - Opções de composição
@@ -258,14 +296,14 @@ export async function composeFinalVideo({
       // LAYOUT FORÇADO 9:16 (1080x1920) - HARDCODED
       // ============================================
 
-      // Dimensões FIXAS (não negociáveis)
+      // Dimensões FIXAS: clipe 1080x1920; vídeo principal e retenção em 16:9; headline ao centro
       const CANVAS_WIDTH = 1080;
       const CANVAS_HEIGHT = 1920;
       const VIDEO_WIDTH = 1080;
-      const VIDEO_HEIGHT = 608;
-      const VIDEO_Y_TOP = 180;      // Vídeo principal no topo
-      const VIDEO_Y_BOTTOM = 1172;  // Vídeo de retenção na base
-      const HEADLINE_Y = 960;       // Headline centralizada
+      const VIDEO_HEIGHT = 608;    // 16:9
+      const VIDEO_Y_TOP = 180;
+      const VIDEO_Y_BOTTOM = 1172;
+      const HEADLINE_MARGIN_PX = 80;
 
       let filterComplex = [];
 
@@ -285,8 +323,8 @@ export async function composeFinalVideo({
         currentLabel = '[bg_fixed]';
       }
 
-      // 2. Vídeo Principal (input 0) - Escala para 1080x608
-      filterComplex.push(`[0:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}[main_scaled]`);
+      // 2. Vídeo Principal (input 0) - 1080x608 (16:9), fit sem distorção
+      filterComplex.push(`[0:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:(${VIDEO_WIDTH}-iw)/2:(${VIDEO_HEIGHT}-ih)/2[main_scaled]`);
 
       // 3. Overlay do Vídeo Principal sobre o Background
       filterComplex.push(`${currentLabel}[main_scaled]overlay=(W-w)/2:${VIDEO_Y_TOP}[composed]`);
@@ -322,7 +360,10 @@ export async function composeFinalVideo({
       const strokeCol = headlineStrokeColor || headlineStyle.strokeColor || '#000000';
       const posKey = (headlineTitlePosition || 'center').toLowerCase();
       if (headlineText && headlineText.trim()) {
-        const lines = String(headlineText).trim().split(/\r?\n/).filter(Boolean);
+        const rawLines = String(headlineText).trim().split(/\r?\n/).filter(Boolean);
+        const maxTextWidthPx = CANVAS_WIDTH - 2 * HEADLINE_MARGIN_PX;
+        const maxCharsPerLine = Math.max(10, Math.floor(maxTextWidthPx / (safeFontSize * 0.52)));
+        const lines = wrapHeadlineToFitWidth(rawLines, maxCharsPerLine);
         const lineHeight = Math.round(safeFontSize * 1.25);
         let textBlockH = lines.length * lineHeight + 20;
         let textTopY;
@@ -350,9 +391,9 @@ export async function composeFinalVideo({
         if (lines.length > 0) currentLabel = '[with_headline]';
       }
 
-      // 5. Vídeo de Retenção (input 2 ou mais) - Escala para 1080x608
+      // 5. Vídeo de Retenção (input 2 ou mais) - 1080x608 (16:9), fit sem distorção
       if (retentionVideoPath && fs.existsSync(retentionVideoPath)) {
-        filterComplex.push(`[${inputCount}:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}[retention_scaled]`);
+        filterComplex.push(`[${inputCount}:v]scale=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad=${VIDEO_WIDTH}:${VIDEO_HEIGHT}:(${VIDEO_WIDTH}-iw)/2:(${VIDEO_HEIGHT}-ih)/2[retention_scaled]`);
 
         // 6. Overlay do Vídeo de Retenção
         filterComplex.push(
@@ -372,8 +413,8 @@ export async function composeFinalVideo({
         currentLabel = '[with_counter]';
       }
 
-      // 8. Final - Garantir que [final] existe
-      filterComplex.push(`${currentLabel}copy[final]`);
+      // 8. Final - Forçar 1080x1920
+      filterComplex.push(`${currentLabel}scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(1080-iw)/2:(1920-ih)/2[final]`);
 
       // Construir a string final
       const filterComplexString = filterComplex.join(';');
@@ -398,7 +439,8 @@ export async function composeFinalVideo({
         .complexFilter(filterComplexString)
         .outputOptions([
           '-map', '[final]',
-          '-map', '0:a?', // Mapear áudio do vídeo principal se existir
+          '-map', '0:a?',
+          '-s', '1080x1920',
           '-c:v', 'libx264',
           '-c:a', 'aac',
           '-b:a', '128k',

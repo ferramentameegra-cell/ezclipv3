@@ -158,8 +158,8 @@ export const generateSeries = async (req, res) => {
         trimEnd: trimEnd || null,
         cutDuration: cutDuration || 60,
         backgroundColor: backgroundColor || '#000000',
-        // CONFIGURAÇÕES DE VÍDEO
-        format,
+        // CONFIGURAÇÕES DE VÍDEO - sempre 9:16 (1080x1920)
+        format: '9:16',
         platforms,
         captionLanguage,
         captionStyle,

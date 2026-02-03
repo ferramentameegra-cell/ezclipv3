@@ -70,14 +70,15 @@ export const generateVideoSeries = async (job, jobsMap) => {
       headlineTarjaCentralColor = null,
       font = 'Inter',
       backgroundColor = '#000000',
-      // CONFIGURAÇÕES DE VÍDEO
-      format = '9:16',
+      // CONFIGURAÇÕES DE VÍDEO (forçar 9:16)
       platforms = { tiktok: true, reels: true, shorts: true },
       captionLanguage = 'pt',
       captionStyle = 'modern',
       clipsQuantity = null,
       safeMargins = 10
     } = jobData;
+
+    const format = '9:16';
 
     if (!videoStore) {
       throw new Error('VideoStore não foi configurado');
