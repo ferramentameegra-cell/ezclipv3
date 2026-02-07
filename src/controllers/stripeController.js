@@ -9,8 +9,9 @@ import { getUserById, updateUser } from '../models/users.js';
 import { getUserVideoStats } from '../services/videoService.js';
 
 /**
- * POST /api/stripe/webhook
- * Webhook do Stripe para processar eventos de pagamento
+ * POST /webhook/stripe (ou /api/stripe/webhook)
+ * Webhook do Stripe para processar eventos de pagamento (Payment Links).
+ * Mínimo: valida assinatura, extrai dados, loga, retorna 200.
  */
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -24,91 +25,44 @@ export const handleStripeWebhook = async (req, res) => {
   let event;
 
   try {
-    // req.body já vem como Buffer do middleware express.raw
+    // req.body vem como Buffer do middleware express.raw
     event = constructWebhookEvent(req.body, sig, webhookSecret);
   } catch (err) {
-    console.error('[STRIPE] Erro ao verificar webhook:', err.message);
+    console.error('[STRIPE] Erro ao verificar assinatura do webhook:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Processar evento
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object);
-        break;
-      
-      case 'payment_intent.succeeded':
-        console.log('[STRIPE] PaymentIntent succeeded:', event.data.object.id);
-        break;
-      
-      case 'payment_intent.payment_failed':
-        console.error('[STRIPE] PaymentIntent failed:', event.data.object.id);
-        break;
-      
-      default:
-        console.log(`[STRIPE] Evento não tratado: ${event.type}`);
-    }
+  console.log(`[STRIPE] Webhook recebido: ${event.type}`);
 
-    res.json({ received: true });
+  try {
+    if (event.type === 'checkout.session.completed') {
+      handleCheckoutCompleted(event.data.object);
+    } else {
+      console.log(`[STRIPE] Evento não tratado: ${event.type}`);
+    }
+    return res.status(200).send();
   } catch (error) {
     console.error('[STRIPE] Erro ao processar webhook:', error);
-    res.status(500).json({ error: 'Erro ao processar webhook' });
+    return res.status(500).send('Erro ao processar webhook');
   }
 };
 
 /**
- * Processar checkout completado
+ * Processar checkout completado (Payment Link).
+ * Extrai dados e loga. Sem lógica de créditos/planos.
  */
-async function handleCheckoutCompleted(session) {
-  try {
-    console.log('[STRIPE] Checkout session completed:', session.id);
-    
-    const { planId, userId } = session.metadata || {};
-    
-    if (!planId || !userId) {
-      console.error('[STRIPE] Metadata faltando na sessão:', session.id);
-      return;
-    }
+function handleCheckoutCompleted(session) {
+  const customerEmail = session.customer_email || session.customer_details?.email || '-';
+  const sessionId = session.id;
+  const amountTotal = session.amount_total ?? 0;
+  const currency = (session.currency || 'brl').toUpperCase();
 
-    // Verificar se pagamento foi confirmado
-    if (session.payment_status !== 'paid') {
-      console.warn('[STRIPE] Pagamento não confirmado para sessão:', session.id);
-      return;
-    }
-
-    // Buscar plano
-    const plan = getPlanById(planId);
-    if (!plan) {
-      console.error('[STRIPE] Plano não encontrado:', planId);
-      return;
-    }
-
-    // Buscar usuário
-    const user = getUserById(userId);
-    if (!user) {
-      console.error('[STRIPE] Usuário não encontrado:', userId);
-      return;
-    }
-
-    // Atualizar plano do usuário
-    const updates = {
-      plan_id: planId,
-      videos_limit: plan.videos_limit,
-      videos_used: user.videos_used || 0 // Manter vídeos já processados
-    };
-
-    updateUser(userId, updates);
-
-    const videoStats = getUserVideoStats(userId);
-    
-    console.log(`[STRIPE] ✅ Plano ${plan.name} ativado para usuário ${userId} via webhook`);
-    console.log(`[STRIPE] Vídeos: ${videoStats.videos_used}/${videoStats.videos_limit || 'ilimitado'}`);
-
-  } catch (error) {
-    console.error('[STRIPE] Erro ao processar checkout completado:', error);
-    throw error;
-  }
+  console.log('[STRIPE] Pagamento confirmado:', {
+    customer_email: customerEmail,
+    session_id: sessionId,
+    amount_total: amountTotal,
+    currency,
+  });
 }
 
 /**

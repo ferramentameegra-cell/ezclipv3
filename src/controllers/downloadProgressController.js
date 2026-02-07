@@ -411,7 +411,7 @@ export async function downloadWithProgress(req, res) {
     console.warn('[DOWNLOAD] Erro ao limpar cache:', cacheError.message);
   }
   
-  // MÚLTIPLAS ESTRATÉGIAS PARA CONTORNAR ERRO 403
+  // MÚLTIPLAS ESTRATÉGIAS PARA CONTORNAR ERRO 403 (ordem: android, ios, mweb, web, tv_embedded)
   const strategies = [
     {
       name: 'Android Client',
@@ -424,6 +424,12 @@ export async function downloadWithProgress(req, res) {
       extractorArgs: 'youtube:player_client=ios',
       userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
       format: 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best[height<=720]/best/bestvideo+bestaudio/best'
+    },
+    {
+      name: 'Mobile Web',
+      extractorArgs: 'youtube:player_client=mweb',
+      userAgent: 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      format: 'best[height<=720]/bestvideo+bestaudio/best'
     },
     {
       name: 'Web Client',

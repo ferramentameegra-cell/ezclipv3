@@ -13,7 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { STORAGE_CONFIG } from '../config/storage.config.js';
 
-// Estratégias de download em ordem de prioridade
+// Estratégias de download em ordem: android, ios, mweb, web, tv_embedded
 const DOWNLOAD_STRATEGIES = [
   {
     name: 'Android',
@@ -26,6 +26,12 @@ const DOWNLOAD_STRATEGIES = [
     extractorArgs: 'youtube:player_client=ios',
     userAgent: 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
     format: 'bestvideo[height<=720]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[height<=720]/best'
+  },
+  {
+    name: 'Mobile Web',
+    extractorArgs: 'youtube:player_client=mweb',
+    userAgent: 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+    format: 'best[height<=720]/bestvideo+bestaudio/best'
   },
   {
     name: 'Web',

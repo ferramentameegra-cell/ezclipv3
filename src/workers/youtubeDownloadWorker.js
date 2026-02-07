@@ -79,11 +79,12 @@ function getStrategyArgs(strategyBase, cookiesPath) {
   return baseArgs;
 }
 
-// APENAS Android Client (única estratégia permitida)
+// Estratégias em ordem: quando Android falha com 403, tenta as próximas
+// Cookies habilitados para todas (quando YTDLP_COOKIES ou YT_DLP_COOKIES_PATH estiver configurado)
 const DOWNLOAD_STRATEGIES = [
   {
     name: 'android',
-    description: 'Android Client (única estratégia)',
+    description: 'Android Client',
     args: [
       '--user-agent', 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
       '--referer', 'https://www.youtube.com/',
@@ -91,7 +92,55 @@ const DOWNLOAD_STRATEGIES = [
       '--no-check-certificate',
       '--extractor-args', 'youtube:player_client=android'
     ],
-    useCookies: false
+    useCookies: true
+  },
+  {
+    name: 'ios',
+    description: 'iOS Client (fallback)',
+    args: [
+      '--user-agent', 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=ios'
+    ],
+    useCookies: true
+  },
+  {
+    name: 'mweb',
+    description: 'Mobile Web (fallback)',
+    args: [
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=mweb'
+    ],
+    useCookies: true
+  },
+  {
+    name: 'web',
+    description: 'Web Desktop (fallback)',
+    args: [
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=web'
+    ],
+    useCookies: true
+  },
+  {
+    name: 'tv_embedded',
+    description: 'TV Embedded (último recurso)',
+    args: [
+      '--user-agent', 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version',
+      '--referer', 'https://www.youtube.com/',
+      '--geo-bypass',
+      '--no-check-certificate',
+      '--extractor-args', 'youtube:player_client=tv_embedded'
+    ],
+    useCookies: true
   }
 ];
 
@@ -260,6 +309,9 @@ async function tryGetInfoWithStrategy(url, strategy, ytDlpCommand) {
                              stderr.includes('format not available');
         
         if (is403) {
+          if (stderr && stderr.trim()) {
+            console.warn(`[DOWNLOAD-WORKER] stderr (classificado 403): ${stderr.slice(-500)}`);
+          }
           reject(new Error('403_FORBIDDEN'));
         } else if (isFormatError) {
           reject(new Error('FORMAT_NOT_AVAILABLE'));
@@ -346,6 +398,9 @@ async function tryDownloadWithStrategy(url, outputPath, strategy, ytDlpCommand, 
                              stderr.includes('format not available');
         
         if (is403) {
+          if (stderr && stderr.trim()) {
+            console.warn(`[DOWNLOAD-WORKER] stderr (classificado 403): ${stderr.slice(-500)}`);
+          }
           reject(new Error('403_FORBIDDEN'));
         } else if (isFormatError) {
           reject(new Error('FORMAT_NOT_AVAILABLE'));

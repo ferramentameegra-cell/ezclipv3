@@ -29,6 +29,7 @@ import thumbnailsRoutes from "./routes/thumbnails.js";
 import termsRoutes from "./routes/terms.js";
 import creditsRoutes from "./routes/credits.js";
 import stripeRoutes from "./routes/stripe.js";
+import { handleStripeWebhook } from "./controllers/stripeController.js";
 // videoRoutes removido - duplicado com downloadRoutes
 import { requireAuth } from "./middleware/authMiddleware.js";
 
@@ -88,7 +89,10 @@ app.use(cors(corsConfig));
 // 3. Cookie parser
 app.use(cookieParser());
 
-// 4. Body parser com limite
+// 4. Webhook Stripe - DEVE vir ANTES do express.json() para receber body raw
+app.post("/webhook/stripe", express.raw({ type: "application/json" }), handleStripeWebhook);
+
+// 5. Body parser com limite
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
