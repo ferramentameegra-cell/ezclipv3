@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { videoProcessQueue } from '../queue/queue.js';
-import { canGenerateVideo, decrementCredits } from '../services/creditService.js';
+import { canUserUploadVideo, incrementVideosUsed } from '../services/subscriptionService.js';
 import { STORAGE_CONFIG } from '../config/storage.config.js';
 
 export const generateSeries = async (req, res) => {
@@ -57,21 +57,18 @@ export const generateSeries = async (req, res) => {
     // Calcular quantidade de clipes que serão gerados
     const finalClipsCount = clipsQuantity || numberOfCuts;
 
-    // Verificar créditos apenas se usuário estiver autenticado
-    let creditCheck = { allowed: true, creditos: -1 }; // Permitir por padrão
+    // Verificar se usuário pode enviar vídeo (subscription: videos_used < videos_allowed)
     if (req.user && req.userId) {
       try {
-        creditCheck = await canGenerateVideo(req.userId);
-        if (!creditCheck.allowed) {
+        const canUpload = await canUserUploadVideo(req.userId);
+        if (!canUpload) {
           return res.status(402).json({
-            error: creditCheck.reason || 'Créditos esgotados',
-            code: 'NO_CREDITS',
-            creditos: creditCheck.creditos
+            error: 'Limite de vídeos atingido. Faça upgrade do seu plano para continuar.',
+            code: 'VIDEOS_LIMIT_REACHED'
           });
         }
       } catch (error) {
-        console.warn('[GENERATE] Erro ao verificar créditos, permitindo geração:', error);
-        // Continuar mesmo se houver erro na verificação de créditos
+        console.warn('[GENERATE] Erro ao verificar permissões, permitindo geração:', error);
       }
     }
 
@@ -116,12 +113,23 @@ export const generateSeries = async (req, res) => {
 
     const seriesId = uuidv4();
 
-    // Créditos já foram verificados acima (se autenticado)
-    // O crédito será decrementado APÓS a geração bem-sucedida (no worker, apenas se autenticado)
     if (req.userId) {
-      console.log(`[GENERATE] Usuário ${req.userId} tem ${creditCheck.creditos} crédito(s) disponível(is). Iniciando geração...`);
+      console.log(`[GENERATE] Usuário ${req.userId} - permissão OK. Iniciando geração...`);
     } else {
       console.log(`[GENERATE] Geração sem autenticação. Iniciando geração...`);
+    }
+
+    // Incrementar videos_used quando usuário envia vídeo para processamento
+    if (req.userId) {
+      try {
+        await incrementVideosUsed(req.userId);
+      } catch (err) {
+        console.warn('[GENERATE] Erro ao incrementar videos_used:', err);
+        return res.status(500).json({
+          error: 'Erro ao registrar uso de vídeo',
+          code: 'INCREMENT_ERROR'
+        });
+      }
     }
 
     // Obter posição na fila antes de adicionar

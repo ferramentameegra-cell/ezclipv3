@@ -1,6 +1,6 @@
 import { videoProcessQueue } from '../queue/queue.js';
 import { generateVideoSeries, setVideoStore } from '../services/videoProcessor.js';
-import { decrementCredits } from '../services/creditService.js';
+// incrementVideosUsed é chamado no generateController ao enviar o vídeo
 
 // VideoStore será injetado quando o servidor iniciar
 let videoStoreInstance = null;
@@ -67,26 +67,7 @@ videoProcessQueue.process('generate-video-series', CONCURRENCY, async (job) => {
       throw new Error(error);
     }
     
-    // DECREMENTAR 1 CRÉDITO após geração bem-sucedida
-    // IMPORTANTE: Só decrementa se a geração foi bem-sucedida
-    const userId = job.data?.userId;
-    if (userId) {
-      try {
-        const creditResult = await decrementCredits(userId);
-        if (creditResult.decremented) {
-          console.log(`[WORKER] ✅ Crédito decrementado para usuário ${userId}. Créditos restantes: ${creditResult.creditos}`);
-        } else {
-          console.log(`[WORKER] ℹ️ Usuário ${userId} tem créditos ilimitados. Não decrementado.`);
-        }
-      } catch (creditError) {
-        console.error(`[WORKER] ❌ Erro ao decrementar créditos:`, creditError);
-        console.error(`[WORKER] Stack:`, creditError.stack);
-        // Não falhar o job se houver erro ao decrementar créditos (já foi gerado)
-        // Mas logar o erro para investigação
-      }
-    } else {
-      console.warn(`[WORKER] ⚠️ userId não encontrado no job.data. Créditos não foram decrementados.`);
-    }
+    // videos_used já foi incrementado no generateController ao enviar o vídeo
     
     // Retornar resultado que será armazenado em job.returnvalue
     const returnValue = {

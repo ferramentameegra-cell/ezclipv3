@@ -29,7 +29,7 @@ import thumbnailsRoutes from "./routes/thumbnails.js";
 import termsRoutes from "./routes/terms.js";
 import creditsRoutes from "./routes/credits.js";
 import stripeRoutes from "./routes/stripe.js";
-import { handleStripeWebhook } from "./controllers/stripeController.js";
+import { handleStripeWebhook } from "./controllers/webhookController.js";
 // videoRoutes removido - duplicado com downloadRoutes
 import { requireAuth } from "./middleware/authMiddleware.js";
 

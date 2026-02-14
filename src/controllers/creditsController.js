@@ -4,33 +4,40 @@
  */
 
 import { getUserCredits, addCredits } from '../services/creditService.js';
+import { getUserSubscriptionData } from '../services/subscriptionService.js';
 import { getAllPlans } from '../models/plans.js';
 
 /**
  * GET /api/credits/balance
- * Obter saldo de créditos do usuário autenticado
+ * Obter saldo (subscription: videos_used, videos_allowed)
  */
 export const getBalance = async (req, res) => {
   try {
-    // Se não houver usuário autenticado, retornar saldo padrão (não bloquear)
     if (!req.userId) {
       return res.json({
-        creditos: 0,
+        videos_used: 0,
+        videos_allowed: 1,
+        plan_name: 'free',
         is_unlimited: false,
-        message: 'Não autenticado - créditos não disponíveis'
+        message: 'Não autenticado'
       });
     }
 
-    const creditos = await getUserCredits(req.userId);
+    const sub = await getUserSubscriptionData(req.userId);
+    const isUnlimited = sub.videos_allowed === -1;
 
     res.json({
-      creditos: creditos,
-      is_unlimited: creditos === -1
+      videos_used: sub.videos_used ?? 0,
+      videos_allowed: sub.videos_allowed ?? 1,
+      plan_name: sub.plan_name || 'free',
+      subscription_status: sub.subscription_status,
+      is_unlimited: isUnlimited,
+      creditos: sub.videos_allowed === -1 ? -1 : Math.max(0, (sub.videos_allowed ?? 1) - (sub.videos_used ?? 0)) // compat
     });
   } catch (error) {
     console.error('[CREDITS] Erro ao obter saldo:', error);
     res.status(500).json({
-      error: 'Erro ao obter saldo de créditos',
+      error: 'Erro ao obter saldo',
       code: 'BALANCE_ERROR'
     });
   }
