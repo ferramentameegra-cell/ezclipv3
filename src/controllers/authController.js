@@ -357,12 +357,9 @@ export const forgotPassword = async (req, res) => {
     });
 
     if (error) {
-      const isRateLimit = error.message?.toLowerCase().includes('rate limit') || error.message?.toLowerCase().includes('too many');
       return res.status(400).json({
-        error: isRateLimit
-          ? 'Muitas tentativas. Aguarde 1 hora ou faça login e use "Trocar senha" no menu do usuário.'
-          : error.message || 'Erro ao enviar email',
-        code: isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'FORGOT_PASSWORD_ERROR'
+        error: error.message || 'Erro ao enviar email',
+        code: 'FORGOT_PASSWORD_ERROR'
       });
     }
 
