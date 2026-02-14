@@ -4,8 +4,9 @@
  */
 
 import { getUserCredits, addCredits } from '../services/creditService.js';
-import { getUserSubscriptionData } from '../services/subscriptionService.js';
-import { getAllPlans } from '../models/plans.js';
+import { getUserSubscriptionData, updateUserSubscription } from '../services/subscriptionService.js';
+import { getAllPlans, getPlanById } from '../models/plans.js';
+import { createSubscriptionCheckoutSession } from '../services/stripeService.js';
 
 /**
  * GET /api/credits/balance
@@ -62,6 +63,83 @@ export const getPlans = async (req, res) => {
     res.status(500).json({
       error: 'Erro ao carregar planos',
       code: 'PLANS_ERROR'
+    });
+  }
+};
+
+/**
+ * POST /api/credits/create-checkout
+ * Plano free: ativa direto (1 vídeo). Planos pagos: cria sessão Stripe.
+ */
+export const createCheckout = async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id;
+    const userEmail = req.user?.email;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Faça login para ativar um plano',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
+
+    const { planId } = req.body;
+    if (!planId) {
+      return res.status(400).json({
+        error: 'planId é obrigatório',
+        code: 'MISSING_PLAN_ID'
+      });
+    }
+
+    const plan = getPlanById(planId);
+    if (!plan) {
+      return res.status(404).json({
+        error: 'Plano não encontrado',
+        code: 'PLAN_NOT_FOUND'
+      });
+    }
+
+    // Plano FREE: ativar direto no Supabase (1 vídeo)
+    if (planId === 'free') {
+      await updateUserSubscription({
+        userId,
+        planName: 'free',
+        videosAllowed: 1,
+        subscriptionStatus: 'active',
+        stripeCustomerId: null,
+        stripeSubscriptionId: null
+      });
+
+      console.log(`[CREDITS] Plano Free ativado para usuário ${userId}`);
+
+      return res.json({
+        success: true,
+        plan: {
+          id: plan.id,
+          name: plan.name,
+          videos_limit: 1,
+          is_unlimited: false
+        }
+      });
+    }
+
+    // Planos pagos: criar sessão Stripe
+    const session = await createSubscriptionCheckoutSession({
+      userId,
+      userEmail,
+      planId: planId.toLowerCase()
+    });
+
+    res.json({
+      success: true,
+      url: session.url,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('[CREDITS] Erro em create-checkout:', error);
+    res.status(500).json({
+      error: error.message || 'Erro ao processar plano',
+      code: 'CREATE_CHECKOUT_ERROR'
     });
   }
 };

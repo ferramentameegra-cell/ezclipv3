@@ -32,7 +32,8 @@ export async function updateUserSubscription({
   videosAllowed,
   subscriptionStatus,
   stripeCustomerId,
-  stripeSubscriptionId
+  stripeSubscriptionId,
+  resetVideosUsed = false
 }) {
   if (!supabaseAdmin) {
     throw new Error('Supabase não configurado. Configure SUPABASE_SERVICE_ROLE_KEY.');
@@ -48,14 +49,8 @@ export async function updateUserSubscription({
   if (stripeCustomerId) updates.stripe_customer_id = stripeCustomerId;
   if (stripeSubscriptionId) updates.stripe_subscription_id = stripeSubscriptionId;
 
-  // Manter videos_used se já existir (não resetar)
-  const { data: existing } = await supabaseAdmin
-    .from('users')
-    .select('videos_used')
-    .eq('id', userId)
-    .single();
-
-  if (existing && existing.videos_used === undefined) {
+  // Ao ativar plano free: resetar videos_used para dar 1 vídeo
+  if (resetVideosUsed || planName === 'free') {
     updates.videos_used = 0;
   }
 
