@@ -986,6 +986,62 @@ async function verifyPaymentLinkPurchase(planId) {
     }
 }
 
+async function handleForgotPassword(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const emailInput = document.getElementById('auth-forgot-email');
+    const btnText = document.getElementById('auth-forgot-btn-text');
+    const btnSpinner = document.getElementById('auth-forgot-btn-spinner');
+    const statusMsg = document.getElementById('auth-forgot-status');
+
+    if (!emailInput) return;
+
+    const email = emailInput.value.trim();
+    if (!email) {
+        if (statusMsg) {
+            statusMsg.textContent = 'Digite seu email';
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (btnText) btnText.classList.add('hidden');
+    if (btnSpinner) btnSpinner.classList.remove('hidden');
+    if (statusMsg) statusMsg.classList.add('hidden');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro ao enviar email');
+        }
+
+        if (statusMsg) {
+            statusMsg.textContent = data.message || 'Se o email existir, você receberá um link para redefinir sua senha. Verifique sua caixa de entrada e spam.';
+            statusMsg.className = 'auth-status-message success';
+            statusMsg.classList.remove('hidden');
+        }
+    } catch (error) {
+        if (statusMsg) {
+            statusMsg.textContent = error.message || 'Erro ao enviar email. Tente novamente.';
+            statusMsg.className = 'auth-status-message error';
+            statusMsg.classList.remove('hidden');
+        }
+    } finally {
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnSpinner) btnSpinner.classList.add('hidden');
+    }
+}
+
 async function handleLogin(event) {
     console.log('[AUTH] handleLogin chamado', event);
     
@@ -1415,17 +1471,25 @@ async function handleRegister(event) {
     }
 }
 
-// Alternar entre login e registro na nova estrutura
+// Alternar entre login, registro e esqueci senha
 function switchAuthView(view) {
     const loginCard = document.getElementById('auth-login-card');
     const registerCard = document.getElementById('auth-register-card');
-    
-    if (view === 'register') {
-        if (loginCard) loginCard.classList.remove('active');
-        if (registerCard) registerCard.classList.add('active');
-    } else {
-        if (registerCard) registerCard.classList.remove('active');
-        if (loginCard) loginCard.classList.add('active');
+    const forgotCard = document.getElementById('auth-forgot-card');
+
+    [loginCard, registerCard, forgotCard].forEach(c => c && c.classList.remove('active'));
+
+    if (view === 'register' && registerCard) {
+        registerCard.classList.add('active');
+    } else if (view === 'forgot' && forgotCard) {
+        forgotCard.classList.add('active');
+        const emailFromLogin = document.getElementById('auth-login-email');
+        const emailForgot = document.getElementById('auth-forgot-email');
+        if (emailFromLogin && emailForgot && emailFromLogin.value) {
+            emailForgot.value = emailFromLogin.value;
+        }
+    } else if (loginCard) {
+        loginCard.classList.add('active');
     }
 }
 

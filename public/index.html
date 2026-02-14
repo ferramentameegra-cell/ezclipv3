@@ -1081,6 +1081,7 @@
                                     required
                                     autocomplete="current-password"
                                 >
+                                <a href="#" class="forgot-password-link" onclick="switchAuthView('forgot'); return false;">Esqueci minha senha</a>
                             </div>
                             <button type="submit" class="btn-auth-primary">
                                 <span id="auth-login-btn-text">Entrar</span>
@@ -1100,6 +1101,42 @@
                         </div>
                         <button type="button" class="btn-auth-secondary" onclick="switchAuthView('register')">
                             Criar nova conta
+                        </button>
+                    </div>
+
+                    <!-- Esqueci minha senha Card -->
+                    <div class="auth-card" id="auth-forgot-card">
+                        <div class="auth-header">
+                            <h2 class="auth-title">Esqueci minha senha</h2>
+                            <p class="auth-subtitle">Digite seu email para receber o link de redefinição</p>
+                        </div>
+                        <form id="auth-forgot-form" class="auth-form" onsubmit="handleForgotPassword(event)">
+                            <div class="form-group">
+                                <label for="auth-forgot-email" class="form-label">Email</label>
+                                <input 
+                                    type="email" 
+                                    id="auth-forgot-email" 
+                                    class="form-input" 
+                                    placeholder="seu@email.com" 
+                                    required
+                                    autocomplete="email"
+                                >
+                            </div>
+                            <button type="submit" class="btn-auth-primary">
+                                <span id="auth-forgot-btn-text">Enviar link</span>
+                                <span id="auth-forgot-btn-spinner" class="spinner-inline hidden">
+                                    <svg width="16" height="16" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="32" stroke-dashoffset="32">
+                                            <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                                            <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                                        </circle>
+                                    </svg>
+                                </span>
+                            </button>
+                            <div id="auth-forgot-status" class="auth-status-message hidden"></div>
+                        </form>
+                        <button type="button" class="btn-auth-secondary" onclick="switchAuthView('login')" style="margin-top: 1rem;">
+                            Voltar para login
                         </button>
                     </div>
 

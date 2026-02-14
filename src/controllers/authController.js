@@ -328,6 +328,54 @@ export const getMe = async (req, res) => {
 };
 
 /**
+ * POST /api/auth/forgot-password
+ * Enviar email de redefinição de senha
+ */
+export const forgotPassword = async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        error: 'Serviço de autenticação não configurado',
+        code: 'AUTH_NOT_CONFIGURED'
+      });
+    }
+
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Email é obrigatório',
+        code: 'MISSING_EMAIL'
+      });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const redirectTo = `${baseUrl}/auth/confirm`;
+
+    const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo
+    });
+
+    if (error) {
+      return res.status(400).json({
+        error: error.message || 'Erro ao enviar email',
+        code: 'FORGOT_PASSWORD_ERROR'
+      });
+    }
+
+    res.json({
+      message: 'Se o email existir, você receberá um link para redefinir sua senha'
+    });
+  } catch (error) {
+    console.error('[AUTH] Erro ao enviar email de redefinição:', error);
+    res.status(500).json({
+      error: 'Erro ao enviar email',
+      code: 'FORGOT_PASSWORD_ERROR'
+    });
+  }
+};
+
+/**
  * POST /api/auth/verify-email
  * Reenviar email de confirmação
  */

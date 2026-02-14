@@ -2774,6 +2774,18 @@ body {
     color: var(--text-tertiary);
 }
 
+.forgot-password-link {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+.forgot-password-link:hover {
+    color: #667eea;
+    text-decoration: underline;
+}
+
 .form-hint {
     font-size: 0.75rem;
     color: var(--text-tertiary);
