@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Confirmação - EZ Clips AI</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -41,155 +40,29 @@
             cursor: pointer; text-decoration: none; display: inline-block;
         }
         .btn-inicio:hover { transform: translateY(-2px); }
-        .reset-form { display: none; text-align: left; }
-        .reset-form.active { display: block; }
-        .form-group { margin-bottom: 1.5rem; }
-        .form-label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151; }
-        .form-input {
-            width: 100%; padding: 0.75rem 1rem; border: 2px solid #e5e7eb;
-            border-radius: 8px; font-size: 1rem;
-        }
-        .form-input:focus { outline: none; border-color: #667eea; }
-        .form-hint { font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; }
-        .status-msg { margin-top: 1rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; }
-        .status-msg.error { background: #fee2e2; color: #b91c1c; }
-        .status-msg.success { background: #d1fae5; color: #047857; }
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="confirmation-container">
-        <!-- Sucesso padrão (assinatura / signup) -->
-        <div id="view-success">
-            <div class="success-icon">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </div>
-            <h1>Parabéns!</h1>
-            <p class="message">
-                Sua assinatura foi concluída.<br>
-                Começar a clipar agora!
-            </p>
-            <a href="/" class="btn-inicio">Início</a>
+        <div class="success-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
         </div>
-
-        <!-- Formulário de redefinir senha (type=recovery) -->
-        <div id="view-reset" class="reset-form">
-            <h1>Nova senha</h1>
-            <p class="message">Defina uma nova senha para sua conta.</p>
-            <form id="reset-password-form" onsubmit="handleResetPassword(event)">
-                <div class="form-group">
-                    <label for="new-password" class="form-label">Nova senha</label>
-                    <input type="password" id="new-password" class="form-input" placeholder="Mínimo 6 caracteres" minlength="6" required>
-                    <p class="form-hint">A senha deve ter no mínimo 6 caracteres</p>
-                </div>
-                <div class="form-group">
-                    <label for="confirm-password" class="form-label">Confirmar senha</label>
-                    <input type="password" id="confirm-password" class="form-input" placeholder="Repita a senha" minlength="6" required>
-                </div>
-                <button type="submit" class="btn-inicio" style="width: 100%;">Salvar nova senha</button>
-                <div id="reset-status" class="status-msg hidden"></div>
-            </form>
-        </div>
-
-        <!-- Erro (link expirado, etc) -->
-        <div id="view-error" class="hidden">
-            <h1 style="color: #b91c1c;">Link inválido ou expirado</h1>
-            <p class="message">Solicite um novo link de redefinição de senha na tela de login.</p>
-            <a href="/" class="btn-inicio">Ir para início</a>
-        </div>
+        <h1>Parabéns!</h1>
+        <p class="message">
+            Sua assinatura foi concluída.<br>
+            Começar a clipar agora!
+        </p>
+        <a href="/" class="btn-inicio">Início</a>
     </div>
-
     <script>
-        const SUPABASE_URL = 'https://wrsefdlvqprxjelxkvee.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indyc2VmZGx2cXByeGplbHhrdmVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MjExNjIsImV4cCI6MjA4NDQ5NzE2Mn0.gY7SYyAh0g6fjGbaFw9VT_h35Slq6NZysCf9gcd4CQI';
-
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
+        const params = new URLSearchParams(window.location.hash?.substring(1) || '');
+        const accessToken = params.get('access_token');
         const type = params.get('type');
-        const error = params.get('error');
-
-        let supabase = null;
-
-        function initSupabase() {
-            if (typeof window.supabase !== 'undefined') {
-                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            }
-            return supabase;
+        if (accessToken && type === 'signup') {
+            localStorage.setItem('ezv2_token', accessToken);
         }
-
-        async function handleResetPassword(event) {
-            event.preventDefault();
-            const newPass = document.getElementById('new-password').value;
-            const confirmPass = document.getElementById('confirm-password').value;
-            const statusEl = document.getElementById('reset-status');
-
-            if (newPass !== confirmPass) {
-                statusEl.textContent = 'As senhas não coincidem.';
-                statusEl.className = 'status-msg error';
-                statusEl.classList.remove('hidden');
-                return;
-            }
-
-            if (newPass.length < 6) {
-                statusEl.textContent = 'A senha deve ter no mínimo 6 caracteres.';
-                statusEl.className = 'status-msg error';
-                statusEl.classList.remove('hidden');
-                return;
-            }
-
-            if (!supabase) {
-                statusEl.textContent = 'Erro ao conectar. Tente novamente.';
-                statusEl.className = 'status-msg error';
-                statusEl.classList.remove('hidden');
-                return;
-            }
-
-            try {
-                const { error } = await supabase.auth.updateUser({ password: newPass });
-
-                if (error) throw error;
-
-                statusEl.textContent = 'Senha alterada com sucesso! Redirecionando...';
-                statusEl.className = 'status-msg success';
-                statusEl.classList.remove('hidden');
-
-                setTimeout(() => {
-                    window.location.href = '/?tab=login';
-                }, 2000);
-            } catch (err) {
-                statusEl.textContent = err.message || 'Erro ao alterar senha.';
-                statusEl.className = 'status-msg error';
-                statusEl.classList.remove('hidden');
-            }
-        }
-
-        (async function() {
-            initSupabase();
-
-            if (error) {
-                document.getElementById('view-success').classList.add('hidden');
-                document.getElementById('view-reset').classList.remove('active');
-                document.getElementById('view-error').classList.remove('hidden');
-                return;
-            }
-
-            if (type === 'recovery' && hash) {
-                document.getElementById('view-success').classList.add('hidden');
-                document.getElementById('view-reset').classList.add('active');
-
-                if (supabase) {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        document.getElementById('view-reset').classList.remove('active');
-                        document.getElementById('view-error').classList.remove('hidden');
-                    }
-                }
-            } else if (params.get('access_token') && type === 'signup') {
-                localStorage.setItem('ezv2_token', params.get('access_token'));
-            }
-        })();
     </script>
 </body>
 </html>

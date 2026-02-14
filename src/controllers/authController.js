@@ -350,7 +350,7 @@ export const forgotPassword = async (req, res) => {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const redirectTo = `${baseUrl}/auth/confirm`;
+    const redirectTo = `${baseUrl}/auth/reset-password`;
 
     const { error } = await supabaseAdmin.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo

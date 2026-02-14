@@ -153,6 +153,11 @@ app.get("/auth/confirm", (req, res) => {
   res.sendFile(path.join(publicDir, "auth-confirm.html"));
 });
 
+// Página para trocar senha (link do email Supabase)
+app.get("/auth/reset-password", (req, res) => {
+  res.sendFile(path.join(publicDir, "auth-reset-password.html"));
+});
+
 // ⚠️ ESSENCIAL: rota raiz
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
