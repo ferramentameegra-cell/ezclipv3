@@ -357,9 +357,12 @@ export const forgotPassword = async (req, res) => {
     });
 
     if (error) {
+      const isRateLimit = error.message?.toLowerCase().includes('rate limit') || error.message?.toLowerCase().includes('too many');
       return res.status(400).json({
-        error: error.message || 'Erro ao enviar email',
-        code: 'FORGOT_PASSWORD_ERROR'
+        error: isRateLimit
+          ? 'Muitas tentativas. Aguarde 1 hora ou faça login e use "Trocar senha" no menu do usuário.'
+          : error.message || 'Erro ao enviar email',
+        code: isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'FORGOT_PASSWORD_ERROR'
       });
     }
 
@@ -371,6 +374,80 @@ export const forgotPassword = async (req, res) => {
     res.status(500).json({
       error: 'Erro ao enviar email',
       code: 'FORGOT_PASSWORD_ERROR'
+    });
+  }
+};
+
+/**
+ * POST /api/auth/change-password
+ * Trocar senha (usuário logado) - sem enviar email, sem rate limit
+ */
+export const changePassword = async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        error: 'Serviço de autenticação não configurado',
+        code: 'AUTH_NOT_CONFIGURED'
+      });
+    }
+
+    const userId = req.userId || req.user?.id;
+    const userEmail = req.user?.email;
+
+    if (!userId || !userEmail) {
+      return res.status(401).json({
+        error: 'Faça login para trocar a senha',
+        code: 'NOT_AUTHENTICATED'
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        error: 'Senha atual e nova senha são obrigatórias',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        error: 'A nova senha deve ter no mínimo 6 caracteres',
+        code: 'WEAK_PASSWORD'
+      });
+    }
+
+    const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: userEmail.trim().toLowerCase(),
+      password: currentPassword
+    });
+
+    if (signInError) {
+      return res.status(401).json({
+        error: 'Senha atual incorreta',
+        code: 'INVALID_CURRENT_PASSWORD'
+      });
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword
+    });
+
+    if (updateError) {
+      return res.status(400).json({
+        error: updateError.message || 'Erro ao alterar senha',
+        code: 'CHANGE_PASSWORD_ERROR'
+      });
+    }
+
+    res.json({
+      message: 'Parabéns, senha alterada com sucesso!'
+    });
+  } catch (error) {
+    console.error('[AUTH] Erro ao trocar senha:', error);
+    res.status(500).json({
+      error: 'Erro ao alterar senha',
+      code: 'CHANGE_PASSWORD_ERROR'
     });
   }
 };

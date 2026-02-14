@@ -45,6 +45,7 @@
                             <div id="user-credits-dropdown" class="user-credits" style="margin-top: 0.5rem; font-size: 0.875rem; color: #999;"></div>
                         </div>
                         <button class="dropdown-btn" onclick="showCreditsPurchaseModal()" style="margin-bottom: 0.5rem;">Comprar Créditos</button>
+                        <button class="dropdown-btn" onclick="showChangePasswordModal()">Trocar senha</button>
                         <button class="dropdown-btn" onclick="logout()">Sair</button>
                     </div>
                 </div>
@@ -1378,6 +1379,36 @@
                     Fazer Login / Cadastrar
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Trocar Senha -->
+    <div id="change-password-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 440px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">Trocar senha</h2>
+                <button onclick="closeChangePasswordModal()" style="background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--text-secondary);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="change-password-form" onsubmit="handleChangePassword(event)">
+                <div style="margin-bottom: 1.25rem;">
+                    <label class="form-label" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Senha atual</label>
+                    <input type="password" id="change-pw-current" class="form-input" placeholder="Digite sua senha atual" required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 2px solid var(--border);">
+                </div>
+                <div style="margin-bottom: 1.25rem;">
+                    <label class="form-label" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Nova senha</label>
+                    <input type="password" id="change-pw-new" class="form-input" placeholder="Mínimo 6 caracteres" minlength="6" required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 2px solid var(--border);">
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <label class="form-label" style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Confirmar nova senha</label>
+                    <input type="password" id="change-pw-confirm" class="form-input" placeholder="Repita a nova senha" minlength="6" required style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 2px solid var(--border);">
+                </div>
+                <div id="change-pw-status" class="auth-status-message hidden" style="margin-bottom: 1rem;"></div>
+                <button type="submit" class="btn-modal primary" style="width: 100%;">Salvar nova senha</button>
+            </form>
         </div>
     </div>
 

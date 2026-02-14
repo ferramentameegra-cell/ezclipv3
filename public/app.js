@@ -1541,6 +1541,76 @@ function closeLoginRequiredModal() {
 }
 
 /**
+ * Mostrar modal de trocar senha (usuário logado - sem rate limit)
+ */
+function showChangePasswordModal() {
+    const modal = document.getElementById('change-password-modal');
+    if (modal) {
+        document.getElementById('change-password-form')?.reset();
+        document.getElementById('change-pw-status')?.classList.add('hidden');
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+/**
+ * Fechar modal de trocar senha
+ */
+function closeChangePasswordModal() {
+    const modal = document.getElementById('change-password-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+}
+
+/**
+ * Enviar troca de senha (usuário logado)
+ */
+async function handleChangePassword(event) {
+    event.preventDefault();
+    const currentPass = document.getElementById('change-pw-current').value;
+    const newPass = document.getElementById('change-pw-new').value;
+    const confirmPass = document.getElementById('change-pw-confirm').value;
+    const statusEl = document.getElementById('change-pw-status');
+
+    if (newPass !== confirmPass) {
+        statusEl.textContent = 'As senhas não coincidem.';
+        statusEl.className = 'auth-status-message error';
+        statusEl.classList.remove('hidden');
+        return;
+    }
+
+    if (newPass.length < 6) {
+        statusEl.textContent = 'A nova senha deve ter no mínimo 6 caracteres.';
+        statusEl.className = 'auth-status-message error';
+        statusEl.classList.remove('hidden');
+        return;
+    }
+
+    statusEl.classList.add('hidden');
+
+    try {
+        const { data } = await apiClient.post('/api/auth/change-password', {
+            currentPassword: currentPass,
+            newPassword: newPass
+        });
+
+        statusEl.textContent = data.message || 'Parabéns, senha alterada com sucesso!';
+        statusEl.className = 'auth-status-message success';
+        statusEl.classList.remove('hidden');
+
+        setTimeout(() => {
+            closeChangePasswordModal();
+        }, 2000);
+    } catch (error) {
+        statusEl.textContent = error.message || 'Erro ao alterar senha.';
+        statusEl.className = 'auth-status-message error';
+        statusEl.classList.remove('hidden');
+    }
+}
+
+/**
  * Abrir tela de login a partir do modal
  */
 function openLoginFromModal() {
