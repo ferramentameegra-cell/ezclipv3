@@ -1,13 +1,8 @@
-# Configurar emails por usuário no Supabase
+# Configurar emails ilimitados no Supabase
 
-## Problema
+Por padrão, o Supabase limita a **2 emails por hora** para todo o projeto (recuperação de senha, confirmação, etc.).
 
-O limite do Supabase é **global** (não por usuário): **2 emails por hora para toda a plataforma**.  
-Se 2 pessoas pedirem "Esqueci minha senha" em 1 hora, todos os outros usuários ficam bloqueados até a próxima hora.
-
-## Solução: Custom SMTP
-
-É a **única forma** de permitir que vários usuários alterem a senha ao mesmo tempo. Com Custom SMTP, o limite passa a ser do seu provedor (muito maior e, em geral, por usuário/destinatário).
+Para que cada usuário possa solicitar "Esqueci minha senha" quantas vezes quiser:
 
 1. Acesse **Supabase Dashboard** → seu projeto
 2. Vá em **Project Settings** → **Auth** → **SMTP Settings**
