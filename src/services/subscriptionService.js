@@ -42,8 +42,7 @@ export async function updateUserSubscription({
   const updates = {
     plan_name: planName || 'free',
     videos_allowed: videosAllowed ?? 1,
-    subscription_status: subscriptionStatus || 'active',
-    updated_at: new Date().toISOString()
+    subscription_status: subscriptionStatus || 'active'
   };
 
   if (stripeCustomerId) updates.stripe_customer_id = stripeCustomerId;
@@ -156,10 +155,7 @@ export async function incrementVideosUsed(userId) {
 
   const { error: updateError } = await supabaseAdmin
     .from('users')
-    .update({
-      videos_used: newCount,
-      updated_at: new Date().toISOString()
-    })
+    .update({ videos_used: newCount })
     .eq('id', userId);
 
   if (updateError) {
@@ -178,9 +174,6 @@ export async function setStripeCustomerId(userId, stripeCustomerId) {
 
   await supabaseAdmin
     .from('users')
-    .update({
-      stripe_customer_id: stripeCustomerId,
-      updated_at: new Date().toISOString()
-    })
+    .update({ stripe_customer_id: stripeCustomerId })
     .eq('id', userId);
 }
